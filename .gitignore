@@ -35,6 +35,11 @@ apps/backend/build/
 # Stockfish WASM Cache / Large Binaries (nếu có)
 *.wasm.map
 
+# Python Virtual Environments
+.venv/
+venv/
+__pycache__/
+
 # Logs
 logs/
 *.log

@@ -1,0 +1,62 @@
+Issue Type,Issue ID,Summary,Description,Story Points,Priority,Parent
+Epic,1,Project Skeleton & Core Board UI,Khởi tạo cấu trúc Monorepo và giao diện Bàn cờ tương tác 8x8.,8,High,
+Epic,2,Player vs AI (Stockfish WASM),Chế độ đánh với máy tích hợp Stockfish WASM Web Worker 3 cấp độ.,13,High,
+Epic,3,Authentication & User Profile,Hệ thống Quản lý Tài khoản Đăng ký Đăng nhập JWT và điểm Elo.,8,High,
+Epic,4,Realtime PvP & Room Manager,Chế độ đấu 2 người trực tuyến qua Socket.io và quản lý phòng.,21,High,
+Epic,5,Match History & PGN Replay,Lưu trữ lịch sử trận đấu và Replay nước đi theo chuẩn PGN.,8,Medium,
+Epic,6,Tournament & Puzzles (Phase 2),Hệ thống giải đấu loại trực tiếp và kho bài tập cờ thế.,13,Low,
+Story,7,Khởi tạo cấu trúc dự án Monorepo,"As a Developer I want to initialize Next.js Frontend and NestJS Backend monorepo layout So that the team can build features smoothly.
+
+Acceptance Criteria:
+- Thư mục apps/frontend và apps/backend đầy đủ.
+- File gitignore và README đã sẵn sàng.",3,High,1
+Story,8,Xây dựng UI Bàn cờ tương tác (ChessBoard),"As a User I want to see an interactive chess board So that I can drag and drop pieces mượt mà.
+
+Acceptance Criteria:
+- Render bàn cờ 8x8 với react-chessboard.
+- Tích hợp chess.js validate nước đi hợp lệ.",5,High,1
+Story,9,Tích hợp Stockfish WASM via Web Worker,"As a User I want to play against AI without freezing the browser UI So that the game is smooth.
+
+Acceptance Criteria:
+- Web Worker khởi tạo stockfish.js ngầm.
+- Hỗ trợ 3 cấp độ Dễ (Skill 1) Trung bình (Skill 10) Khó (Skill 20).",8,High,2
+Story,10,Xây dựng API Đăng ký và Đăng nhập JWT,"As a User I want to register and login So that I can save my match history and Elo rating.
+
+Acceptance Criteria:
+- API POST /api/auth/register mã hóa password BCrypt.
+- API POST /api/auth/login trả về JWT token.",5,High,3
+Story,11,Thiết kế Giao diện Profile & Leaderboard Elo,"As a User I want to view my profile and Elo leaderboard So that I can track my rank.
+
+Acceptance Criteria:
+- Màn hình Profile hiển thị Avatar Elo Thắng/Thua/Hòa.
+- Bảng xếp hạng Top người chơi theo Elo.",5,Medium,3
+Story,12,Xây dựng WebSocket Gateway Tạo phòng PvP,"As a User I want to create a private room and get a shareable link So that I can invite my friend.
+
+Acceptance Criteria:
+- API/Socket sinh Room Code 6 ký tự ngẫu nhiên.
+- Link chia sẻ phòng dạng /room/[code] cho bạn tham gia.",8,High,4
+Story,13,Đồng bộ nước đi PvP Realtime qua Socket.io,"As a Player I want my moves to sync instantly (<100ms) with my opponent So that we can play realtime.
+
+Acceptance Criteria:
+- Event make_move truyền vị trí FEN mới.
+- Validate nước đi phía Server tránh gian lận.",8,High,4
+Story,14,Đếm ngược thời gian và Disconnect Recovery,"As a Player I want fair timer countdown and reconnect recovery So that network drops don't lose the game.
+
+Acceptance Criteria:
+- Đồng bộ đếm giờ trận đấu trên Redis/Server.
+- Cho phép reconnect trong 30s lấy lại trạng thái bàn cờ.",5,High,4
+Story,15,Lưu và Replay trận đấu PGN,"As a User I want to view match history and replay my moves So that I can analyze my games.
+
+Acceptance Criteria:
+- Lưu file chuỗi PGN vào PostgreSQL khi trận đấu kết thúc.
+- UI Replay cho phép xem lại từng nước đi First/Next/Prev/Last.",5,Medium,5
+Story,16,Hệ thống Giải đấu Tournament (Phase 2),"As a User I want to participate in 4-8 players single elimination tournament So that I can compete.
+
+Acceptance Criteria:
+- Sơ đồ cây giải đấu (Bracket tree).
+- Tự động đôn người thắng vào vòng trong.",8,Low,6
+Story,17,Kho bài tập Cờ thế Chess Puzzles (Phase 2),"As a User I want to solve chess puzzles So that I can improve my tactical skills.
+
+Acceptance Criteria:
+- Đọc vị trí FEN thế cờ khó.
+- Kiểm tra đáp án nước đi đúng/sai.",5,Low,6
