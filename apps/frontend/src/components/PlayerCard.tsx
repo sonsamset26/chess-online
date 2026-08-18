@@ -30,7 +30,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   const isDraw = gameStatus === 'DRAW';
 
   return (
-    <div className={`w-full max-w-[440px] flex items-center justify-between px-3.5 py-2 rounded-xl border transition-all duration-300 ${
+    <div className={`w-full max-w-[500px] flex items-center justify-between px-3.5 py-2 rounded-xl border transition-all duration-300 ${
       isThinking
         ? 'bg-purple-950/40 border-purple-500/40 shadow-lg shadow-purple-500/10'
         : 'bg-slate-900/80 border-slate-800'
