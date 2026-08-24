@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 import { connectDB } from '../config/db';
 import { User } from '../modules/user/user.model';
 import { Match } from '../modules/match/match.model';
+import { PuzzleModel } from '../modules/puzzle/puzzle.model';
+import { INITIAL_PUZZLES } from '../modules/puzzle/puzzle.service';
 
 dotenv.config();
 
@@ -12,6 +14,7 @@ const seedData = async () => {
     console.log('🧹 Đang làm sạch dữ liệu cũ...');
     await User.deleteMany({});
     await Match.deleteMany({});
+    await PuzzleModel.deleteMany({});
 
     console.log('🌱 Đang khởi tạo dữ liệu mẫu (Seed Data)...');
 
@@ -19,6 +22,7 @@ const seedData = async () => {
     const admin = await User.create({
       email: 'admin@chess.online',
       username: 'chess_admin',
+      name: 'Phan Hồng Sơn (Admin)',
       passwordHash: '$2a$10$X8XzQ1K2K3K4K5K6K7K8K.z9y8x7w6v5u4t3s2r1q0p9o8n7m6',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
       eloRating: 2000,
@@ -28,6 +32,7 @@ const seedData = async () => {
     const player1 = await User.create({
       email: 'magnus@chess.online',
       username: 'Magnus Carlsen',
+      name: 'Magnus Carlsen',
       passwordHash: '$2a$10$X8XzQ1K2K3K4K5K6K7K8K.z9y8x7w6v5u4t3s2r1q0p9o8n7m6',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=magnus',
       eloRating: 2882,
@@ -40,6 +45,7 @@ const seedData = async () => {
     const player2 = await User.create({
       email: 'hikaru@chess.online',
       username: 'Hikaru Nakamura',
+      name: 'Hikaru Nakamura',
       passwordHash: '$2a$10$X8XzQ1K2K3K4K5K6K7K8K.z9y8x7w6v5u4t3s2r1q0p9o8n7m6',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=hikaru',
       eloRating: 2875,
@@ -61,8 +67,11 @@ const seedData = async () => {
       endedAt: new Date(),
     });
 
+    // 3. Tạo Bài tập Cờ thế Mẫu (Puzzles) vào MongoDB Atlas
+    await PuzzleModel.insertMany(INITIAL_PUZZLES);
+
     console.log('✅ KHỞI TẠO CÁC COLLECTION VÀ DỮ LIỆU MẪU THÀNH CÔNG!');
-    console.log('📊 Các collection đã được tạo trên MongoDB Cloud: [users, matches]');
+    console.log('📊 Các collection đã được tạo trên MongoDB Cloud: [users, matches, puzzles]');
     process.exit(0);
   } catch (error) {
     console.error('❌ Lỗi seed data:', error);

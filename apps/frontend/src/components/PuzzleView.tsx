@@ -4,11 +4,16 @@ import { PUZZLES_DATA, PuzzleData } from '../data/puzzles';
 import { ChessBoardComponent } from './ChessBoard';
 import { PlayerCard } from './PlayerCard';
 import { sounds } from '../utils/soundEffects';
-import { Puzzle, Lightbulb, RotateCcw, ArrowRight, CheckCircle2, XCircle, Trophy } from 'lucide-react';
+import { Puzzle, Lightbulb, RotateCcw, ArrowRight, CheckCircle2, XCircle, Cloud } from 'lucide-react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const PuzzleView: React.FC = () => {
+  const [puzzlesList, setPuzzlesList] = useState<PuzzleData[]>(PUZZLES_DATA);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const puzzle: PuzzleData = PUZZLES_DATA[currentIndex];
+  const [isCloudLoaded, setIsCloudLoaded] = useState(false);
+
+  const puzzle: PuzzleData = puzzlesList[currentIndex] || PUZZLES_DATA[0];
 
   const [game, setGame] = useState(() => new Chess(puzzle.fen));
   const [fen, setFen] = useState(puzzle.fen);
@@ -16,22 +21,44 @@ export const PuzzleView: React.FC = () => {
   const [showHint, setShowHint] = useState(false);
   const [moveStep, setMoveStep] = useState(0);
 
-  // Khi chuyển bài tập mới
+  // 1. Tải dữ liệu Cờ Thế từ CSDL Cloud MongoDB Atlas qua REST API
   useEffect(() => {
-    const newGame = new Chess(puzzle.fen);
-    setGame(newGame);
-    setFen(puzzle.fen);
-    setStatus('IDLE');
-    setShowHint(false);
-    setMoveStep(0);
+    const fetchPuzzlesFromMongoDB = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/puzzles`);
+        const json = await res.json();
+
+        if (json.success && json.data && json.data.length > 0) {
+          console.log('🍃 [MongoDB Atlas Cloud] Đã tải thành công bộ Cờ thế từ MongoDB:', json.data.length, 'bài tập');
+          setPuzzlesList(json.data);
+          setIsCloudLoaded(true);
+        }
+      } catch (err) {
+        console.warn('⚠️ Không thể kết nối API Backend MongoDB. Sử dụng bộ nhớ đệm Frontend.');
+      }
+    };
+
+    fetchPuzzlesFromMongoDB();
+  }, []);
+
+  // 2. Khi chuyển bài tập mới
+  useEffect(() => {
+    if (puzzle && puzzle.fen) {
+      const newGame = new Chess(puzzle.fen);
+      setGame(newGame);
+      setFen(puzzle.fen);
+      setStatus('IDLE');
+      setShowHint(false);
+      setMoveStep(0);
+    }
   }, [currentIndex, puzzle]);
 
   // Xử lý khi người chơi thả quân cờ giải đố
   const handlePieceDrop = (from: Square, to: Square): boolean => {
-    if (status !== 'IDLE') return false;
+    if (status !== 'IDLE' || !puzzle) return false;
 
     const expectedMove = puzzle.solution[moveStep];
-    const isCorrect = from === expectedMove.from && to === expectedMove.to;
+    const isCorrect = expectedMove && from === expectedMove.from && to === expectedMove.to;
 
     if (isCorrect) {
       try {
@@ -65,29 +92,33 @@ export const PuzzleView: React.FC = () => {
 
   // Reset bài tập hiện tại
   const handleRetry = () => {
-    const resetG = new Chess(puzzle.fen);
-    setGame(resetG);
-    setFen(puzzle.fen);
-    setStatus('IDLE');
-    setShowHint(false);
-    setMoveStep(0);
+    if (puzzle && puzzle.fen) {
+      const resetG = new Chess(puzzle.fen);
+      setGame(resetG);
+      setFen(puzzle.fen);
+      setStatus('IDLE');
+      setShowHint(false);
+      setMoveStep(0);
+    }
   };
 
   // Sang bài tiếp theo
   const handleNextPuzzle = () => {
-    if (currentIndex < PUZZLES_DATA.length - 1) {
+    if (currentIndex < puzzlesList.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
       setCurrentIndex(0);
     }
   };
 
+  if (!puzzle) return null;
+
   return (
     <div className="w-full h-full max-w-7xl mx-auto flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-4 items-center justify-center select-none">
       
       {/* CỘT TRÁI (8/12 Cols): Bàn cờ & Player Cards Chuẩn Giao diện */}
       <div className="lg:col-span-8 flex flex-col items-center justify-between h-full py-1">
-        {/* Card ĐỐI THỦ (Phía trên bàn cờ) */}
+        {/* Card ĐỐI THỦ */}
         <PlayerCard
           isAi={true}
           name={puzzle.turn === 'w' ? 'Quân Đen (Đối thủ)' : 'Quân Trắng (Đối thủ)'}
@@ -96,7 +127,7 @@ export const PuzzleView: React.FC = () => {
           gameStatus="IN_PROGRESS"
         />
 
-        {/* Bàn cờ Cờ vua (Bằng kích thước mượt mà chuẩn) */}
+        {/* Bàn cờ Cờ vua */}
         <ChessBoardComponent
           game={game}
           fen={fen}
@@ -105,7 +136,7 @@ export const PuzzleView: React.FC = () => {
           disabled={status !== 'IDLE'}
         />
 
-        {/* Card NGUYÊN THỂ BẢN THÂN (Phía dưới bàn cờ) */}
+        {/* Card BẢN THÂN */}
         <PlayerCard
           isAi={false}
           name={puzzle.turn === 'w' ? 'Bạn (Cầm quân Trắng)' : 'Bạn (Cầm quân Đen)'}
@@ -126,8 +157,9 @@ export const PuzzleView: React.FC = () => {
                 <Puzzle className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-[10px] font-black text-pink-400 uppercase tracking-wider block">
-                  Bài tập #{currentIndex + 1} / {PUZZLES_DATA.length}
+                <span className="text-[10px] font-black text-pink-400 uppercase tracking-wider block flex items-center gap-1">
+                  <span>Bài tập #{currentIndex + 1} / {puzzlesList.length}</span>
+                  {isCloudLoaded && <span className="text-[9px] text-emerald-400 flex items-center gap-0.5"><Cloud className="w-3 h-3" /> MongoDB</span>}
                 </span>
                 <span className="text-xs font-extrabold text-white">
                   {puzzle.title}
@@ -183,7 +215,7 @@ export const PuzzleView: React.FC = () => {
             )}
           </div>
 
-          {/* Bảng Điều Khiển Nút Thao Tác (Gợi ý, Thử lại, Bài tiếp) */}
+          {/* Bảng Điều Khiển Nút Thao Tác */}
           <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-2.5 shadow-xl shrink-0">
             <button
               onClick={handleNextPuzzle}

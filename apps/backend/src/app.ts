@@ -6,6 +6,7 @@ import { globalErrorHandler } from './middlewares/errorHandler';
 import authRoutes from './modules/auth/auth.routes';
 import userRoutes from './modules/user/user.routes';
 import healthRoutes from './modules/health/health.routes';
+import puzzleRoutes from './modules/puzzle/puzzle.routes';
 import { ApiResponse } from './utils/apiResponse';
 
 dotenv.config();
@@ -22,6 +23,8 @@ app.use(requestLogger);
 app.use('/api/v1', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/puzzles', puzzleRoutes);
+app.use('/api/puzzles', puzzleRoutes);
 
 // Unhandled Route Handler (404)
 app.use('*', (req: Request, res: Response) => {
