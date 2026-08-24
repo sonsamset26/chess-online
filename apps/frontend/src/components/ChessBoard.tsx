@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess, Square } from 'chess.js';
 import { PlayerColor } from '../hooks/useChessEngine';
+import { sounds } from '../utils/soundEffects';
+import { PromotionModal, PromotionPiece } from './PromotionModal';
 
 interface ChessBoardComponentProps {
   game: Chess;
   fen: string;
   playerColor: PlayerColor;
-  onPieceDrop: (sourceSquare: Square, targetSquare: Square) => boolean;
+  onPieceDrop: (sourceSquare: Square, targetSquare: Square, promotion?: PromotionPiece) => boolean;
   disabled: boolean;
 }
 
@@ -26,19 +28,31 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [customSquareStyles, setCustomSquareStyles] = useState<Record<string, React.CSSProperties>>({});
 
-  // Reset highlight khi reset bàn cờ
+  // State chờ Phong Tốt (Pending Pawn Promotion)
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
+
+  // Âm thanh và Lịch sử nước đi khi FEN thay đổi
   useEffect(() => {
     setMoveFrom(null);
     const history = game.history({ verbose: true });
     if (history.length > 0) {
       const last = history[history.length - 1];
       setLastMove({ from: last.from, to: last.to });
+
+      // Phát Âm thanh tương ứng nước đi
+      if (game.inCheck()) {
+        sounds.playCheck();
+      } else if (last.captured) {
+        sounds.playCapture();
+      } else {
+        sounds.playMove();
+      }
     } else {
       setLastMove(null);
     }
   }, [fen, game]);
 
-  // Cập nhật các ô Highlight (Xanh lục cho nước đi, Đỏ cho ăn quân, Xanh dương cho nước đi vừa thực hiện)
+  // Cập nhật các ô Highlight
   useEffect(() => {
     const styles: Record<string, React.CSSProperties> = {};
 
@@ -48,25 +62,44 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
       styles[lastMove.to] = { backgroundColor: 'rgba(59, 130, 246, 0.55)' };
     }
 
-    // 2. Highlight khi người chơi chọn một quân cờ
+    // 2. HIGHLIGHT CẢNH BÁO CHIẾU TƯỚNG DƯỚI CHÂN QUÂN VUA
+    if (game.inCheck()) {
+      const board = game.board();
+      const currentTurnColor = game.turn();
+      const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r][c];
+          if (piece && piece.type === 'k' && piece.color === currentTurnColor) {
+            const kingSquare = (files[c] + ranks[r]) as Square;
+            styles[kingSquare] = {
+              background: 'radial-gradient(circle, rgba(239, 68, 68, 0.95) 0%, rgba(220, 38, 38, 0.75) 50%, rgba(245, 158, 11, 0.6) 100%)',
+              boxShadow: 'inset 0 0 15px 4px rgba(239, 68, 68, 0.9), 0 0 25px 8px rgba(245, 158, 11, 0.95)',
+              borderRadius: '16%',
+              border: '2px solid rgba(245, 158, 11, 0.9)',
+            };
+          }
+        }
+      }
+    }
+
+    // 3. Highlight khi người chơi chọn một quân cờ
     if (moveFrom) {
-      // Highlight chính ô quân cờ đang chọn (Màu Vàng nhẹ)
       styles[moveFrom] = { backgroundColor: 'rgba(234, 179, 8, 0.45)' };
 
-      // Lấy danh sách các nước đi hợp lệ từ ô đang chọn
       const moves = game.moves({ square: moveFrom, verbose: true });
       moves.forEach((move) => {
         const isCapture = !!move.captured;
 
         if (isCapture) {
-          // Ô có quân địch có thể ăn (Màu Đỏ)
           styles[move.to] = {
             backgroundColor: 'rgba(239, 68, 68, 0.65)',
             borderRadius: '50%',
             boxShadow: 'inset 0 0 0 4px rgba(185, 28, 28, 0.9)',
           };
         } else {
-          // Ô trống có thể di chuyển tới (Màu Xanh Lục - Chấm tròn)
           styles[move.to] = {
             background: 'radial-gradient(circle, rgba(34, 197, 94, 0.75) 26%, transparent 27%)',
             borderRadius: '50%',
@@ -94,12 +127,36 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Kiểm tra nước đi có phải là Phong Cấp Cho Tốt hay không
+  const checkIsPromotion = (from: Square, to: Square): boolean => {
+    const piece = game.get(from);
+    if (!piece || piece.type !== 'p' || piece.color !== playerColor) return false;
+    const isTargetPromotionRank = (playerColor === 'w' && to[1] === '8') || (playerColor === 'b' && to[1] === '1');
+    if (!isTargetPromotionRank) return false;
+
+    // Kiểm tra tính hợp lệ của nước đi
+    const testGame = new Chess(game.fen());
+    try {
+      const valid = testGame.move({ from, to, promotion: 'q' });
+      return !!valid;
+    } catch {
+      return false;
+    }
+  };
+
   // Xử lý Click vào ô cờ
   const onSquareClick = (square: Square) => {
-    if (disabled) return;
+    if (disabled || pendingPromotion) return;
 
-    // Nếu đã chọn 1 quân cờ trước đó và click vào ô hợp lệ -> Thực hiện nước đi
     if (moveFrom) {
+      // 1. Kiểm tra nếu là Nước Phong Cấp -> Bật Modal chọn quân
+      if (checkIsPromotion(moveFrom, square)) {
+        setPendingPromotion({ from: moveFrom, to: square });
+        setMoveFrom(null);
+        return;
+      }
+
+      // 2. Nước đi thường
       const moves = game.moves({ square: moveFrom, verbose: true });
       const foundMove = moves.find((m) => m.to === square);
 
@@ -110,10 +167,14 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           setMoveFrom(null);
           return;
         }
+      } else {
+        const pieceAtTarget = game.get(square);
+        if (!pieceAtTarget || pieceAtTarget.color !== playerColor) {
+          sounds.playInvalid();
+        }
       }
     }
 
-    // Chọn quân cờ cùng màu với người chơi
     const piece = game.get(square);
     if (piece && piece.color === playerColor) {
       setMoveFrom(square);
@@ -124,19 +185,41 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
 
   // Xử lý Kéo thả quân cờ
   const handlePieceDrop = (sourceSquare: Square, targetSquare: Square) => {
-    if (disabled) return false;
+    if (disabled || pendingPromotion) return false;
+
+    // 1. Kiểm tra nếu là Nước Phong Cấp -> Mở Modal chọn quân
+    if (checkIsPromotion(sourceSquare, targetSquare)) {
+      setPendingPromotion({ from: sourceSquare, to: targetSquare });
+      return false;
+    }
+
+    // 2. Nước đi thường
     const success = onPieceDrop(sourceSquare, targetSquare);
     if (success) {
       setLastMove({ from: sourceSquare, to: targetSquare });
       setMoveFrom(null);
+    } else {
+      sounds.playInvalid();
     }
     return success;
+  };
+
+  // Xử lý khi người chơi chọn xong 1 trong 4 quân phong cấp (Hậu, Xe, Tượng, Mã)
+  const handlePromotionSelect = (piece: PromotionPiece) => {
+    if (pendingPromotion) {
+      const { from, to } = pendingPromotion;
+      const success = onPieceDrop(from, to, piece);
+      if (success) {
+        setLastMove({ from, to });
+      }
+      setPendingPromotion(null);
+    }
   };
 
   return (
     <div
       ref={containerRef}
-      className="w-full flex items-center justify-center p-0.5 my-auto"
+      className="w-full flex items-center justify-center p-0.5 my-auto relative"
     >
       <div
         style={{ width: `${boardWidth}px`, height: `${boardWidth}px` }}
@@ -152,11 +235,19 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           customBoardStyle={{
             borderRadius: '4px',
           }}
-          customDarkSquareStyle={{ backgroundColor: '#769656' }}
-          customLightSquareStyle={{ backgroundColor: '#EEEED2' }}
-          arePiecesDraggable={!disabled}
+          customDarkSquareStyle={{ backgroundColor: '#D87093' }}
+          customLightSquareStyle={{ backgroundColor: '#FFF0F5' }}
+          arePiecesDraggable={!disabled && !pendingPromotion}
         />
       </div>
+
+      {/* POPUP CHỌN QUÂN PHONG CẤP (HẬU, XE, TƯỢNG, MÃ) */}
+      <PromotionModal
+        isOpen={!!pendingPromotion}
+        playerColor={playerColor}
+        onSelectPiece={handlePromotionSelect}
+        onCancel={() => setPendingPromotion(null)}
+      />
     </div>
   );
 };

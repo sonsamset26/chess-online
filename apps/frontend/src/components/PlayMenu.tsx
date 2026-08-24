@@ -2,14 +2,12 @@ import React from 'react';
 import { 
   Zap, 
   Bot, 
-  GraduationCap, 
   Users, 
   Trophy, 
-  Puzzle,
   ChevronRight
 } from 'lucide-react';
 
-export type GameModeSelection = 'online' | 'bots' | 'friend' | 'puzzles' | 'tournament';
+export type GameModeSelection = 'online' | 'bots' | 'friend' | 'tournament';
 
 interface PlayMenuProps {
   onSelectMode: (mode: GameModeSelection) => void;
@@ -28,16 +26,16 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
     {
       id: 'online',
       title: 'Đấu Trực tuyến (Play Online)',
-      description: 'Đánh với người chơi có cùng trình độ Elo',
+      description: 'Đánh PvP ngẫu nhiên với người chơi có cùng trình độ Elo',
       icon: Zap,
       iconBg: 'bg-amber-500/20 border-amber-500/30',
       iconColor: 'text-amber-400',
-      badge: 'Hot',
+      badge: 'PvP Realtime',
     },
     {
       id: 'bots',
       title: 'Đánh với Máy (Play Bots)',
-      description: 'Thách thức AI Stockfish từ Dễ đến Master',
+      description: 'Thách thức AI Stockfish từ Dễ (~800) đến Khó (~2000 Elo)',
       icon: Bot,
       iconBg: 'bg-blue-500/20 border-blue-500/30',
       iconColor: 'text-blue-400',
@@ -45,23 +43,15 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
     {
       id: 'friend',
       title: 'Đấu với Bạn bè (Play a Friend)',
-      description: 'Tạo phòng private và gửi link mời bạn bè',
+      description: 'Tạo phòng riêng với Mã 6 chữ số hoặc nhập mã để tham gia',
       icon: Users,
       iconBg: 'bg-purple-500/20 border-purple-500/30',
       iconColor: 'text-purple-400',
     },
     {
-      id: 'puzzles',
-      title: 'Giải cờ thế (Chess Puzzles)',
-      description: 'Rèn luyện tư duy chiến thuật qua các bài cờ khó',
-      icon: Puzzle,
-      iconBg: 'bg-emerald-500/20 border-emerald-500/30',
-      iconColor: 'text-emerald-400',
-    },
-    {
       id: 'tournament',
       title: 'Giải đấu (Tournaments)',
-      description: 'Tham gia giải đấu loại trực tiếp 4-8+ người chơi',
+      description: 'Tham gia giải đấu chia nhánh Knockout loại trực tiếp',
       icon: Trophy,
       iconBg: 'bg-rose-500/20 border-rose-500/30',
       iconColor: 'text-rose-400',
@@ -80,7 +70,7 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
           <span className="text-xs text-[#8B8987] font-medium">Chess.com Style</span>
         </div>
 
-        {/* Menu Cards List - Khớp 100% giao diện ảnh chụp */}
+        {/* Menu Cards List */}
         <div className="flex flex-col gap-2.5">
           {menuOptions.map((option) => {
             const Icon = option.icon;
@@ -88,7 +78,7 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
               <button
                 key={option.id}
                 onClick={() => onSelectMode(option.id)}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl bg-[#2F2D2A] hover:bg-[#383531] border border-[#3A3733] hover:border-emerald-500/50 transition-all duration-200 group text-left shadow-md"
+                className="w-full flex items-center justify-between p-3.5 rounded-xl bg-[#2F2D2A] hover:bg-[#383531] border border-[#3A3733] hover:border-pink-500/50 transition-all duration-200 group text-left shadow-md"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className={`p-2.5 rounded-xl border ${option.iconBg} ${option.iconColor} shrink-0 group-hover:scale-105 transition-transform`}>
@@ -96,11 +86,11 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition-colors truncate">
+                      <h3 className="font-bold text-sm text-white group-hover:text-pink-400 transition-colors truncate">
                         {option.title}
                       </h3>
                       {option.badge && (
-                        <span className="px-1.5 py-0.2 text-[9px] font-extrabold bg-amber-500/20 text-amber-300 rounded border border-amber-500/30">
+                        <span className="px-1.5 py-0.2 text-[9px] font-extrabold bg-pink-500/20 text-pink-300 rounded border border-pink-500/30">
                           {option.badge}
                         </span>
                       )}

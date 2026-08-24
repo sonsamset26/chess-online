@@ -2,6 +2,7 @@ import { Schema, model, Document } from 'mongoose';
 
 export interface IUser extends Document {
   email: string;
+  name: string;
   username: string;
   passwordHash: string;
   avatarUrl: string;
@@ -24,13 +25,16 @@ const UserSchema = new Schema<IUser>(
       lowercase: true,
       trim: true,
     },
+    name: {
+      type: String,
+      required: [true, 'Tên hiển thị là bắt buộc'],
+      trim: true,
+      minlength: [2, 'Tên hiển thị tối thiểu 2 ký tự'],
+      maxlength: [50, 'Tên hiển thị tối đa 50 ký tự'],
+    },
     username: {
       type: String,
-      required: [true, 'Tên đăng nhập là bắt buộc'],
-      unique: true,
       trim: true,
-      minlength: [3, 'Tên đăng nhập tối thiểu 3 ký tự'],
-      maxlength: [30, 'Tên đăng nhập tối đa 30 ký tự'],
     },
     passwordHash: {
       type: String,
@@ -43,7 +47,7 @@ const UserSchema = new Schema<IUser>(
     eloRating: {
       type: Number,
       default: 1200,
-      index: true, // Index để tăng tốc truy vấn Leaderboard Top Elo
+      index: true,
     },
     wins: {
       type: Number,
@@ -72,7 +76,6 @@ const UserSchema = new Schema<IUser>(
   }
 );
 
-// Index sắp xếp Leaderboard Elo giảm dần
 UserSchema.index({ eloRating: -1 });
 
 export const User = model<IUser>('User', UserSchema);
