@@ -11,13 +11,14 @@ import { LeaveRoomModal } from '../components/LeaveRoomModal';
 import { ResignModal } from '../components/ResignModal';
 import { PromotionPiece } from '../components/PromotionModal';
 import { PuzzleView } from '../components/PuzzleView';
+import { LearnView } from '../components/LearnView';
 import { ChessBoardComponent } from '../components/ChessBoard';
 import { PlayerCard } from '../components/PlayerCard';
 import { DifficultySelector } from '../components/DifficultySelector';
 import { GameControls } from '../components/GameControls';
 import { MoveHistory } from '../components/MoveHistory';
 import { useChessEngine } from '../hooks/useChessEngine';
-import { useSocket } from '../hooks/useSocket';
+import { useSocket, EloPlayerResult } from '../hooks/useSocket';
 import { sounds } from '../utils/soundEffects';
 import { Chess, Square } from 'chess.js';
 import { Cpu, ArrowLeft, Flag, Trophy } from 'lucide-react';
@@ -32,6 +33,7 @@ export default function Home() {
   const [user, setUser] = useState<{ username: string; eloRating: number; token: string } | null>(null);
   const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
   const [localGameOverStatus, setLocalGameOverStatus] = useState<string | null>(null);
+  const [currentMatchEloResult, setCurrentMatchEloResult] = useState<EloPlayerResult | null>(null);
 
   const prevStatusRef = useRef<string>('IN_PROGRESS');
 
@@ -80,6 +82,7 @@ export default function Home() {
       setActiveMode('online');
       setLocalGameOverStatus(null);
       setCustomGameOverMsg(undefined);
+      setCurrentMatchEloResult(null);
 
       const myColor = activeMatch.yourColor || 'w';
       setPlayerColor(myColor);
@@ -95,6 +98,15 @@ export default function Home() {
       setLocalGameOverStatus(winningStatus);
       setCustomGameOverMsg(resignationEvent.message);
 
+      // Cập nhật kết quả Elo
+      if (resignationEvent.eloResult) {
+        const myElo = playerColor === 'w' ? resignationEvent.eloResult.white : resignationEvent.eloResult.black;
+        setCurrentMatchEloResult(myElo);
+
+        // Cập nhật State User để Sidebar tự động nhảy số Elo
+        setUser((prev) => (prev ? { ...prev, eloRating: myElo.newElo } : prev));
+      }
+
       if (resignationEvent.winnerColor === playerColor) {
         sounds.playGameEndWin();
       } else {
@@ -103,7 +115,16 @@ export default function Home() {
     }
   }, [resignationEvent, playerColor]);
 
-  // 3. Phát âm thanh KẾT THÚC TRẬN
+  // 3. Phát âm thanh KẾT THÚC TRẬN & Bắt Elo khi Chiếu Hết qua latestMove
+  useEffect(() => {
+    if (latestMove && latestMove.isGameOver && latestMove.eloResult) {
+      const myElo = playerColor === 'w' ? latestMove.eloResult.white : latestMove.eloResult.black;
+      setCurrentMatchEloResult(myElo);
+      setUser((prev) => (prev ? { ...prev, eloRating: myElo.newElo } : prev));
+    }
+  }, [latestMove, playerColor]);
+
+  // Phát âm thanh khi kết thúc ván đấu
   useEffect(() => {
     if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && !resignationEvent) {
       const isWhiteWin = currentStatus === 'WHITE_WIN';
@@ -133,6 +154,7 @@ export default function Home() {
   const handleSelectMode = (mode: GameModeSelection) => {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
+    setCurrentMatchEloResult(null);
 
     if (mode === 'online') {
       joinQueue({
@@ -183,6 +205,7 @@ export default function Home() {
     resetGame();
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
+    setCurrentMatchEloResult(null);
   };
 
   // Xác nhận Đầu hàng
@@ -203,6 +226,7 @@ export default function Home() {
   const handlePlayAgain = () => {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
+    setCurrentMatchEloResult(null);
 
     if (activeMatch) {
       clearActiveMatch();
@@ -214,7 +238,7 @@ export default function Home() {
     }
   };
 
-  // Xử lý thả quân cờ (Hỗ trợ phong cấp Tốt theo lựa chọn)
+  // Xử lý thả quân cờ
   const handlePieceDrop = (from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
     if (activeMode === 'online' && activeMatch) {
       const isMyTurn = game.turn() === playerColor;
@@ -329,7 +353,7 @@ export default function Home() {
                     }
                     subText={
                       activeMatch
-                        ? `Elo: ${myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
+                        ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
                         : playerColor === 'w'
                         ? 'Cầm quân Trắng'
                         : 'Cầm quân Đen'
@@ -393,11 +417,13 @@ export default function Home() {
                           onReset={() => {
                             setLocalGameOverStatus(null);
                             setCustomGameOverMsg(undefined);
+                            setCurrentMatchEloResult(null);
                             resetGame();
                           }}
                           onToggleColor={() => {
                             setLocalGameOverStatus(null);
                             setCustomGameOverMsg(undefined);
+                            setCurrentMatchEloResult(null);
                             togglePlayerColor();
                           }}
                           playerColor={playerColor}
@@ -432,7 +458,7 @@ export default function Home() {
                   {[
                     { rank: 1, name: 'Magnus Carlsen', elo: 2882, wins: 450, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=magnus' },
                     { rank: 2, name: 'Hikaru Nakamura', elo: 2875, wins: 412, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=hikaru' },
-                    { rank: 3, name: 'Phan Hồng Sơn', elo: 1200, wins: 12, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=sonsamset' },
+                    { rank: 3, name: 'Phan Hồng Sơn', elo: user?.eloRating || 1200, wins: 12, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=sonsamset' },
                   ].map((player) => (
                     <div key={player.rank} className="flex items-center justify-between p-3.5 rounded-xl bg-[#2F2D2A] border border-[#3A3733]">
                       <div className="flex items-center gap-3">
@@ -463,6 +489,11 @@ export default function Home() {
         {activeTab === 'puzzles' && (
           <PuzzleView />
         )}
+
+        {/* TAB HỌC CỜ (CHESS LESSONS) */}
+        {activeTab === 'learn' && (
+          <LearnView />
+        )}
       </main>
 
       <AuthModal
@@ -486,16 +517,18 @@ export default function Home() {
         onCancelRoom={cancelFriendRoom}
       />
 
-      {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
+      {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU (KÈM BIẾN ĐỘNG ELO) */}
       <GameOverModal
         gameStatus={currentStatus}
         playerColor={playerColor}
         isOnlineMatch={!!activeMatch}
         customMessage={customGameOverMsg}
+        myEloResult={currentMatchEloResult}
         onPlayAgain={handlePlayAgain}
         onBackToMenu={() => {
           setLocalGameOverStatus(null);
           setCustomGameOverMsg(undefined);
+          setCurrentMatchEloResult(null);
           setActiveMode(null);
           clearActiveMatch();
           resetGame();

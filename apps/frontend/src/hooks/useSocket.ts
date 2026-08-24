@@ -18,6 +18,17 @@ export interface ActiveMatch {
   fen: string;
 }
 
+export interface EloPlayerResult {
+  oldElo: number;
+  newElo: number;
+  delta: number;
+}
+
+export interface EloCalculationResult {
+  white: EloPlayerResult;
+  black: EloPlayerResult;
+}
+
 export interface MoveData {
   from: Square;
   to: Square;
@@ -27,6 +38,8 @@ export interface MoveData {
   isCheckmate: boolean;
   isDraw: boolean;
   turn: string;
+  winnerColor?: 'w' | 'b' | null;
+  eloResult?: EloCalculationResult | null;
 }
 
 export interface ResignationData {
@@ -36,6 +49,7 @@ export interface ResignationData {
   loserName: string;
   reason: 'RESIGNATION' | 'DISCONNECT';
   message: string;
+  eloResult?: EloCalculationResult | null;
 }
 
 export function useSocket() {
@@ -99,7 +113,7 @@ export function useSocket() {
 
     // Lắng nghe thông báo Đối thủ Đầu hàng hoặc F5 / Thoát trình duyệt
     socketInstance.on('opponent_resigned', (data: ResignationData) => {
-      console.log('🏳️ [Resignation Event]:', data);
+      console.log('🏳️ [Resignation Event with Elo]:', data);
       setResignationEvent(data);
     });
 
