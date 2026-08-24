@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Chess, Square } from 'chess.js';
+import { PromotionPiece } from '../components/PromotionModal';
 
 export type DifficultyLevel = 1 | 2 | 3;
 export type PlayerColor = 'w' | 'b';
@@ -31,7 +32,6 @@ export function useChessEngine() {
         if (bestMove && bestMove !== '(none)' && bestMove.length >= 4) {
           makeAiMove(bestMove);
         }
-        // Luôn giải phóng trạng thái isAiThinking khi nhận kết quả từ Worker
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
         setIsAiThinking(false);
       }
@@ -64,7 +64,7 @@ export function useChessEngine() {
     }
   };
 
-  // Nước đi của AI với SafeguardTimeout chống kẹt
+  // Nước đi của AI với SafeguardTimeout
   const triggerAiMove = useCallback(
     (currentFen: string) => {
       if (workerRef.current) {
@@ -72,7 +72,6 @@ export function useChessEngine() {
         workerRef.current.postMessage(`position fen ${currentFen}`);
         workerRef.current.postMessage('go');
 
-        // Safeguard Timeout: Tự động hủy trạng thái thinking sau 2000ms nếu worker không phản hồi
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
         aiTimeoutRef.current = setTimeout(() => {
           setIsAiThinking(false);
@@ -87,7 +86,7 @@ export function useChessEngine() {
     try {
       const from = moveStr.substring(0, 2) as Square;
       const to = moveStr.substring(2, 4) as Square;
-      const promotion = moveStr.length === 5 ? moveStr[4] : undefined;
+      const promotion = moveStr.length === 5 ? (moveStr[4] as PromotionPiece) : undefined;
 
       const move = gameRef.current.move({ from, to, promotion });
       if (move) {
@@ -112,13 +111,13 @@ export function useChessEngine() {
     }
   };
 
-  // Thực hiện nước đi của Người chơi (Mode đánh với Bot)
-  const makePlayerMove = (from: Square, to: Square): boolean => {
+  // Thực hiện nước đi của Người chơi (Hỗ trợ chọn quân Phong cấp)
+  const makePlayerMove = (from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
     if (isAiThinking || gameRef.current.isGameOver()) return false;
     if (gameRef.current.turn() !== playerColor) return false;
 
     try {
-      const move = gameRef.current.move({ from, to, promotion: 'q' });
+      const move = gameRef.current.move({ from, to, promotion });
 
       if (move) {
         const newFen = gameRef.current.fen();
@@ -126,7 +125,6 @@ export function useChessEngine() {
         setMoveHistory(gameRef.current.history());
         updateGameStatus(gameRef.current);
 
-        // Kích hoạt Bot trả đũa mượt mà sau 150ms
         if (
           !gameRef.current.isGameOver() &&
           gameRef.current.turn() !== playerColor

@@ -9,6 +9,7 @@ import { FriendRoomModal } from '../components/FriendRoomModal';
 import { GameOverModal } from '../components/GameOverModal';
 import { LeaveRoomModal } from '../components/LeaveRoomModal';
 import { ResignModal } from '../components/ResignModal';
+import { PromotionPiece } from '../components/PromotionModal';
 import { PuzzleView } from '../components/PuzzleView';
 import { ChessBoardComponent } from '../components/ChessBoard';
 import { PlayerCard } from '../components/PlayerCard';
@@ -213,17 +214,17 @@ export default function Home() {
     }
   };
 
-  // Xử lý thả quân cờ
-  const handlePieceDrop = (from: Square, to: Square): boolean => {
+  // Xử lý thả quân cờ (Hỗ trợ phong cấp Tốt theo lựa chọn)
+  const handlePieceDrop = (from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
     if (activeMode === 'online' && activeMatch) {
       const isMyTurn = game.turn() === playerColor;
       if (!isMyTurn || game.isGameOver() || currentStatus !== 'IN_PROGRESS') return false;
 
       try {
         const testGame = new Chess(game.fen());
-        const move = testGame.move({ from, to, promotion: 'q' });
+        const move = testGame.move({ from, to, promotion });
         if (move) {
-          sendMove(activeMatch.roomId, from, to, 'q');
+          sendMove(activeMatch.roomId, from, to, promotion);
           return true;
         }
       } catch (err) {
@@ -232,7 +233,7 @@ export default function Home() {
       return false;
     }
 
-    return makePlayerMove(from, to);
+    return makePlayerMove(from, to, promotion);
   };
 
   const handleLogout = () => {

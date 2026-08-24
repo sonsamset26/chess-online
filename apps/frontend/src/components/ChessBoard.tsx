@@ -3,12 +3,13 @@ import { Chessboard } from 'react-chessboard';
 import { Chess, Square } from 'chess.js';
 import { PlayerColor } from '../hooks/useChessEngine';
 import { sounds } from '../utils/soundEffects';
+import { PromotionModal, PromotionPiece } from './PromotionModal';
 
 interface ChessBoardComponentProps {
   game: Chess;
   fen: string;
   playerColor: PlayerColor;
-  onPieceDrop: (sourceSquare: Square, targetSquare: Square) => boolean;
+  onPieceDrop: (sourceSquare: Square, targetSquare: Square, promotion?: PromotionPiece) => boolean;
   disabled: boolean;
 }
 
@@ -27,6 +28,9 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [customSquareStyles, setCustomSquareStyles] = useState<Record<string, React.CSSProperties>>({});
 
+  // State chờ Phong Tốt (Pending Pawn Promotion)
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
+
   // Âm thanh và Lịch sử nước đi khi FEN thay đổi
   useEffect(() => {
     setMoveFrom(null);
@@ -37,18 +41,18 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
 
       // Phát Âm thanh tương ứng nước đi
       if (game.inCheck()) {
-        sounds.playCheck(); // Âm thanh Chiếu Tướng dồn dập
+        sounds.playCheck();
       } else if (last.captured) {
-        sounds.playCapture(); // Âm thanh Ăn quân
+        sounds.playCapture();
       } else {
-        sounds.playMove(); // Âm thanh Nước đi thường
+        sounds.playMove();
       }
     } else {
       setLastMove(null);
     }
   }, [fen, game]);
 
-  // Cập nhật các ô Highlight (Xanh lục/Hồng cho nước đi, Đỏ cho ăn quân, Vàng Đỏ Chiếu Tướng dưới chân Quân Vua)
+  // Cập nhật các ô Highlight
   useEffect(() => {
     const styles: Record<string, React.CSSProperties> = {};
 
@@ -123,11 +127,36 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Kiểm tra nước đi có phải là Phong Cấp Cho Tốt hay không
+  const checkIsPromotion = (from: Square, to: Square): boolean => {
+    const piece = game.get(from);
+    if (!piece || piece.type !== 'p' || piece.color !== playerColor) return false;
+    const isTargetPromotionRank = (playerColor === 'w' && to[1] === '8') || (playerColor === 'b' && to[1] === '1');
+    if (!isTargetPromotionRank) return false;
+
+    // Kiểm tra tính hợp lệ của nước đi
+    const testGame = new Chess(game.fen());
+    try {
+      const valid = testGame.move({ from, to, promotion: 'q' });
+      return !!valid;
+    } catch {
+      return false;
+    }
+  };
+
   // Xử lý Click vào ô cờ
   const onSquareClick = (square: Square) => {
-    if (disabled) return;
+    if (disabled || pendingPromotion) return;
 
     if (moveFrom) {
+      // 1. Kiểm tra nếu là Nước Phong Cấp -> Bật Modal chọn quân
+      if (checkIsPromotion(moveFrom, square)) {
+        setPendingPromotion({ from: moveFrom, to: square });
+        setMoveFrom(null);
+        return;
+      }
+
+      // 2. Nước đi thường
       const moves = game.moves({ square: moveFrom, verbose: true });
       const foundMove = moves.find((m) => m.to === square);
 
@@ -139,7 +168,6 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           return;
         }
       } else {
-        // Phát âm thanh khi chọn ô mà quân cờ không thể đi tới
         const pieceAtTarget = game.get(square);
         if (!pieceAtTarget || pieceAtTarget.color !== playerColor) {
           sounds.playInvalid();
@@ -157,22 +185,41 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
 
   // Xử lý Kéo thả quân cờ
   const handlePieceDrop = (sourceSquare: Square, targetSquare: Square) => {
-    if (disabled) return false;
+    if (disabled || pendingPromotion) return false;
+
+    // 1. Kiểm tra nếu là Nước Phong Cấp -> Mở Modal chọn quân
+    if (checkIsPromotion(sourceSquare, targetSquare)) {
+      setPendingPromotion({ from: sourceSquare, to: targetSquare });
+      return false;
+    }
+
+    // 2. Nước đi thường
     const success = onPieceDrop(sourceSquare, targetSquare);
     if (success) {
       setLastMove({ from: sourceSquare, to: targetSquare });
       setMoveFrom(null);
     } else {
-      // Phát âm thanh từ chối khi kéo thả vào ô sai luật
       sounds.playInvalid();
     }
     return success;
   };
 
+  // Xử lý khi người chơi chọn xong 1 trong 4 quân phong cấp (Hậu, Xe, Tượng, Mã)
+  const handlePromotionSelect = (piece: PromotionPiece) => {
+    if (pendingPromotion) {
+      const { from, to } = pendingPromotion;
+      const success = onPieceDrop(from, to, piece);
+      if (success) {
+        setLastMove({ from, to });
+      }
+      setPendingPromotion(null);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
-      className="w-full flex items-center justify-center p-0.5 my-auto"
+      className="w-full flex items-center justify-center p-0.5 my-auto relative"
     >
       <div
         style={{ width: `${boardWidth}px`, height: `${boardWidth}px` }}
@@ -190,9 +237,17 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           }}
           customDarkSquareStyle={{ backgroundColor: '#D87093' }}
           customLightSquareStyle={{ backgroundColor: '#FFF0F5' }}
-          arePiecesDraggable={!disabled}
+          arePiecesDraggable={!disabled && !pendingPromotion}
         />
       </div>
+
+      {/* POPUP CHỌN QUÂN PHONG CẤP (HẬU, XE, TƯỢNG, MÃ) */}
+      <PromotionModal
+        isOpen={!!pendingPromotion}
+        playerColor={playerColor}
+        onSelectPiece={handlePromotionSelect}
+        onCancel={() => setPendingPromotion(null)}
+      />
     </div>
   );
 };
