@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const navItems: { id: ActiveTab; label: string; icon: any; badge?: string }[] = [
     { id: 'play', label: 'Chơi cờ', icon: Gamepad2 },
-    { id: 'puzzles', label: 'Bài tập', icon: Puzzle, badge: 'Hot' },
+    { id: 'puzzles', label: 'Giải thế cờ', icon: Puzzle, badge: 'Hot' },
     { id: 'learn', label: 'Học cờ', icon: GraduationCap },
     { id: 'leaderboard', label: 'Xếp hạng', icon: Trophy },
     { id: 'history', label: 'Lịch sử', icon: History },
@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* User Footer / Auth Section Nền Hồng */}
+      {/* User Footer / Auth Section */}
       <div className="border-t border-[#312E2B] pt-3 mt-auto">
         {user ? (
           <div className="flex items-center justify-between p-2 rounded-xl bg-[#2F2D2A]">
