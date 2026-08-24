@@ -1,42 +1,238 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar, ActiveTab } from '../components/Sidebar';
 import { PlayMenu, GameModeSelection } from '../components/PlayMenu';
 import { AuthModal } from '../components/AuthModal';
+import { MatchmakingModal } from '../components/MatchmakingModal';
+import { FriendRoomModal } from '../components/FriendRoomModal';
+import { GameOverModal } from '../components/GameOverModal';
+import { LeaveRoomModal } from '../components/LeaveRoomModal';
+import { ResignModal } from '../components/ResignModal';
+import { PuzzleView } from '../components/PuzzleView';
 import { ChessBoardComponent } from '../components/ChessBoard';
 import { PlayerCard } from '../components/PlayerCard';
 import { DifficultySelector } from '../components/DifficultySelector';
 import { GameControls } from '../components/GameControls';
 import { MoveHistory } from '../components/MoveHistory';
 import { useChessEngine } from '../hooks/useChessEngine';
-import { Bot, Cpu, ArrowLeft, Trophy, Users, Puzzle } from 'lucide-react';
+import { useSocket } from '../hooks/useSocket';
+import { sounds } from '../utils/soundEffects';
+import { Chess, Square } from 'chess.js';
+import { Cpu, ArrowLeft, Flag, Trophy } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
   const [activeMode, setActiveMode] = useState<GameModeSelection | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isResignModalOpen, setIsResignModalOpen] = useState(false);
+  const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
   const [user, setUser] = useState<{ username: string; eloRating: number; token: string } | null>(null);
+  const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
+  const [localGameOverStatus, setLocalGameOverStatus] = useState<string | null>(null);
 
-  // Hook quản lý Bàn cờ & Stockfish AI Engine
+  const prevStatusRef = useRef<string>('IN_PROGRESS');
+
+  // Hook WebSocket Socket.io Realtime
+  const {
+    isConnected,
+    isSearchingQueue,
+    createdRoomCode,
+    friendRoomError,
+    activeMatch,
+    latestMove,
+    resignationEvent,
+    joinQueue,
+    leaveQueue,
+    createFriendRoom,
+    joinFriendRoom,
+    cancelFriendRoom,
+    resignMatch,
+    sendMove,
+    clearActiveMatch,
+  } = useSocket();
+
+  // Hook quản lý Bàn cờ & Engine
   const {
     game,
     fen,
     playerColor,
     difficulty,
     isAiThinking,
-    gameStatus,
+    gameStatus: engineStatus,
     moveHistory,
     setDifficulty,
+    setPlayerColor,
+    setBoardFen,
     makePlayerMove,
     resetGame,
     togglePlayerColor,
   } = useChessEngine();
 
-  const aiColor = playerColor === 'w' ? 'b' : 'w';
+  const currentStatus = localGameOverStatus || engineStatus;
 
+  // 1. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi ghép trận / bạn bè thành công
+  useEffect(() => {
+    if (activeMatch) {
+      setIsFriendModalOpen(false);
+      setActiveMode('online');
+      setLocalGameOverStatus(null);
+      setCustomGameOverMsg(undefined);
+
+      const myColor = activeMatch.yourColor || 'w';
+      setPlayerColor(myColor);
+      setBoardFen(activeMatch.fen, []);
+      sounds.playGameStart();
+    }
+  }, [activeMatch]);
+
+  // 2. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG HOẶC F5 / THOÁT WEB
+  useEffect(() => {
+    if (resignationEvent) {
+      const winningStatus = resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
+      setLocalGameOverStatus(winningStatus);
+      setCustomGameOverMsg(resignationEvent.message);
+
+      if (resignationEvent.winnerColor === playerColor) {
+        sounds.playGameEndWin();
+      } else {
+        sounds.playGameEndLose();
+      }
+    }
+  }, [resignationEvent, playerColor]);
+
+  // 3. Phát âm thanh KẾT THÚC TRẬN
+  useEffect(() => {
+    if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && !resignationEvent) {
+      const isWhiteWin = currentStatus === 'WHITE_WIN';
+      const isBlackWin = currentStatus === 'BLACK_WIN';
+      const isPlayerWin = (isWhiteWin && playerColor === 'w') || (isBlackWin && playerColor === 'b');
+      const isPlayerLose = (isWhiteWin && playerColor === 'b') || (isBlackWin && playerColor === 'w');
+
+      if (isPlayerWin) {
+        sounds.playGameEndWin();
+      } else if (isPlayerLose) {
+        sounds.playGameEndLose();
+      } else {
+        sounds.playGameEndDraw();
+      }
+    }
+    prevStatusRef.current = currentStatus;
+  }, [currentStatus, playerColor, resignationEvent]);
+
+  // 4. Đồng bộ nước đi mới từ WebSocket Realtime
+  useEffect(() => {
+    if (latestMove && activeMode === 'online') {
+      setBoardFen(latestMove.fen, latestMove.history);
+    }
+  }, [latestMove, activeMode]);
+
+  // Xử lý chọn Chế độ chơi từ PlayMenu
   const handleSelectMode = (mode: GameModeSelection) => {
+    setLocalGameOverStatus(null);
+    setCustomGameOverMsg(undefined);
+
+    if (mode === 'online') {
+      joinQueue({
+        userId: user ? user.username : `guest_${Math.floor(Math.random() * 1000)}`,
+        username: user ? user.username : 'Người chơi (Guest)',
+        eloRating: user ? user.eloRating : 1200,
+      });
+      return;
+    }
+
+    if (mode === 'friend') {
+      setIsFriendModalOpen(true);
+      return;
+    }
+
+    clearActiveMatch();
     setActiveMode(mode);
+    resetGame();
+    sounds.playGameStart();
+  };
+
+  // Tạo phòng bạn bè
+  const handleCreateFriendRoom = () => {
+    createFriendRoom({
+      userId: user ? user.username : `guest_host_${Math.floor(Math.random() * 1000)}`,
+      username: user ? user.username : 'Chủ phòng (Guest)',
+      eloRating: user ? user.eloRating : 1200,
+    });
+  };
+
+  // Nhập mã phòng tham gia
+  const handleJoinFriendRoom = (code: string) => {
+    joinFriendRoom(code, {
+      userId: user ? user.username : `guest_join_${Math.floor(Math.random() * 1000)}`,
+      username: user ? user.username : 'Khách (Guest)',
+      eloRating: user ? user.eloRating : 1200,
+    });
+  };
+
+  // Xác nhận Rời phòng đấu
+  const handleConfirmLeaveRoom = () => {
+    if (activeMatch) {
+      resignMatch(activeMatch.roomId);
+    }
+    setIsLeaveModalOpen(false);
+    setActiveMode(null);
+    clearActiveMatch();
+    resetGame();
+    setLocalGameOverStatus(null);
+    setCustomGameOverMsg(undefined);
+  };
+
+  // Xác nhận Đầu hàng
+  const handleConfirmResign = () => {
+    setIsResignModalOpen(false);
+
+    if (activeMatch) {
+      resignMatch(activeMatch.roomId);
+    } else {
+      const losingStatus = playerColor === 'w' ? 'BLACK_WIN' : 'WHITE_WIN';
+      setLocalGameOverStatus(losingStatus);
+      setCustomGameOverMsg('Bạn đã đầu hàng. Trận thắng thuộc về Stockfish Engine!');
+      sounds.playGameEndLose();
+    }
+  };
+
+  // Xử lý nút Chơi Ván Mới / Tạo Phòng Mới
+  const handlePlayAgain = () => {
+    setLocalGameOverStatus(null);
+    setCustomGameOverMsg(undefined);
+
+    if (activeMatch) {
+      clearActiveMatch();
+      setActiveMode(null);
+      resetGame();
+      setIsFriendModalOpen(true);
+    } else {
+      resetGame();
+    }
+  };
+
+  // Xử lý thả quân cờ
+  const handlePieceDrop = (from: Square, to: Square): boolean => {
+    if (activeMode === 'online' && activeMatch) {
+      const isMyTurn = game.turn() === playerColor;
+      if (!isMyTurn || game.isGameOver() || currentStatus !== 'IN_PROGRESS') return false;
+
+      try {
+        const testGame = new Chess(game.fen());
+        const move = testGame.move({ from, to, promotion: 'q' });
+        if (move) {
+          sendMove(activeMatch.roomId, from, to, 'q');
+          return true;
+        }
+      } catch (err) {
+        return false;
+      }
+      return false;
+    }
+
+    return makePlayerMove(from, to);
   };
 
   const handleLogout = () => {
@@ -44,9 +240,22 @@ export default function Home() {
     setUser(null);
   };
 
+  // Xác định Thông tin Đối thủ & Người chơi
+  const isUserWhite = activeMatch ? activeMatch.yourColor === 'w' : playerColor === 'w';
+  const opponentInfo = activeMatch
+    ? isUserWhite
+      ? activeMatch.blackPlayer
+      : activeMatch.whitePlayer
+    : null;
+  const myInfo = activeMatch
+    ? isUserWhite
+      ? activeMatch.whitePlayer
+      : activeMatch.blackPlayer
+    : null;
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#161512] text-[#C3C1C0] flex select-none">
-      {/* Left Sidebar - Chuẩn Chess.com */}
+      {/* Sidebar Trái */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -57,109 +266,155 @@ export default function Home() {
 
       {/* Main View Area */}
       <main className="flex-1 h-full overflow-hidden flex flex-col p-2.5 md:p-4 bg-radial-glow">
-        
-        {/* TAB 1: PLAY CHESS (MATCHING USER SCREENSHOT 100%) */}
         {activeTab === 'play' && (
-          <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-4 items-center justify-center">
+          <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex items-center justify-center">
             
-            {/* Left Column (8/12 Cols): Bàn cờ & Thanh Thông tin Người chơi */}
-            <div className="lg:col-span-8 flex flex-col items-center justify-between h-full py-1">
-              {/* Opponent Card (Phía trên Bàn cờ - Chuẩn trong hình chụp) */}
-              <PlayerCard
-                isAi={activeMode === 'bots' || !activeMode}
-                name={activeMode === 'friend' ? 'Bạn bè (Player 2)' : 'Stockfish Engine'}
-                subText={
-                  activeMode === 'bots' || !activeMode
-                    ? difficulty === 1
-                      ? 'Mức: Dễ (~800 Elo)'
-                      : difficulty === 2
-                      ? 'Mức: Trung bình (~1400 Elo)'
-                      : 'Mức: Khó (~2000 Elo)'
-                    : 'Phòng thi đấu trực tuyến'
-                }
-                color={aiColor}
-                isThinking={isAiThinking}
-                gameStatus={gameStatus}
-              />
-
-              {/* Bàn cờ Cờ vua (Màu Xanh lá - Kem chuẩn Chess.com) */}
-              <ChessBoardComponent
-                game={game}
-                fen={fen}
-                playerColor={playerColor}
-                onPieceDrop={makePlayerMove}
-                disabled={isAiThinking}
-              />
-
-              {/* Player Card (Phía dưới Bàn cờ - Chuẩn trong hình chụp) */}
-              <PlayerCard
-                isAi={false}
-                name={user ? user.username : 'Người chơi (Bạn)'}
-                subText={playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}
-                color={playerColor}
-                gameStatus={gameStatus}
-              />
-            </div>
-
-            {/* Right Column (4/12 Cols): Menu Chọn chế độ chơi (Giống hình chụp) HOẶC Bảng điều khiển trận đấu */}
-            <div className="lg:col-span-4 flex flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
-              {!activeMode ? (
-                /* MÀN HÌNH CHỌN CHẾ ĐỘ CHƠI - MATCHING SCREENSHOT 100% */
+            {/* MÀN HÌNH CHỌN CHẾ ĐỘ CHƠI BAN ĐẦU */}
+            {!activeMode && !activeMatch ? (
+              <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center p-4">
                 <PlayMenu onSelectMode={handleSelectMode} />
-              ) : (
-                /* MÀN HÌNH BẢNG ĐIỀU KHIỂN & LỊCH SỬ NƯỚC ĐI KHI ĐANG TRONG TRẬN */
-                <div className="flex flex-col gap-3 h-full justify-between">
-                  {/* Top Bar: Back to Menu */}
-                  <div className="p-3 bg-[#262421] rounded-2xl border border-[#312E2B] flex items-center justify-between shadow-lg shrink-0">
-                    <button
-                      onClick={() => setActiveMode(null)}
-                      className="flex items-center gap-2 text-xs font-bold text-[#BAB8B6] hover:text-white transition-colors"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      <span>Quay lại Menu</span>
-                    </button>
-                    <span className="text-xs font-black text-emerald-400 uppercase tracking-wider">
-                      {activeMode === 'bots' ? 'Đánh với Máy' : activeMode === 'online' ? 'Đấu Online' : 'Đấu Bạn bè'}
-                    </span>
-                  </div>
+              </div>
+            ) : (
+              /* MÀN HÌNH BÀN CỜ THI ĐẤU (Khi đã chọn Mode) */
+              <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-4 items-center justify-center">
+                
+                {/* Left Column (8/12 Cols): Bàn cờ & Player Cards */}
+                <div className="lg:col-span-8 flex flex-col items-center justify-between h-full py-1">
+                  
+                  {/* Card ĐỐI THỦ */}
+                  <PlayerCard
+                    isAi={activeMode === 'bots' || (!activeMode && !activeMatch)}
+                    name={
+                      activeMatch
+                        ? opponentInfo?.username || 'Đối thủ Online'
+                        : activeMode === 'friend'
+                        ? 'Bạn bè (Player 2)'
+                        : 'Stockfish Engine'
+                    }
+                    subText={
+                      activeMatch
+                        ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
+                        : activeMode === 'bots'
+                        ? difficulty === 1
+                          ? 'Mức: Dễ (~800 Elo)'
+                          : difficulty === 2
+                          ? 'Mức: Trung bình (~1300 Elo)'
+                          : 'Mức: Khó (~2000 Elo)'
+                        : 'Phòng thi đấu'
+                    }
+                    color={playerColor === 'w' ? 'b' : 'w'}
+                    isThinking={activeMode === 'online' ? game.turn() !== playerColor : isAiThinking}
+                    gameStatus={currentStatus}
+                  />
 
-                  {/* Controls Box */}
-                  <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-3.5 shadow-xl shrink-0">
-                    <div className="flex items-center justify-between border-b border-[#312E2B] pb-2">
-                      <h2 className="font-bold text-xs text-white flex items-center gap-1.5">
-                        <Cpu className="w-4 h-4 text-blue-400" />
-                        Cấu hình Trận đấu
-                      </h2>
-                      <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                        Active
+                  {/* Bàn cờ Cờ vua */}
+                  <ChessBoardComponent
+                    game={game}
+                    fen={fen}
+                    playerColor={playerColor}
+                    onPieceDrop={handlePieceDrop}
+                    disabled={activeMode === 'online' ? game.turn() !== playerColor || currentStatus !== 'IN_PROGRESS' : isAiThinking}
+                  />
+
+                  {/* Card BẢN THÂN */}
+                  <PlayerCard
+                    isAi={false}
+                    name={
+                      activeMatch
+                        ? myInfo?.username || 'Bạn'
+                        : user
+                        ? user.username
+                        : 'Người chơi (Guest)'
+                    }
+                    subText={
+                      activeMatch
+                        ? `Elo: ${myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
+                        : playerColor === 'w'
+                        ? 'Cầm quân Trắng'
+                        : 'Cầm quân Đen'
+                    }
+                    color={playerColor}
+                    gameStatus={currentStatus}
+                  />
+                </div>
+
+                {/* Right Column (4/12 Cols): Bảng điều khiển & Lịch sử */}
+                <div className="lg:col-span-4 flex flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
+                  <div className="flex flex-col gap-3 h-full justify-between">
+                    
+                    {/* Top Bar: Nút Rời Phòng & Nút Đầu Hàng */}
+                    <div className="p-3 bg-[#262421] rounded-2xl border border-[#312E2B] flex items-center justify-between shadow-lg shrink-0 gap-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsLeaveModalOpen(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          <span>Rời phòng</span>
+                        </button>
+
+                        <button
+                          onClick={() => setIsResignModalOpen(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold transition-all"
+                        >
+                          <Flag className="w-4 h-4" />
+                          <span>Đầu hàng</span>
+                        </button>
+                      </div>
+
+                      <span className="text-[11px] font-black text-pink-400 uppercase tracking-wider hidden sm:inline">
+                        {activeMatch ? '⚔️ Đấu PvP Realtime' : activeMode === 'bots' ? '🤖 Đánh với Máy' : '👥 Đấu Bạn bè'}
                       </span>
                     </div>
 
-                    {activeMode === 'bots' && (
-                      <DifficultySelector
-                        difficulty={difficulty}
-                        onSelect={setDifficulty}
-                        disabled={isAiThinking}
-                      />
-                    )}
+                    {/* Controls Box */}
+                    <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-3.5 shadow-xl shrink-0">
+                      <div className="flex items-center justify-between border-b border-[#312E2B] pb-2">
+                        <h2 className="font-bold text-xs text-white flex items-center gap-1.5">
+                          <Cpu className="w-4 h-4 text-pink-400" />
+                          Cấu hình Trận đấu
+                        </h2>
+                        <span className="text-[10px] text-pink-400 font-semibold bg-pink-500/10 px-2 py-0.5 rounded-full border border-pink-500/20">
+                          {activeMatch ? 'Ghép trận Realtime' : 'Local Game'}
+                        </span>
+                      </div>
 
-                    <GameControls
-                      onReset={resetGame}
-                      onToggleColor={togglePlayerColor}
-                      playerColor={playerColor}
-                      disabled={isAiThinking}
-                    />
+                      {activeMode === 'bots' && (
+                        <DifficultySelector
+                          difficulty={difficulty}
+                          onSelect={setDifficulty}
+                          disabled={isAiThinking}
+                        />
+                      )}
+
+                      {!activeMatch && (
+                        <GameControls
+                          onReset={() => {
+                            setLocalGameOverStatus(null);
+                            setCustomGameOverMsg(undefined);
+                            resetGame();
+                          }}
+                          onToggleColor={() => {
+                            setLocalGameOverStatus(null);
+                            setCustomGameOverMsg(undefined);
+                            togglePlayerColor();
+                          }}
+                          playerColor={playerColor}
+                          disabled={isAiThinking}
+                        />
+                      )}
+                    </div>
+
+                    {/* Move History */}
+                    <MoveHistory moveHistory={moveHistory} />
                   </div>
-
-                  {/* Move History Panel */}
-                  <MoveHistory moveHistory={moveHistory} />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 2: LEADERBOARD */}
+        {/* TAB LEADERBOARD */}
         {activeTab === 'leaderboard' && (
           <div className="w-full max-w-4xl mx-auto h-full overflow-hidden flex flex-col p-4">
             <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-6 flex flex-col h-full shadow-2xl">
@@ -176,26 +431,24 @@ export default function Home() {
                   {[
                     { rank: 1, name: 'Magnus Carlsen', elo: 2882, wins: 450, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=magnus' },
                     { rank: 2, name: 'Hikaru Nakamura', elo: 2875, wins: 412, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=hikaru' },
-                    { rank: 3, name: 'Alireza Firouzja', elo: 2805, wins: 380, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=alireza' },
-                    { rank: 4, name: 'Lê Quang Liêm', elo: 2740, wins: 320, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=liem' },
+                    { rank: 3, name: 'Phan Hồng Sơn', elo: 1200, wins: 12, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=sonsamset' },
                   ].map((player) => (
                     <div key={player.rank} className="flex items-center justify-between p-3.5 rounded-xl bg-[#2F2D2A] border border-[#3A3733]">
                       <div className="flex items-center gap-3">
                         <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
-                          player.rank === 1 ? 'bg-amber-500 text-slate-950' : player.rank === 2 ? 'bg-slate-300 text-slate-950' : 'bg-amber-700 text-white'
+                          player.rank === 1 ? 'bg-amber-500 text-slate-950' : player.rank === 2 ? 'bg-slate-300 text-slate-950' : 'bg-pink-600 text-white'
                         }`}>
                           #{player.rank}
                         </span>
                         <img src={player.avatar} alt="Avatar" className="w-9 h-9 rounded-lg bg-[#363431]" />
                         <div>
-                          <p className="font-bold text-sm text-white">{player.name}</p>
+                          <p className="font-bold text-sm text-[#FFFFFF]">{player.name}</p>
                           <p className="text-[11px] text-[#8B8987]">Thắng: {player.wins} trận</p>
                         </div>
                       </div>
 
                       <div className="text-right">
                         <p className="font-black text-base text-amber-400 font-mono">🏆 {player.elo}</p>
-                        <p className="text-[10px] text-emerald-400">Grandmaster</p>
                       </div>
                     </div>
                   ))}
@@ -205,32 +458,61 @@ export default function Home() {
           </div>
         )}
 
-        {/* TAB 3: PUZZLES */}
+        {/* TAB GIẢI THẾ CỜ (CHESS PUZZLES) */}
         {activeTab === 'puzzles' && (
-          <div className="w-full max-w-4xl mx-auto h-full flex flex-col items-center justify-center p-4">
-            <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-8 text-center max-w-md shadow-2xl">
-              <Puzzle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-              <h2 className="text-xl font-black text-white mb-2">Bài tập Cờ thế (Chess Puzzles)</h2>
-              <p className="text-xs text-[#8B8987] mb-6">Giải thế cờ khó và nâng cao tư duy chiến thuật đỉnh cao.</p>
-              <button
-                onClick={() => {
-                  setActiveTab('play');
-                  setActiveMode('bots');
-                }}
-                className="py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white font-black text-xs uppercase tracking-wider shadow-lg"
-              >
-                Bắt đầu giải đố
-              </button>
-            </div>
-          </div>
+          <PuzzleView />
         )}
       </main>
 
-      {/* Auth Modal (Register / Login JWT) */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onSuccessLogin={(userData) => setUser(userData)}
+      />
+
+      <MatchmakingModal
+        isOpen={isSearchingQueue}
+        onCancel={leaveQueue}
+      />
+
+      <FriendRoomModal
+        isOpen={isFriendModalOpen}
+        onClose={() => setIsFriendModalOpen(false)}
+        createdRoomCode={createdRoomCode}
+        friendRoomError={friendRoomError}
+        onCreateRoom={handleCreateFriendRoom}
+        onJoinRoom={handleJoinFriendRoom}
+        onCancelRoom={cancelFriendRoom}
+      />
+
+      {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
+      <GameOverModal
+        gameStatus={currentStatus}
+        playerColor={playerColor}
+        isOnlineMatch={!!activeMatch}
+        customMessage={customGameOverMsg}
+        onPlayAgain={handlePlayAgain}
+        onBackToMenu={() => {
+          setLocalGameOverStatus(null);
+          setCustomGameOverMsg(undefined);
+          setActiveMode(null);
+          clearActiveMatch();
+          resetGame();
+        }}
+      />
+
+      {/* POPUP XÁC NHẬN RỜI PHÒNG ĐẤU */}
+      <LeaveRoomModal
+        isOpen={isLeaveModalOpen}
+        onConfirm={handleConfirmLeaveRoom}
+        onCancel={() => setIsLeaveModalOpen(false)}
+      />
+
+      {/* POPUP XÁC NHẬN ĐẦU HÀNG */}
+      <ResignModal
+        isOpen={isResignModalOpen}
+        onConfirm={handleConfirmResign}
+        onCancel={() => setIsResignModalOpen(false)}
       />
     </div>
   );

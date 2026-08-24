@@ -31,7 +31,7 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
     {
       level: 2,
       name: 'Trung bình',
-      elo: '~1400 Elo',
+      elo: '~1300 Elo',
       icon: Zap,
       activeStyle:
         'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md shadow-amber-500/10',
@@ -47,13 +47,13 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
   ];
 
   return (
-    <div className="flex flex-col gap-1.5 w-full">
+    <div className="flex flex-col gap-1.5 w-full select-none">
       <div className="flex items-center justify-between">
         <label className="text-xs font-semibold text-slate-300">
-          Độ khó AI Stockfish:
+          Độ khó AI Engine:
         </label>
-        <span className="text-[10px] text-slate-400 font-mono">
-          Engine WASM
+        <span className="text-[10px] text-[#8B8987] font-mono">
+          Fast Engine
         </span>
       </div>
 
@@ -70,7 +70,7 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
               className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 ${
                 isSelected
                   ? `${item.activeStyle} ring-1 ring-white/20`
-                  : 'border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-400'
+                  : 'border-[#3A3733] bg-[#2B2926] hover:bg-[#363431] text-[#BAB8B6]'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <Icon className="w-4 h-4 mb-1" />

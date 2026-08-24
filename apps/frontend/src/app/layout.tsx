@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { GoogleAuthProvider } from '../components/GoogleAuthProvider';
 
 export const metadata: Metadata = {
   title: 'Chess Online - Đánh Cờ Vua Trực Tuyến Realtime tích hợp AI',
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className="bg-slate-950 text-slate-100 antialiased font-sans">
-        {children}
+        <GoogleAuthProvider>
+          {children}
+        </GoogleAuthProvider>
       </body>
     </html>
   );

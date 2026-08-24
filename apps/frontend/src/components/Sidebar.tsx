@@ -6,9 +6,8 @@ import {
   Trophy, 
   History, 
   User, 
-  Shield, 
-  LogOut,
-  Users
+  Crown, 
+  LogOut
 } from 'lucide-react';
 
 export type ActiveTab = 'play' | 'puzzles' | 'learn' | 'leaderboard' | 'history' | 'profile';
@@ -38,11 +37,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside className="w-16 md:w-60 h-screen bg-[#262421] text-[#C3C1C0] border-r border-[#312E2B] flex flex-col justify-between p-2 md:p-3 shrink-0 select-none z-30">
-      {/* Brand Header */}
+      {/* Brand Header với Logo Quân Vua & Nền Hồng */}
       <div>
         <div className="flex items-center gap-3 px-2 py-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-500 flex items-center justify-center text-white shadow-lg shadow-green-500/20 shrink-0">
-            <Shield className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-600 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-pink-500/30 shrink-0">
+            <Crown className="w-6 h-6 fill-white/20" />
           </div>
           <div className="hidden md:block">
             <h1 className="font-black text-lg text-white tracking-wide">Chess Online</h1>
@@ -61,14 +60,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectTab(item.id)}
                 className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 font-bold text-sm text-left ${
                   isActive
-                    ? 'bg-[#363431] text-white shadow-md border-l-4 border-emerald-500'
+                    ? 'bg-[#363431] text-white shadow-md border-l-4 border-pink-500'
                     : 'hover:bg-[#2F2D2A] text-[#BAB8B6] hover:text-white'
                 }`}
               >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-emerald-400' : 'text-[#8B8987]'}`} />
+                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-pink-400' : 'text-[#8B8987]'}`} />
                 <span className="hidden md:inline flex-1">{item.label}</span>
                 {item.badge && (
-                  <span className="hidden md:inline px-2 py-0.5 text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30">
+                  <span className="hidden md:inline px-2 py-0.5 text-[10px] font-extrabold bg-pink-500/20 text-pink-300 rounded-full border border-pink-500/30">
                     {item.badge}
                   </span>
                 )}
@@ -78,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* User Footer / Auth Section */}
+      {/* User Footer / Auth Section Nền Hồng */}
       <div className="border-t border-[#312E2B] pt-3 mt-auto">
         {user ? (
           <div className="flex items-center justify-between p-2 rounded-xl bg-[#2F2D2A]">
@@ -105,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           <button
             onClick={onOpenAuthModal}
-            className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-green-500/20 active:scale-95 transition-all"
+            className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-pink-500/30 active:scale-95 transition-all"
           >
             <User className="w-4 h-4" />
             <span className="hidden md:inline">Đăng nhập / Đăng ký</span>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess, Square } from 'chess.js';
 import { PlayerColor } from '../hooks/useChessEngine';
+import { sounds } from '../utils/soundEffects';
 
 interface ChessBoardComponentProps {
   game: Chess;
@@ -26,19 +27,28 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [customSquareStyles, setCustomSquareStyles] = useState<Record<string, React.CSSProperties>>({});
 
-  // Reset highlight khi reset bàn cờ
+  // Âm thanh và Lịch sử nước đi khi FEN thay đổi
   useEffect(() => {
     setMoveFrom(null);
     const history = game.history({ verbose: true });
     if (history.length > 0) {
       const last = history[history.length - 1];
       setLastMove({ from: last.from, to: last.to });
+
+      // Phát Âm thanh tương ứng nước đi
+      if (game.inCheck()) {
+        sounds.playCheck(); // Âm thanh Chiếu Tướng dồn dập
+      } else if (last.captured) {
+        sounds.playCapture(); // Âm thanh Ăn quân
+      } else {
+        sounds.playMove(); // Âm thanh Nước đi thường
+      }
     } else {
       setLastMove(null);
     }
   }, [fen, game]);
 
-  // Cập nhật các ô Highlight (Xanh lục cho nước đi, Đỏ cho ăn quân, Xanh dương cho nước đi vừa thực hiện)
+  // Cập nhật các ô Highlight (Xanh lục/Hồng cho nước đi, Đỏ cho ăn quân, Vàng Đỏ Chiếu Tướng dưới chân Quân Vua)
   useEffect(() => {
     const styles: Record<string, React.CSSProperties> = {};
 
@@ -48,25 +58,44 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
       styles[lastMove.to] = { backgroundColor: 'rgba(59, 130, 246, 0.55)' };
     }
 
-    // 2. Highlight khi người chơi chọn một quân cờ
+    // 2. HIGHLIGHT CẢNH BÁO CHIẾU TƯỚNG DƯỚI CHÂN QUÂN VUA
+    if (game.inCheck()) {
+      const board = game.board();
+      const currentTurnColor = game.turn();
+      const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r][c];
+          if (piece && piece.type === 'k' && piece.color === currentTurnColor) {
+            const kingSquare = (files[c] + ranks[r]) as Square;
+            styles[kingSquare] = {
+              background: 'radial-gradient(circle, rgba(239, 68, 68, 0.95) 0%, rgba(220, 38, 38, 0.75) 50%, rgba(245, 158, 11, 0.6) 100%)',
+              boxShadow: 'inset 0 0 15px 4px rgba(239, 68, 68, 0.9), 0 0 25px 8px rgba(245, 158, 11, 0.95)',
+              borderRadius: '16%',
+              border: '2px solid rgba(245, 158, 11, 0.9)',
+            };
+          }
+        }
+      }
+    }
+
+    // 3. Highlight khi người chơi chọn một quân cờ
     if (moveFrom) {
-      // Highlight chính ô quân cờ đang chọn (Màu Vàng nhẹ)
       styles[moveFrom] = { backgroundColor: 'rgba(234, 179, 8, 0.45)' };
 
-      // Lấy danh sách các nước đi hợp lệ từ ô đang chọn
       const moves = game.moves({ square: moveFrom, verbose: true });
       moves.forEach((move) => {
         const isCapture = !!move.captured;
 
         if (isCapture) {
-          // Ô có quân địch có thể ăn (Màu Đỏ)
           styles[move.to] = {
             backgroundColor: 'rgba(239, 68, 68, 0.65)',
             borderRadius: '50%',
             boxShadow: 'inset 0 0 0 4px rgba(185, 28, 28, 0.9)',
           };
         } else {
-          // Ô trống có thể di chuyển tới (Màu Xanh Lục - Chấm tròn)
           styles[move.to] = {
             background: 'radial-gradient(circle, rgba(34, 197, 94, 0.75) 26%, transparent 27%)',
             borderRadius: '50%',
@@ -98,7 +127,6 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   const onSquareClick = (square: Square) => {
     if (disabled) return;
 
-    // Nếu đã chọn 1 quân cờ trước đó và click vào ô hợp lệ -> Thực hiện nước đi
     if (moveFrom) {
       const moves = game.moves({ square: moveFrom, verbose: true });
       const foundMove = moves.find((m) => m.to === square);
@@ -110,10 +138,15 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           setMoveFrom(null);
           return;
         }
+      } else {
+        // Phát âm thanh khi chọn ô mà quân cờ không thể đi tới
+        const pieceAtTarget = game.get(square);
+        if (!pieceAtTarget || pieceAtTarget.color !== playerColor) {
+          sounds.playInvalid();
+        }
       }
     }
 
-    // Chọn quân cờ cùng màu với người chơi
     const piece = game.get(square);
     if (piece && piece.color === playerColor) {
       setMoveFrom(square);
@@ -129,6 +162,9 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
     if (success) {
       setLastMove({ from: sourceSquare, to: targetSquare });
       setMoveFrom(null);
+    } else {
+      // Phát âm thanh từ chối khi kéo thả vào ô sai luật
+      sounds.playInvalid();
     }
     return success;
   };
@@ -152,8 +188,8 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           customBoardStyle={{
             borderRadius: '4px',
           }}
-          customDarkSquareStyle={{ backgroundColor: '#769656' }}
-          customLightSquareStyle={{ backgroundColor: '#EEEED2' }}
+          customDarkSquareStyle={{ backgroundColor: '#D87093' }}
+          customLightSquareStyle={{ backgroundColor: '#FFF0F5' }}
           arePiecesDraggable={!disabled}
         />
       </div>

@@ -1,24 +1,22 @@
 import bcrypt from 'bcryptjs';
 import jwt, { Secret, SignOptions } from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 import { User, IUser } from '../user/user.model';
 
 export class AuthService {
   private static JWT_SECRET: Secret = process.env.JWT_SECRET || 'supersecretchesskey123';
+  private static googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+  // 1. Đăng ký Tài khoản mới (Tên hiển thị: name, Email, Mật khẩu)
   public static async register(data: {
     email: string;
-    username: string;
+    name: string;
     password: string;
   }): Promise<{ user: Partial<IUser>; token: string }> {
-    const existingUser = await User.findOne({
-      $or: [{ email: data.email }, { username: data.username }],
-    });
+    const existingUser = await User.findOne({ email: data.email });
 
     if (existingUser) {
-      if (existingUser.email === data.email) {
-        throw { statusCode: 400, message: 'Email này đã được sử dụng' };
-      }
-      throw { statusCode: 400, message: 'Tên đăng nhập này đã được sử dụng' };
+      throw { statusCode: 400, message: 'Email này đã được đăng ký tài khoản' };
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -26,7 +24,8 @@ export class AuthService {
 
     const user = await User.create({
       email: data.email,
-      username: data.username,
+      name: data.name,
+      username: data.name,
       passwordHash,
     });
 
@@ -36,7 +35,7 @@ export class AuthService {
       user: {
         id: user._id,
         email: user.email,
-        username: user.username,
+        username: user.name || user.username,
         avatarUrl: user.avatarUrl,
         eloRating: user.eloRating,
         role: user.role,
@@ -45,11 +44,13 @@ export class AuthService {
     };
   }
 
+  // 2. Đăng nhập chuẩn bằng Email & Mật khẩu
   public static async login(data: {
     email: string;
     password: string;
   }): Promise<{ user: Partial<IUser>; token: string }> {
     const user = await User.findOne({ email: data.email });
+
     if (!user) {
       throw { statusCode: 401, message: 'Email hoặc mật khẩu không chính xác' };
     }
@@ -65,13 +66,91 @@ export class AuthService {
       user: {
         id: user._id,
         email: user.email,
-        username: user.username,
+        username: user.name || user.username,
         avatarUrl: user.avatarUrl,
         eloRating: user.eloRating,
         role: user.role,
       },
       token,
     };
+  }
+
+  // 3. Đăng nhập bằng Google (Hiển thị Tên tài khoản Google name)
+  public static async googleLogin(idToken: string): Promise<{ user: Partial<IUser>; token: string }> {
+    try {
+      let email = '';
+      let name = '';
+      let picture = '';
+
+      if (idToken.startsWith('ya29.') || idToken.split('.').length !== 3) {
+        const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        if (!googleRes.ok) {
+          throw { statusCode: 400, message: 'Xác thực Google Access Token thất bại' };
+        }
+
+        const payload: any = await googleRes.json();
+        email = payload.email;
+        name = payload.name || payload.given_name || email.split('@')[0];
+        picture = payload.picture || '';
+      } else if (process.env.GOOGLE_CLIENT_ID) {
+        const ticket = await this.googleClient.verifyIdToken({
+          idToken,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        if (!payload || !payload.email) {
+          throw { statusCode: 400, message: 'Xác thực Token Google thất bại' };
+        }
+        email = payload.email;
+        name = payload.name || payload.given_name || email.split('@')[0];
+        picture = payload.picture || '';
+      } else {
+        const decoded: any = jwt.decode(idToken);
+        email = decoded?.email || `user_${Date.now()}@gmail.com`;
+        name = decoded?.name || 'Tài khoản Google';
+        picture = decoded?.picture || 'https://api.dicebear.com/7.x/bottts/svg?seed=google';
+      }
+
+      if (!email) {
+        throw { statusCode: 400, message: 'Không lấy được Email từ Google' };
+      }
+
+      let user = await User.findOne({ email });
+
+      if (!user) {
+        const randomPassword = Math.random().toString(36).slice(-10);
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(randomPassword, salt);
+
+        user = await User.create({
+          email,
+          name,
+          username: name,
+          passwordHash,
+          avatarUrl: picture || 'https://api.dicebear.com/7.x/bottts/svg?seed=google',
+        });
+      }
+
+      const token = this.generateToken(user._id.toString(), user.role);
+
+      return {
+        user: {
+          id: user._id,
+          email: user.email,
+          username: user.name || user.username,
+          avatarUrl: user.avatarUrl,
+          eloRating: user.eloRating,
+          role: user.role,
+        },
+        token,
+      };
+    } catch (err: any) {
+      console.error('❌ Google Login Error:', err);
+      throw { statusCode: 400, message: err.message || 'Xác thực Google OAuth thất bại' };
+    }
   }
 
   private static generateToken(userId: string, role: string): string {
