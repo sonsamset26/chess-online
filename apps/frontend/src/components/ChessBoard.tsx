@@ -21,7 +21,7 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   disabled,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [boardWidth, setBoardWidth] = useState<number>(480);
+  const [boardWidth, setBoardWidth] = useState<number>(340);
 
   // States lưu vết ô đang chọn và nước đi cuối cùng
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
@@ -111,23 +111,25 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
     setCustomSquareStyles(styles);
   }, [moveFrom, lastMove, fen, game]);
 
-  // Co giãn bàn cờ tự động tối ưu cho cả Mobile Android và Desktop
+  // Tính toán kích thước bàn cờ chuẩn mực Responsive 100% (Mobile 360-412px, Tablet 768px, Desktop >1024px)
   useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
-        const isMobile = window.innerWidth < 1024;
-        const containerWidth = containerRef.current.clientWidth;
-        const maxAvailableHeight = isMobile
-          ? Math.min(window.innerWidth - 12, window.innerHeight - 230)
-          : Math.min(containerWidth, window.innerHeight - 150, 520);
-        const calculatedSize = Math.min(containerWidth, maxAvailableHeight, 520);
-        setBoardWidth(Math.max(260, calculatedSize));
+    const updateSize = () => {
+      if (typeof window !== 'undefined') {
+        const isMobile = window.innerWidth < 768;
+        const availableWidth = window.innerWidth - (isMobile ? 20 : 48);
+        const availableHeight = window.innerHeight - (isMobile ? 220 : 160);
+        const calculated = Math.min(availableWidth, availableHeight, 480);
+        setBoardWidth(Math.max(260, Math.floor(calculated)));
       }
     };
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    window.addEventListener('orientationchange', updateSize);
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      window.removeEventListener('orientationchange', updateSize);
+    };
   }, []);
 
   // Kiểm tra nước đi có phải là Phong Cấp Cho Tốt hay không
