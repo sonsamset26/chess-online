@@ -38,15 +38,12 @@ echo -e "${GREEN}✓ Đã cập nhật lên commit: ${CURRENT_COMMIT}${NC}"
 echo -e "\n${YELLOW}[2/5] Đang chuẩn bị và Build Backend...${NC}"
 cd "$PROJECT_DIR/apps/backend"
 
-# Kiểm tra file .env nếu chưa có thì tạo mẫu
+# Kiểm tra file .env nếu chưa có thì cảnh báo
 if [ ! -f ".env" ]; then
-    echo -e "${YELLOW}  Tạo file cấu hình .env cho Backend...${NC}"
-    cat << 'EOF' > .env
-PORT=5000
-NODE_ENV=production
-MONGO_URI=mongodb+srv://chess_admin:sonsamset262002@cluster0.eaowx0c.mongodb.net/chess_online?retryWrites=true&w=majority&appName=Cluster0
-JWT_SECRET=chess_super_secret_jwt_key_2026
-EOF
+    echo -e "${RED}  ⚠️ Cảnh báo: Chưa tìm thấy file .env tại apps/backend/.env${NC}"
+    echo -e "${YELLOW}  Vui lòng tạo file .env chứa biến môi trường MONGO_URI và JWT_SECRET${NC}"
+else
+    echo -e "${GREEN}  ✓ Đã tìm thấy file cấu hình môi trường .env${NC}"
 fi
 
 echo "  - Đang cài đặt thư viện Backend..."
@@ -65,14 +62,10 @@ echo -e "${GREEN}✓ Backend đã build thành công!${NC}"
 echo -e "\n${YELLOW}[3/5] Đang chuẩn bị và Build Frontend (Next.js 14)...${NC}"
 cd "$PROJECT_DIR/apps/frontend"
 
-# Kiểm tra file .env.local nếu chưa có thì tạo mẫu
 if [ ! -f ".env.local" ]; then
-    echo -e "${YELLOW}  Tạo file cấu hình .env.local cho Frontend...${NC}"
-    cat << 'EOF' > .env.local
-NEXT_PUBLIC_API_URL=https://chessvn.tech
-NEXT_PUBLIC_SOCKET_URL=https://chessvn.tech
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=202723471780-lck546jjst7kt5m8jj5r9buokl6i9gjs.apps.googleusercontent.com
-EOF
+    echo -e "${RED}  ⚠️ Cảnh báo: Chưa tìm thấy file .env.local tại apps/frontend/.env.local${NC}"
+else
+    echo -e "${GREEN}  ✓ Đã tìm thấy file cấu hình môi trường .env.local${NC}"
 fi
 
 echo "  - Đang cài đặt thư viện Frontend..."
@@ -122,5 +115,5 @@ pm2 status
 echo -e "\n${GREEN}======================================================${NC}"
 echo -e "${GREEN}  🎉 TRIỂN KHAI THÀNH CÔNG HỆ THỐNG CHESS ONLINE!     ${NC}"
 echo -e "${GREEN}  🌐 Website: https://chessvn.tech                    ${NC}"
-echo -e "${GREEN}  📡 Backend API: https://chessvn.tech/api             ${NC}"
+echo -e "${GREEN}  📡 Swagger API Docs: https://chessvn.tech/api        ${NC}"
 echo -e "${GREEN}======================================================${NC}\n"
