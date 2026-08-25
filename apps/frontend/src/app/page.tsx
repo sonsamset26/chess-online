@@ -108,12 +108,29 @@ export default function Home() {
     }
   }, [activeMatch]);
 
-  // 2. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG HOẶC F5 / THOÁT WEB
+  // 2. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
   useEffect(() => {
     if (resignationEvent) {
       const winningStatus = resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
       setLocalGameOverStatus(winningStatus);
-      setCustomGameOverMsg(resignationEvent.message);
+
+      const isMeWin = resignationEvent.winnerColor === playerColor;
+      let msg = resignationEvent.message;
+
+      if (resignationEvent.reason === 'TIMEOUT') {
+        msg = isMeWin
+          ? `Đối thủ (${resignationEvent.loserName}) đã hết thời gian thi đấu. Bạn đã Chiến Thắng!`
+          : `Bạn (${resignationEvent.loserName}) đã hết thời gian thi đấu (Lost on Time)!`;
+      } else if (resignationEvent.reason === 'DISCONNECT') {
+        msg = isMeWin
+          ? `Đối thủ (${resignationEvent.loserName}) đã ngắt kết nối/rời trận. Bạn Thắng!`
+          : `Bạn đã bị mất kết nối khỏi ván đấu.`;
+      } else if (resignationEvent.reason === 'RESIGNATION') {
+        msg = isMeWin
+          ? `Đối thủ (${resignationEvent.loserName}) đã đầu hàng. Bạn đã Chiến Thắng!`
+          : `Bạn đã đầu hàng ván đấu.`;
+      }
+      setCustomGameOverMsg(msg);
 
       // Cập nhật kết quả Elo
       if (resignationEvent.eloResult) {
@@ -170,12 +187,28 @@ export default function Home() {
     prevStatusRef.current = currentStatus;
   }, [currentStatus, playerColor, resignationEvent]);
 
-  // 4. Đồng bộ nước đi mới từ WebSocket Realtime
+  // 4. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật thế cờ chiếu hết
   useEffect(() => {
     if (latestMove && activeMode === 'online') {
       setBoardFen(latestMove.fen, latestMove.history);
+
+      if (latestMove.isGameOver) {
+        if (latestMove.isCheckmate) {
+          const winningStatus = latestMove.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
+          setLocalGameOverStatus(winningStatus);
+          const isMeWin = latestMove.winnerColor === playerColor;
+          setCustomGameOverMsg(
+            isMeWin
+              ? 'Chiến thắng vang dội! Bạn đã xuất sắc chiếu hết Vua của đối thủ.'
+              : 'Bạn đã bị đối thủ chiếu hết (Checkmate)! Hãy bấm nút "Xem bàn cờ" để quan sát lại thế trận cuối cùng.'
+          );
+        } else if (latestMove.isDraw) {
+          setLocalGameOverStatus('DRAW');
+          setCustomGameOverMsg('Ván cờ kết thúc với tỷ số Hòa (Hết nước đi hợp lệ - Stalemate hoặc Không đủ quân).');
+        }
+      }
     }
-  }, [latestMove, activeMode]);
+  }, [latestMove, activeMode, playerColor]);
 
   // Xử lý chọn Chế độ chơi từ PlayMenu (RÀNG BUỘC ĐĂNG NHẬP CHO ĐẤU TRỰC TUYẾN)
   const handleSelectMode = (mode: GameModeSelection) => {
