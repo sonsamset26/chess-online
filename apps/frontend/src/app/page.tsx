@@ -22,7 +22,7 @@ import { useChessEngine } from '../hooks/useChessEngine';
 import { useSocket, EloPlayerResult } from '../hooks/useSocket';
 import { sounds } from '../utils/soundEffects';
 import { Chess, Square } from 'chess.js';
-import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText } from 'lucide-react';
+import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText, RotateCcw } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
@@ -33,6 +33,7 @@ export default function Home() {
   const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMoveHistoryModalOpen, setIsMoveHistoryModalOpen] = useState(false);
+  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(true);
 
   const [user, setUser] = useState<{ username: string; eloRating: number; token: string } | null>(null);
   const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
@@ -100,6 +101,7 @@ export default function Home() {
       setLocalGameOverStatus(null);
       setCustomGameOverMsg(undefined);
       setCurrentMatchEloResult(null);
+      setIsGameOverModalOpen(true);
 
       const myColor = activeMatch.yourColor || 'w';
       setPlayerColor(myColor);
@@ -113,6 +115,7 @@ export default function Home() {
     if (resignationEvent) {
       const winningStatus = resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
       setLocalGameOverStatus(winningStatus);
+      setIsGameOverModalOpen(true);
 
       const isMeWin = resignationEvent.winnerColor === playerColor;
       let msg = resignationEvent.message;
@@ -171,6 +174,7 @@ export default function Home() {
   // Phát âm thanh khi kết thúc ván đấu
   useEffect(() => {
     if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && !resignationEvent) {
+      setIsGameOverModalOpen(true);
       const isWhiteWin = currentStatus === 'WHITE_WIN';
       const isBlackWin = currentStatus === 'BLACK_WIN';
       const isPlayerWin = (isWhiteWin && playerColor === 'w') || (isBlackWin && playerColor === 'b');
@@ -193,6 +197,7 @@ export default function Home() {
       setBoardFen(latestMove.fen, latestMove.history);
 
       if (latestMove.isGameOver) {
+        setIsGameOverModalOpen(true);
         if (latestMove.isCheckmate) {
           const winningStatus = latestMove.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
           setLocalGameOverStatus(winningStatus);
@@ -200,7 +205,7 @@ export default function Home() {
           setCustomGameOverMsg(
             isMeWin
               ? 'Chiến thắng vang dội! Bạn đã xuất sắc chiếu hết Vua của đối thủ.'
-              : 'Bạn đã bị đối thủ chiếu hết (Checkmate)! Hãy bấm nút "Xem bàn cờ" để quan sát lại thế trận cuối cùng.'
+              : 'Bạn đã bị đối thủ chiếu hết (Checkmate)! Bấm nút "Xem lại bàn cờ" để quan sát thế trận.'
           );
         } else if (latestMove.isDraw) {
           setLocalGameOverStatus('DRAW');
@@ -215,6 +220,7 @@ export default function Home() {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
+    setIsGameOverModalOpen(true);
 
     // RÀNG BUỘC: Đấu trực tuyến (Rated PvP) bắt buộc phải Đăng nhập tài khoản
     if (mode === 'online') {
@@ -272,6 +278,7 @@ export default function Home() {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
+    setIsGameOverModalOpen(true);
   };
 
   // Xác nhận Đầu hàng
@@ -284,6 +291,7 @@ export default function Home() {
       const losingStatus = playerColor === 'w' ? 'BLACK_WIN' : 'WHITE_WIN';
       setLocalGameOverStatus(losingStatus);
       setCustomGameOverMsg('Bạn đã đầu hàng. Trận thắng thuộc về Stockfish Engine!');
+      setIsGameOverModalOpen(true);
       sounds.playGameEndLose();
     }
   };
@@ -293,6 +301,7 @@ export default function Home() {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
+    setIsGameOverModalOpen(true);
 
     if (activeMatch) {
       clearActiveMatch();
@@ -487,6 +496,39 @@ export default function Home() {
                     gameStatus={currentStatus}
                   />
 
+                  {/* THANH ĐIỀU HƯỚNG NHANH KHI ĐÓNG MODAL XEM BÀN CỜ */}
+                  {!isGameOverModalOpen && currentStatus !== 'IN_PROGRESS' && (
+                    <div className="w-full max-w-[480px] mt-1.5 p-2 bg-[#262421]/95 border border-[#3A3733] rounded-2xl shadow-xl flex items-center justify-between gap-2 animate-in slide-in-from-bottom-2 duration-200 shrink-0">
+                      <span className="text-xs font-bold text-pink-400 pl-2 truncate">
+                        🏁 Ván đấu đã kết thúc
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={handlePlayAgain}
+                          className="px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center gap-1 shadow transition-all active:scale-95"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Ván Mới</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setLocalGameOverStatus(null);
+                            setCustomGameOverMsg(undefined);
+                            setCurrentMatchEloResult(null);
+                            setActiveMode(null);
+                            clearActiveMatch();
+                            resetGame();
+                            setIsGameOverModalOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center gap-1 transition-colors"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          <span>Menu</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* BẢNG CẤU HÌNH NHỎ GỌN TRÊN MOBILE (< md) */}
                   <div className="md:hidden w-full max-w-[500px] mt-1.5 p-2 bg-[#262421] rounded-2xl border border-[#312E2B] shadow-xl flex flex-col gap-1.5 shrink-0">
                     {activeMode === 'bots' && (
@@ -502,12 +544,14 @@ export default function Home() {
                               setLocalGameOverStatus(null);
                               setCustomGameOverMsg(undefined);
                               setCurrentMatchEloResult(null);
+                              setIsGameOverModalOpen(true);
                               resetGame();
                             }}
                             onToggleColor={() => {
                               setLocalGameOverStatus(null);
                               setCustomGameOverMsg(undefined);
                               setCurrentMatchEloResult(null);
+                              setIsGameOverModalOpen(true);
                               togglePlayerColor();
                             }}
                             playerColor={playerColor}
@@ -581,12 +625,14 @@ export default function Home() {
                             setLocalGameOverStatus(null);
                             setCustomGameOverMsg(undefined);
                             setCurrentMatchEloResult(null);
+                            setIsGameOverModalOpen(true);
                             resetGame();
                           }}
                           onToggleColor={() => {
                             setLocalGameOverStatus(null);
                             setCustomGameOverMsg(undefined);
                             setCurrentMatchEloResult(null);
+                            setIsGameOverModalOpen(true);
                             togglePlayerColor();
                           }}
                           playerColor={playerColor}
@@ -689,12 +735,14 @@ export default function Home() {
 
       {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
       <GameOverModal
+        isOpen={isGameOverModalOpen}
         gameStatus={currentStatus}
         playerColor={playerColor}
         isOnlineMatch={!!activeMatch}
         customMessage={customGameOverMsg}
         myEloResult={currentMatchEloResult}
         onPlayAgain={handlePlayAgain}
+        onCloseToReview={() => setIsGameOverModalOpen(false)}
         onBackToMenu={() => {
           setLocalGameOverStatus(null);
           setCustomGameOverMsg(undefined);
@@ -702,6 +750,7 @@ export default function Home() {
           setActiveMode(null);
           clearActiveMatch();
           resetGame();
+          setIsGameOverModalOpen(true);
         }}
       />
 
