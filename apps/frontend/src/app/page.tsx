@@ -39,6 +39,7 @@ export default function Home() {
   const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
   const [localGameOverStatus, setLocalGameOverStatus] = useState<string | null>(null);
   const [currentMatchEloResult, setCurrentMatchEloResult] = useState<EloPlayerResult | null>(null);
+  const [reconnectCountdown, setReconnectCountdown] = useState<number>(45);
 
   const prevStatusRef = useRef<string>('IN_PROGRESS');
 
@@ -95,7 +96,28 @@ export default function Home() {
 
   const currentStatus = localGameOverStatus || engineStatus;
 
-  // 1. Tự động kiểm tra và kết nối lại ván đấu (Reconnect Grace Period khi F5)
+  // 1. Đếm lùi thời gian Grace Period 45s khi đối thủ mất kết nối
+  useEffect(() => {
+    if (!disconnectedOpponent) {
+      setReconnectCountdown(45);
+      return;
+    }
+
+    setReconnectCountdown(disconnectedOpponent.gracePeriodSeconds || 45);
+    const interval = setInterval(() => {
+      setReconnectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [disconnectedOpponent]);
+
+  // 2. Tự động kiểm tra và kết nối lại ván đấu (Reconnect Grace Period khi F5)
   useEffect(() => {
     if (isConnected && !activeMatch) {
       try {
@@ -501,7 +523,10 @@ export default function Home() {
                     <div className="w-full max-w-[480px] mb-1 p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-2xl flex items-center justify-between text-amber-300 text-xs font-bold shadow-lg animate-pulse shrink-0">
                       <span className="flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Đối thủ ({disconnectedOpponent.disconnectedPlayer}) tạm mất kết nối. Đang chờ 45s...</span>
+                        <span>Đối thủ ({disconnectedOpponent.disconnectedPlayer}) tạm mất kết nối. Đang chờ:</span>
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-xl bg-amber-500/30 text-amber-200 font-mono font-black text-xs border border-amber-500/50 shadow-inner">
+                        {reconnectCountdown}s
                       </span>
                     </div>
                   )}
