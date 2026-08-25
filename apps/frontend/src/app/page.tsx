@@ -41,6 +41,19 @@ export default function Home() {
 
   const prevStatusRef = useRef<string>('IN_PROGRESS');
 
+  // Khôi phục trạng thái Đăng nhập từ LocalStorage khi F5 / mở lại trình duyệt
+  useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('chess_user');
+      const token = localStorage.getItem('chess_token');
+      if (savedUser && token) {
+        setUser(JSON.parse(savedUser));
+      }
+    } catch (err) {
+      console.error('Error reading saved user from localStorage:', err);
+    }
+  }, []);
+
   // Hook WebSocket Socket.io Realtime
   const {
     isConnected,
@@ -107,8 +120,13 @@ export default function Home() {
         const myElo = playerColor === 'w' ? resignationEvent.eloResult.white : resignationEvent.eloResult.black;
         setCurrentMatchEloResult(myElo);
 
-        // Cập nhật State User để Sidebar tự động nhảy số Elo
-        setUser((prev) => (prev ? { ...prev, eloRating: myElo.newElo } : prev));
+        // Cập nhật State User và LocalStorage để tự động nhảy số Elo
+        setUser((prev) => {
+          if (!prev) return null;
+          const updated = { ...prev, eloRating: myElo.newElo };
+          localStorage.setItem('chess_user', JSON.stringify(updated));
+          return updated;
+        });
       }
 
       if (resignationEvent.winnerColor === playerColor) {
@@ -124,7 +142,12 @@ export default function Home() {
     if (latestMove && latestMove.isGameOver && latestMove.eloResult) {
       const myElo = playerColor === 'w' ? latestMove.eloResult.white : latestMove.eloResult.black;
       setCurrentMatchEloResult(myElo);
-      setUser((prev) => (prev ? { ...prev, eloRating: myElo.newElo } : prev));
+      setUser((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, eloRating: myElo.newElo };
+        localStorage.setItem('chess_user', JSON.stringify(updated));
+        return updated;
+      });
     }
   }, [latestMove, playerColor]);
 
@@ -154,17 +177,23 @@ export default function Home() {
     }
   }, [latestMove, activeMode]);
 
-  // Xử lý chọn Chế độ chơi từ PlayMenu
+  // Xử lý chọn Chế độ chơi từ PlayMenu (RÀNG BUỘC ĐĂNG NHẬP CHO ĐẤU TRỰC TUYẾN)
   const handleSelectMode = (mode: GameModeSelection) => {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
 
+    // RÀNG BUỘC: Đấu trực tuyến (Rated PvP) bắt buộc phải Đăng nhập tài khoản
     if (mode === 'online') {
+      if (!user) {
+        setIsAuthOpen(true);
+        return;
+      }
+
       joinQueue({
-        userId: user ? user.username : `guest_${Math.floor(Math.random() * 1000)}`,
-        username: user ? user.username : 'Người chơi (Guest)',
-        eloRating: user ? user.eloRating : 1200,
+        userId: user.username,
+        username: user.username,
+        eloRating: user.eloRating || 1200,
       });
       return;
     }
@@ -266,6 +295,7 @@ export default function Home() {
 
   const handleLogout = () => {
     localStorage.removeItem('chess_token');
+    localStorage.removeItem('chess_user');
     setUser(null);
   };
 
@@ -296,7 +326,7 @@ export default function Home() {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 h-full overflow-hidden flex flex-col p-1.5 sm:p-2 md:p-4 bg-radial-glow">
+      <main className="flex-1 h-full overflow-y-auto md:overflow-hidden flex flex-col p-1.5 sm:p-2 md:p-4 bg-radial-glow">
         
         {/* TOP HEADER BAR CHO MOBILE (< md) */}
         <header className="md:hidden flex items-center justify-between p-2 sm:p-2.5 bg-[#262421] rounded-2xl border border-[#312E2B] mb-1.5 shadow-lg shrink-0">
