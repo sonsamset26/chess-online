@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle, TrendingUp, TrendingDown, Eye, X } from 'lucide-react';
+import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle, TrendingUp, TrendingDown, Eye, X, Swords, Users } from 'lucide-react';
 import { PlayerColor } from '../hooks/useChessEngine';
 import { EloPlayerResult } from '../hooks/useSocket';
 
@@ -8,6 +8,7 @@ interface GameOverModalProps {
   gameStatus: string;
   playerColor: PlayerColor;
   isOnlineMatch?: boolean;
+  isRated?: boolean;
   customMessage?: string;
   myEloResult?: EloPlayerResult | null;
   onPlayAgain: () => void;
@@ -20,6 +21,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   gameStatus,
   playerColor,
   isOnlineMatch = false,
+  isRated = false,
   customMessage,
   myEloResult,
   onPlayAgain,
@@ -61,7 +63,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </button>
 
         {/* BADGE LÝ DO KẾT THÚC */}
-        <div className="mb-3">
+        <div className="mb-3 flex items-center gap-1.5">
           <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-[#1C1A17] text-pink-400 border border-pink-500/20 shadow-sm">
             {reasonBadge}
           </span>
@@ -110,8 +112,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </>
         )}
 
-        {/* THẺ BIẾN ĐỘNG ELO NẾU LÀ ĐẤU ONLINE RATED */}
-        {myEloResult && (
+        {/* THẺ BIẾN ĐỘNG ELO KHI LÀ ĐẤU XẾP HẠNG RATED */}
+        {isRated && myEloResult && (
           <div className="w-full p-3 mb-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-between shadow-inner">
             <div className="text-left">
               <span className="text-[10px] text-[#8B8987] font-bold block uppercase tracking-wider">
@@ -133,14 +135,38 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
         )}
 
+        {/* THẺ GIAO HỮU NẾU LÀ ĐẤU BẠN BÈ (CUSTOM ROOM UNRATED) */}
+        {!isRated && isOnlineMatch && (
+          <div className="w-full p-2.5 mb-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-center gap-2 shadow-inner">
+            <Users className="w-3.5 h-3.5 text-pink-400" />
+            <span className="text-[11px] font-bold text-[#A8A6A4]">
+              Đấu Bạn Bè (Giao Hữu • Không tính điểm Elo)
+            </span>
+          </div>
+        )}
+
         {/* CÁC NÚT ĐIỀU KHIỂN CHÍNH */}
         <div className="w-full flex flex-col gap-2">
           <button
             onClick={onPlayAgain}
             className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
           >
-            {isOnlineMatch ? <PlusCircle className="w-4 h-4" /> : <RotateCcw className="w-4 h-4" />}
-            <span>{isOnlineMatch ? 'Tạo / Nhập Phòng Mới' : 'Chơi Ván Mới'}</span>
+            {isRated ? (
+              <>
+                <Swords className="w-4 h-4" />
+                <span>Tìm Trận Xếp Hạng Mới</span>
+              </>
+            ) : isOnlineMatch ? (
+              <>
+                <PlusCircle className="w-4 h-4" />
+                <span>Tạo / Nhập Phòng Mới</span>
+              </>
+            ) : (
+              <>
+                <RotateCcw className="w-4 h-4" />
+                <span>Chơi Ván Mới</span>
+              </>
+            )}
           </button>
 
           <button

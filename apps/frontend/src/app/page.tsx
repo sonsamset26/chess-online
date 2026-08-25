@@ -147,6 +147,8 @@ export default function Home() {
           localStorage.setItem('chess_user', JSON.stringify(updated));
           return updated;
         });
+      } else {
+        setCurrentMatchEloResult(null);
       }
 
       if (resignationEvent.winnerColor === playerColor) {
@@ -303,13 +305,21 @@ export default function Home() {
     setCurrentMatchEloResult(null);
     setIsGameOverModalOpen(true);
 
-    if (activeMatch) {
-      clearActiveMatch();
-      setActiveMode(null);
-      resetGame();
-      setIsFriendModalOpen(true);
+    const wasRated = activeMatch?.isRated;
+    clearActiveMatch();
+    resetGame();
+
+    if (wasRated) {
+      if (user) {
+        joinQueue({
+          userId: user.username,
+          username: user.username,
+          eloRating: user.eloRating || 1200,
+        });
+      }
     } else {
-      resetGame();
+      setActiveMode(null);
+      setIsFriendModalOpen(true);
     }
   };
 
@@ -453,7 +463,9 @@ export default function Home() {
                     }
                     subText={
                       activeMatch
-                        ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
+                        ? activeMatch.isRated
+                          ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
+                          : `Phòng Bạn Bè • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
                         : activeMode === 'bots'
                         ? difficulty === 1
                           ? 'Dễ (~800 Elo)'
@@ -488,7 +500,9 @@ export default function Home() {
                     }
                     subText={
                       activeMatch
-                        ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
+                        ? activeMatch.isRated
+                          ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
+                          : `Phòng Bạn Bè • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
                         : playerColor === 'w'
                         ? 'Cầm quân Trắng'
                         : 'Cầm quân Đen'
@@ -564,8 +578,12 @@ export default function Home() {
 
                     {activeMatch && (
                       <div className="flex items-center justify-between px-3 py-1.5 bg-[#1C1A17] rounded-xl text-xs">
-                        <span className="text-pink-400 font-bold">⚔️ Đấu PvP Realtime</span>
-                        <span className="text-amber-400 font-mono font-bold">Elo: {user?.eloRating || myInfo?.eloRating || 1200}</span>
+                        <span className="text-pink-400 font-bold">
+                          {activeMatch.isRated ? '⚔️ Đấu Xếp Hạng Online' : '👥 Đấu Bạn Bè (Custom Room)'}
+                        </span>
+                        <span className="text-amber-400 font-mono font-bold">
+                          {activeMatch.isRated ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200}` : 'Giao hữu'}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -596,7 +614,13 @@ export default function Home() {
                       </div>
 
                       <span className="text-[11px] font-black text-pink-400 uppercase tracking-wider hidden sm:inline">
-                        {activeMatch ? '⚔️ Đấu PvP Realtime' : activeMode === 'bots' ? '🤖 Đánh với Máy' : '👥 Đấu Bạn bè'}
+                        {activeMatch
+                          ? activeMatch.isRated
+                            ? '⚔️ ĐẤU XẾP HẠNG ONLINE (RATED)'
+                            : '👥 ĐẤU BẠN BÈ (CUSTOM ROOM)'
+                          : activeMode === 'bots'
+                          ? '🤖 ĐÁNH VỚI MÁY'
+                          : '👥 ĐẤU BẠN BÈ'}
                       </span>
                     </div>
 
@@ -608,7 +632,11 @@ export default function Home() {
                           Cấu hình Trận đấu
                         </h2>
                         <span className="text-[10px] text-pink-400 font-semibold bg-pink-500/10 px-2 py-0.5 rounded-full border border-pink-500/20">
-                          {activeMatch ? 'Ghép trận Realtime' : 'Local Game'}
+                          {activeMatch
+                            ? activeMatch.isRated
+                              ? 'Ghép trận Xếp hạng'
+                              : 'Phòng Giao Hữu (Unrated)'
+                            : 'Local Game'}
                         </span>
                       </div>
 
@@ -740,6 +768,7 @@ export default function Home() {
         gameStatus={currentStatus}
         playerColor={playerColor}
         isOnlineMatch={!!activeMatch}
+        isRated={activeMatch?.isRated ?? false}
         customMessage={customGameOverMsg}
         myEloResult={currentMatchEloResult}
         onPlayAgain={handlePlayAgain}
