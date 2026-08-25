@@ -10,12 +10,23 @@ export interface PlayerInfo {
   eloRating: number;
 }
 
+export interface ClockPayload {
+  whiteTimeMs: number;
+  blackTimeMs: number;
+  activeColor: 'w' | 'b';
+  turnStartedAt: number;
+  incrementMs: number;
+  serverTimestamp: number;
+}
+
 export interface ActiveMatch {
   roomId: string;
   yourColor: 'w' | 'b';
   whitePlayer: PlayerInfo;
   blackPlayer: PlayerInfo;
   fen: string;
+  isRated?: boolean;
+  clock?: ClockPayload;
 }
 
 export interface EloPlayerResult {
@@ -40,6 +51,7 @@ export interface MoveData {
   turn: string;
   winnerColor?: 'w' | 'b' | null;
   eloResult?: EloCalculationResult | null;
+  clock?: ClockPayload;
 }
 
 export interface ResignationData {
@@ -47,7 +59,7 @@ export interface ResignationData {
   winnerColor: 'w' | 'b';
   winnerName: string;
   loserName: string;
-  reason: 'RESIGNATION' | 'DISCONNECT';
+  reason: 'RESIGNATION' | 'DISCONNECT' | 'TIMEOUT';
   message: string;
   eloResult?: EloCalculationResult | null;
 }
@@ -58,8 +70,9 @@ export function useSocket() {
   const [isSearchingQueue, setIsSearchingQueue] = useState(false);
   const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(null);
   const [latestMove, setLatestMove] = useState<MoveData | null>(null);
+  const [currentClock, setCurrentClock] = useState<ClockPayload | null>(null);
 
-  // States cho phòng bạn bè & sự kiện đối thủ đầu hàng/F5
+  // States cho phòng bạn bè & sự kiện đối thủ đầu hàng/F5/Hết giờ
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const [friendRoomError, setFriendRoomError] = useState<string | null>(null);
   const [resignationEvent, setResignationEvent] = useState<ResignationData | null>(null);
@@ -105,15 +118,22 @@ export function useSocket() {
       setResignationEvent(null);
       setActiveMatch(data);
       setLatestMove(null);
+
+      if (data.clock) {
+        setCurrentClock(data.clock);
+      }
     });
 
     socketInstance.on('receive_move', (moveData: MoveData) => {
       setLatestMove(moveData);
+      if (moveData.clock) {
+        setCurrentClock(moveData.clock);
+      }
     });
 
-    // Lắng nghe thông báo Đối thủ Đầu hàng hoặc F5 / Thoát trình duyệt
+    // Lắng nghe thông báo Đối thủ Đầu hàng hoặc F5 / Thoát web hoặc Hết giờ
     socketInstance.on('opponent_resigned', (data: ResignationData) => {
-      console.log('🏳️ [Resignation Event with Elo]:', data);
+      console.log('🏳️ [Match Ended Event]:', data);
       setResignationEvent(data);
     });
 
@@ -175,6 +195,7 @@ export function useSocket() {
   const clearActiveMatch = () => {
     setActiveMatch(null);
     setLatestMove(null);
+    setCurrentClock(null);
     setCreatedRoomCode(null);
     setFriendRoomError(null);
     setResignationEvent(null);
@@ -188,6 +209,7 @@ export function useSocket() {
     friendRoomError,
     activeMatch,
     latestMove,
+    currentClock,
     resignationEvent,
     joinQueue,
     leaveQueue,
