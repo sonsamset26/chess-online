@@ -43,3 +43,7 @@ __pycache__/
 # Logs
 logs/
 *.log
+
+# Deployment & Shell scripts with secrets
+deploy.sh
+*.sh
