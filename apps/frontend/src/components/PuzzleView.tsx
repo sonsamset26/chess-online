@@ -6,7 +6,7 @@ import { PlayerCard } from './PlayerCard';
 import { sounds } from '../utils/soundEffects';
 import { Puzzle, Lightbulb, RotateCcw, ArrowRight, CheckCircle2, XCircle, Cloud } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export const PuzzleView: React.FC = () => {
   const [puzzlesList, setPuzzlesList] = useState<PuzzleData[]>(PUZZLES_DATA);

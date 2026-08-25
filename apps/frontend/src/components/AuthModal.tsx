@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, Mail, Lock, User as UserIcon, Crown, ArrowRight } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -26,7 +28,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('http://localhost:5000/api/v1/auth/google', {
+        const res = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idToken: tokenResponse.access_token }),
@@ -40,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         localStorage.setItem('chess_token', data.data.token);
         onSuccessLogin({
-          username: data.data.user.username, // Hiển thị tên tài khoản Google
+          username: data.data.user.name || data.data.user.username,
           eloRating: data.data.user.eloRating || 1200,
           token: data.data.token,
         });
@@ -66,8 +68,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       const endpoint = isLogin
-        ? 'http://localhost:5000/api/v1/auth/login'
-        : 'http://localhost:5000/api/v1/auth/register';
+        ? `${API_BASE_URL}/api/v1/auth/login`
+        : `${API_BASE_URL}/api/v1/auth/register`;
 
       const payload = isLogin
         ? { email, password }
@@ -88,7 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // Lưu Token vào LocalStorage
       localStorage.setItem('chess_token', data.data.token);
       onSuccessLogin({
-        username: data.data.user.username,
+        username: data.data.user.name || data.data.user.username,
         eloRating: data.data.user.eloRating || 1200,
         token: data.data.token,
       });

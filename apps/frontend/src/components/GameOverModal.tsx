@@ -1,12 +1,14 @@
 import React from 'react';
-import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle } from 'lucide-react';
+import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { PlayerColor } from '../hooks/useChessEngine';
+import { EloPlayerResult } from '../hooks/useSocket';
 
 interface GameOverModalProps {
   gameStatus: string;
   playerColor: PlayerColor;
   isOnlineMatch?: boolean;
   customMessage?: string;
+  myEloResult?: EloPlayerResult | null;
   onPlayAgain: () => void;
   onBackToMenu: () => void;
 }
@@ -16,6 +18,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   playerColor,
   isOnlineMatch = false,
   customMessage,
+  myEloResult,
   onPlayAgain,
   onBackToMenu,
 }) => {
@@ -34,13 +37,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         {/* ICON & TIÊU ĐỀ KẾT QUẢ */}
         {isPlayerWin && (
           <>
-            <div className="w-20 h-20 rounded-full bg-amber-500/20 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/20 mb-4 animate-bounce">
+            <div className="w-20 h-20 rounded-full bg-amber-500/20 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/20 mb-3 animate-bounce">
               <Trophy className="w-10 h-10" />
             </div>
             <h2 className="text-2xl font-black text-amber-400 tracking-wide mb-1">
               CHIẾN THẮNG RỰC RỠ!
             </h2>
-            <p className="text-xs text-[#8B8987] mb-6 leading-relaxed">
+            <p className="text-xs text-[#8B8987] mb-4 leading-relaxed">
               {customMessage || 'Chúc mừng bạn đã xuất sắc đánh bại đối thủ bằng nước chiếu hết!'}
             </p>
           </>
@@ -48,13 +51,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {isPlayerLose && (
           <>
-            <div className="w-20 h-20 rounded-full bg-rose-500/20 border-2 border-rose-500/60 flex items-center justify-center text-rose-400 shadow-xl shadow-rose-500/20 mb-4">
+            <div className="w-20 h-20 rounded-full bg-rose-500/20 border-2 border-rose-500/60 flex items-center justify-center text-rose-400 shadow-xl shadow-rose-500/20 mb-3">
               <Frown className="w-10 h-10" />
             </div>
             <h2 className="text-2xl font-black text-rose-400 tracking-wide mb-1">
               THẤT BẠI TIẾC NUỐI!
             </h2>
-            <p className="text-xs text-[#8B8987] mb-6 leading-relaxed">
+            <p className="text-xs text-[#8B8987] mb-4 leading-relaxed">
               {customMessage || 'Bạn đã bị chiếu hết. Hãy luyện tập thêm và phục thù ở ván tiếp theo!'}
             </p>
           </>
@@ -62,16 +65,39 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {isDraw && (
           <>
-            <div className="w-20 h-20 rounded-full bg-blue-500/20 border-2 border-blue-500/60 flex items-center justify-center text-blue-400 shadow-xl shadow-blue-500/20 mb-4">
+            <div className="w-20 h-20 rounded-full bg-blue-500/20 border-2 border-blue-500/60 flex items-center justify-center text-blue-400 shadow-xl shadow-blue-500/20 mb-3">
               <Handshake className="w-10 h-10" />
             </div>
             <h2 className="text-2xl font-black text-blue-400 tracking-wide mb-1">
               KẾT QUẢ HÒA CỜ!
             </h2>
-            <p className="text-xs text-[#8B8987] mb-6 leading-relaxed">
+            <p className="text-xs text-[#8B8987] mb-4 leading-relaxed">
               {customMessage || 'Trận đấu cân tài cân sức kết thúc với tỉ số Hòa (Stalemate / Repetition).'}
             </p>
           </>
+        )}
+
+        {/* THẺ HIỂN THỊ BIẾN ĐỘNG ELO SAU TRẬN ĐẤU */}
+        {myEloResult && (
+          <div className="w-full p-3 mb-5 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-between shadow-inner">
+            <div className="text-left">
+              <span className="text-[10px] text-[#8B8987] font-bold block uppercase tracking-wider">
+                Điểm Elo Xếp Hạng
+              </span>
+              <span className="text-sm font-extrabold text-white font-mono">
+                {myEloResult.oldElo} <span className="text-[#63615E]">→</span> {myEloResult.newElo}
+              </span>
+            </div>
+
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black font-mono shadow-sm ${
+              myEloResult.delta >= 0 
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+            }`}>
+              {myEloResult.delta >= 0 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-400" />}
+              <span>{myEloResult.delta >= 0 ? `+${myEloResult.delta}` : myEloResult.delta} Elo</span>
+            </div>
+          </div>
         )}
 
         {/* NÚT ĐIỀU KHIỂN SAU TRẬN */}
