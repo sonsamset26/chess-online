@@ -194,6 +194,16 @@ export class MatchGateway {
 
         this.scheduleTimeout(newRoom);
 
+        const socketWhite = this.io.sockets.sockets.get(whitePlayer.socketId);
+        const socketBlack = this.io.sockets.sockets.get(blackPlayer.socketId);
+
+        if (socketWhite) {
+          socketWhite.join(friendRoom.roomId);
+        }
+        if (socketBlack) {
+          socketBlack.join(friendRoom.roomId);
+        }
+
         const matchPayload = {
           roomId: friendRoom.roomId,
           whitePlayer: { userId: whitePlayer.userId, username: whitePlayer.username, eloRating: whitePlayer.eloRating },
@@ -209,9 +219,6 @@ export class MatchGateway {
             serverTimestamp: serverNow,
           },
         };
-
-        const socketWhite = this.io.sockets.sockets.get(whitePlayer.socketId);
-        const socketBlack = this.io.sockets.sockets.get(blackPlayer.socketId);
 
         if (socketWhite) socketWhite.emit('match_found', { ...matchPayload, yourColor: 'w' });
         if (socketBlack) socketBlack.emit('match_found', { ...matchPayload, yourColor: 'b' });
@@ -544,6 +551,14 @@ export class MatchGateway {
 
       const socketWhite = this.io.sockets.sockets.get(whitePlayer.socketId);
       const socketBlack = this.io.sockets.sockets.get(blackPlayer.socketId);
+
+      // ⚠️ GẮN SOCKET CỦA CẢ 2 VÀO ROOM ID TRƯỚC KHI EMIT SỰ KIỆN
+      if (socketWhite) {
+        socketWhite.join(roomId);
+      }
+      if (socketBlack) {
+        socketBlack.join(roomId);
+      }
 
       const matchPayload = {
         roomId,

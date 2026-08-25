@@ -323,6 +323,7 @@ export default function Home() {
         const testGame = new Chess(game.fen());
         const move = testGame.move({ from, to, promotion });
         if (move) {
+          setBoardFen(testGame.fen(), testGame.history());
           sendMove(activeMatch.roomId, from, to, promotion);
           return true;
         }
