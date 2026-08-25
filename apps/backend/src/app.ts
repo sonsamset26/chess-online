@@ -28,7 +28,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 
-// GẮN CỔNG TÀI LIỆU API (SWAGGER UI OPENAPI 3.0) TẠI /api VÀ /api/docs
+// 1. GẮN CÁC ROUTE API TRƯỚC (Prefix /api/v1)
+app.use('/api/v1', healthRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/puzzles', puzzleRoutes);
+app.use('/api/puzzles', puzzleRoutes);
+
+// 2. GẮN CỔNG TÀI LIỆU SWAGGER UI TẠI /api/docs VÀ REDIRECT /api -> /api/docs
 const swaggerCustomOptions = {
   customSiteTitle: 'Chess Online API Documentation | https://chessvn.tech',
   customCss: `
@@ -40,20 +47,15 @@ const swaggerCustomOptions = {
 };
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerCustomOptions));
-app.use('/api', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerCustomOptions));
-
-// Mount Modules API Routes (RESTful prefix /api/v1)
-app.use('/api/v1', healthRoutes);
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/puzzles', puzzleRoutes);
-app.use('/api/puzzles', puzzleRoutes);
+app.get('/api', (req: Request, res: Response) => {
+  res.redirect('/api/docs');
+});
 
 // Unhandled Route Handler (404)
 app.use('*', (req: Request, res: Response) => {
   return ApiResponse.error(
     res,
-    `Đường dẫn API ${req.originalUrl} không tồn tại trên máy chủ. Xem tài liệu API tại: https://chessvn.tech/api`,
+    `Đường dẫn API ${req.originalUrl} không tồn tại trên máy chủ. Xem tài liệu API tại: https://chessvn.tech/api/docs`,
     404
   );
 });
