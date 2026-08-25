@@ -31,6 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const res = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // Cho phép nhận httpOnly Cookie refreshToken từ Backend
           body: JSON.stringify({ idToken: tokenResponse.access_token }),
         });
 
@@ -43,10 +44,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const userData = {
           username: data.data.user.name || data.data.user.username,
           eloRating: data.data.user.eloRating || 1200,
-          token: data.data.token,
+          token: data.data.accessToken || data.data.token,
         };
 
-        localStorage.setItem('chess_token', data.data.token);
+        localStorage.setItem('chess_token', userData.token);
         localStorage.setItem('chess_user', JSON.stringify(userData));
         onSuccessLogin(userData);
 
@@ -81,6 +82,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Cho phép nhận httpOnly Cookie refreshToken từ Backend
         body: JSON.stringify(payload),
       });
 
@@ -93,11 +95,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const userData = {
         username: data.data.user.name || data.data.user.username,
         eloRating: data.data.user.eloRating || 1200,
-        token: data.data.token,
+        token: data.data.accessToken || data.data.token,
       };
 
-      // Lưu Token và Thông tin User vào LocalStorage
-      localStorage.setItem('chess_token', data.data.token);
+      // Lưu Token và Thông tin User
+      localStorage.setItem('chess_token', userData.token);
       localStorage.setItem('chess_user', JSON.stringify(userData));
       onSuccessLogin(userData);
 
