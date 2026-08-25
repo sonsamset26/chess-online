@@ -40,12 +40,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error(data.message || 'Đăng nhập Google thất bại');
         }
 
-        localStorage.setItem('chess_token', data.data.token);
-        onSuccessLogin({
+        const userData = {
           username: data.data.user.name || data.data.user.username,
           eloRating: data.data.user.eloRating || 1200,
           token: data.data.token,
-        });
+        };
+
+        localStorage.setItem('chess_token', data.data.token);
+        localStorage.setItem('chess_user', JSON.stringify(userData));
+        onSuccessLogin(userData);
 
         onClose();
       } catch (err: any) {
@@ -87,13 +90,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error(data.message || 'Đã xảy ra lỗi khi xác thực');
       }
 
-      // Lưu Token vào LocalStorage
-      localStorage.setItem('chess_token', data.data.token);
-      onSuccessLogin({
+      const userData = {
         username: data.data.user.name || data.data.user.username,
         eloRating: data.data.user.eloRating || 1200,
         token: data.data.token,
-      });
+      };
+
+      // Lưu Token và Thông tin User vào LocalStorage
+      localStorage.setItem('chess_token', data.data.token);
+      localStorage.setItem('chess_user', JSON.stringify(userData));
+      onSuccessLogin(userData);
 
       onClose();
     } catch (err: any) {
@@ -123,7 +129,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {isLogin ? 'Đăng nhập Chess Online' : 'Tạo Tài khoản Mới'}
           </h2>
           <p className="text-xs text-[#8B8987] mt-1">
-            {isLogin ? 'Nhập Email và Mật khẩu của bạn' : 'Điền Tên hiển thị, Email và Mật khẩu để tham gia'}
+            {isLogin ? 'Nhập Email và Mật khẩu để bắt đầu thi đấu' : 'Điền Tên hiển thị, Email và Mật khẩu để tham gia'}
           </p>
         </div>
 
