@@ -111,14 +111,17 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
     setCustomSquareStyles(styles);
   }, [moveFrom, lastMove, fen, game]);
 
-  // Co giãn bàn cờ tự động
+  // Co giãn bàn cờ tự động tối ưu cho cả Mobile Android và Desktop
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current) {
+        const isMobile = window.innerWidth < 1024;
         const containerWidth = containerRef.current.clientWidth;
-        const maxAvailableHeight = window.innerHeight - 150;
+        const maxAvailableHeight = isMobile
+          ? Math.min(window.innerWidth - 12, window.innerHeight - 230)
+          : Math.min(containerWidth, window.innerHeight - 150, 520);
         const calculatedSize = Math.min(containerWidth, maxAvailableHeight, 520);
-        setBoardWidth(Math.max(280, calculatedSize));
+        setBoardWidth(Math.max(260, calculatedSize));
       }
     };
 
@@ -219,11 +222,12 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full flex items-center justify-center p-0.5 my-auto relative"
+      className="w-full flex items-center justify-center p-0.5 my-auto relative select-none touch-none"
+      style={{ touchAction: 'none' }}
     >
       <div
         style={{ width: `${boardWidth}px`, height: `${boardWidth}px` }}
-        className="rounded-lg overflow-hidden shadow-2xl border-[3px] border-[#21201D] bg-[#262421] flex items-center justify-center shrink-0 transition-all duration-200"
+        className="rounded-xl overflow-hidden shadow-2xl border-[3px] border-[#21201D] bg-[#262421] flex items-center justify-center shrink-0 transition-all duration-200"
       >
         <Chessboard
           position={fen}
@@ -233,7 +237,7 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           customSquareStyles={customSquareStyles}
           boardOrientation={playerColor === 'w' ? 'white' : 'black'}
           customBoardStyle={{
-            borderRadius: '4px',
+            borderRadius: '6px',
           }}
           customDarkSquareStyle={{ backgroundColor: '#D87093' }}
           customLightSquareStyle={{ backgroundColor: '#FFF0F5' }}

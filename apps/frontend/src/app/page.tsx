@@ -9,6 +9,7 @@ import { FriendRoomModal } from '../components/FriendRoomModal';
 import { GameOverModal } from '../components/GameOverModal';
 import { LeaveRoomModal } from '../components/LeaveRoomModal';
 import { ResignModal } from '../components/ResignModal';
+import { MoveHistoryModal } from '../components/MoveHistoryModal';
 import { PromotionPiece } from '../components/PromotionModal';
 import { PuzzleView } from '../components/PuzzleView';
 import { LearnView } from '../components/LearnView';
@@ -21,7 +22,7 @@ import { useChessEngine } from '../hooks/useChessEngine';
 import { useSocket, EloPlayerResult } from '../hooks/useSocket';
 import { sounds } from '../utils/soundEffects';
 import { Chess, Square } from 'chess.js';
-import { Cpu, ArrowLeft, Flag, Trophy } from 'lucide-react';
+import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
@@ -30,6 +31,9 @@ export default function Home() {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isResignModalOpen, setIsResignModalOpen] = useState(false);
   const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMoveHistoryModalOpen, setIsMoveHistoryModalOpen] = useState(false);
+
   const [user, setUser] = useState<{ username: string; eloRating: number; token: string } | null>(null);
   const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
   const [localGameOverStatus, setLocalGameOverStatus] = useState<string | null>(null);
@@ -279,32 +283,86 @@ export default function Home() {
     : null;
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#161512] text-[#C3C1C0] flex select-none">
-      {/* Sidebar Trái */}
+    <div className="h-[100dvh] w-screen overflow-hidden bg-[#161512] text-[#C3C1C0] flex select-none">
+      {/* Sidebar (Desktop cố định, Mobile trượt Drawer khi mở) */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         user={user}
         onOpenAuthModal={() => setIsAuthOpen(true)}
         onLogout={handleLogout}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main View Area */}
-      <main className="flex-1 h-full overflow-hidden flex flex-col p-2.5 md:p-4 bg-radial-glow">
+      <main className="flex-1 h-full overflow-hidden flex flex-col p-2 md:p-4 bg-radial-glow">
+        
+        {/* TOP HEADER BAR CHO MOBILE (< lg) */}
+        <header className="lg:hidden flex items-center justify-between p-2.5 bg-[#262421] rounded-2xl border border-[#312E2B] mb-2 shadow-lg shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-2 rounded-xl bg-[#2F2D2A] text-white hover:bg-[#383531] border border-[#3A3733] transition-colors active:scale-95"
+              title="Menu Điều Hướng"
+            >
+              <Menu className="w-5 h-5 text-pink-400" />
+            </button>
+            <div className="flex items-center gap-1.5 font-black text-sm text-white">
+              <Crown className="w-4 h-4 text-pink-500 fill-pink-500/20" />
+              <span>Chess Online</span>
+            </div>
+          </div>
+
+          {/* Cụm nút thao tác trên Mobile khi đang trong ván đấu */}
+          {(activeMode || activeMatch) && activeTab === 'play' && (
+            <div className="flex items-center gap-1.5">
+              {/* Nút xem Lịch sử nước đi */}
+              <button
+                onClick={() => setIsMoveHistoryModalOpen(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 text-xs font-bold transition-all active:scale-95"
+                title="Xem Lịch sử nước đi"
+              >
+                <ScrollText className="w-3.5 h-3.5" />
+                <span className="font-mono text-[11px]">({moveHistory.length})</span>
+              </button>
+
+              {/* Nút Đầu hàng */}
+              <button
+                onClick={() => setIsResignModalOpen(true)}
+                className="p-1.5 px-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-all active:scale-95"
+                title="Đầu hàng"
+              >
+                <Flag className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Nút Rời phòng */}
+              <button
+                onClick={() => setIsLeaveModalOpen(true)}
+                className="p-1.5 px-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all active:scale-95"
+                title="Rời phòng"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </header>
+
+        {/* TAB CHƠI CỜ (PLAY) */}
         {activeTab === 'play' && (
           <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex items-center justify-center">
             
             {/* MÀN HÌNH CHỌN CHẾ ĐỘ CHƠI BAN ĐẦU */}
             {!activeMode && !activeMatch ? (
-              <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center p-4">
+              <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center p-2 md:p-4">
                 <PlayMenu onSelectMode={handleSelectMode} />
               </div>
             ) : (
-              /* MÀN HÌNH BÀN CỜ THI ĐẤU (Khi đã chọn Mode) */
-              <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-4 items-center justify-center">
+              /* MÀN HÌNH BÀN CỜ THI ĐẤU */
+              <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-2 md:gap-4 items-center justify-center">
                 
-                {/* Left Column (8/12 Cols): Bàn cờ & Player Cards */}
-                <div className="lg:col-span-8 flex flex-col items-center justify-between h-full py-1">
+                {/* Left Column (8/12 Cols Desktop, 100% Mobile): Bàn cờ & Player Cards */}
+                <div className="lg:col-span-8 flex flex-col items-center justify-between h-full py-0.5 md:py-1">
                   
                   {/* Card ĐỐI THỦ */}
                   <PlayerCard
@@ -321,10 +379,10 @@ export default function Home() {
                         ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
                         : activeMode === 'bots'
                         ? difficulty === 1
-                          ? 'Mức: Dễ (~800 Elo)'
+                          ? 'Dễ (~800 Elo)'
                           : difficulty === 2
-                          ? 'Mức: Trung bình (~1300 Elo)'
-                          : 'Mức: Khó (~2000 Elo)'
+                          ? 'Trung bình (~1300 Elo)'
+                          : 'Khó (~2000 Elo)'
                         : 'Phòng thi đấu'
                     }
                     color={playerColor === 'w' ? 'b' : 'w'}
@@ -361,10 +419,48 @@ export default function Home() {
                     color={playerColor}
                     gameStatus={currentStatus}
                   />
+
+                  {/* BẢNG CẤU HÌNH NHỎ GỌN TRÊN MOBILE (< lg) */}
+                  <div className="lg:hidden w-full max-w-[500px] mt-1.5 p-2 bg-[#262421] rounded-2xl border border-[#312E2B] shadow-xl flex flex-col gap-1.5 shrink-0">
+                    {activeMode === 'bots' && (
+                      <div className="flex flex-col gap-1.5">
+                        <DifficultySelector
+                          difficulty={difficulty}
+                          onSelect={setDifficulty}
+                          disabled={isAiThinking}
+                        />
+                        {!activeMatch && (
+                          <GameControls
+                            onReset={() => {
+                              setLocalGameOverStatus(null);
+                              setCustomGameOverMsg(undefined);
+                              setCurrentMatchEloResult(null);
+                              resetGame();
+                            }}
+                            onToggleColor={() => {
+                              setLocalGameOverStatus(null);
+                              setCustomGameOverMsg(undefined);
+                              setCurrentMatchEloResult(null);
+                              togglePlayerColor();
+                            }}
+                            playerColor={playerColor}
+                            disabled={isAiThinking}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {activeMatch && (
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-[#1C1A17] rounded-xl text-xs">
+                        <span className="text-pink-400 font-bold">⚔️ Đấu PvP Realtime</span>
+                        <span className="text-amber-400 font-mono font-bold">Elo: {user?.eloRating || myInfo?.eloRating || 1200}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Right Column (4/12 Cols): Bảng điều khiển & Lịch sử */}
-                <div className="lg:col-span-4 flex flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
+                {/* Right Column (4/12 Cols Desktop, Ẩn trên Mobile vì đã có Top Bar & Bottom Panel) */}
+                <div className="hidden lg:flex lg:col-span-4 flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
                   <div className="flex flex-col gap-3 h-full justify-between">
                     
                     {/* Top Bar: Nút Rời Phòng & Nút Đầu Hàng */}
@@ -392,7 +488,7 @@ export default function Home() {
                       </span>
                     </div>
 
-                    {/* Controls Box */}
+                    {/* Controls Box Desktop */}
                     <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-3.5 shadow-xl shrink-0">
                       <div className="flex items-center justify-between border-b border-[#312E2B] pb-2">
                         <h2 className="font-bold text-xs text-white flex items-center gap-1.5">
@@ -432,7 +528,7 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Move History */}
+                    {/* Move History Desktop */}
                     <MoveHistory moveHistory={moveHistory} />
                   </div>
                 </div>
@@ -443,39 +539,39 @@ export default function Home() {
 
         {/* TAB LEADERBOARD */}
         {activeTab === 'leaderboard' && (
-          <div className="w-full max-w-4xl mx-auto h-full overflow-hidden flex flex-col p-4">
-            <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-6 flex flex-col h-full shadow-2xl">
-              <div className="flex items-center gap-3 border-b border-[#312E2B] pb-4 mb-4">
-                <Trophy className="w-7 h-7 text-amber-400" />
+          <div className="w-full max-w-4xl mx-auto h-full overflow-hidden flex flex-col p-2 md:p-4">
+            <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-4 md:p-6 flex flex-col h-full shadow-2xl">
+              <div className="flex items-center gap-3 border-b border-[#312E2B] pb-3 md:pb-4 mb-3 md:mb-4">
+                <Trophy className="w-6 h-6 md:w-7 md:h-7 text-amber-400" />
                 <div>
-                  <h2 className="text-lg font-black text-white">Bảng Xếp Hạng Elo Quốc Tế</h2>
-                  <p className="text-xs text-[#8B8987]">Top cao thủ có điểm Elo cao nhất hệ thống</p>
+                  <h2 className="text-base md:text-lg font-black text-white">Bảng Xếp Hạng Elo Quốc Tế</h2>
+                  <p className="text-[11px] md:text-xs text-[#8B8987]">Top cao thủ có điểm Elo cao nhất hệ thống</p>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 md:pr-2">
                 <div className="flex flex-col gap-2">
                   {[
                     { rank: 1, name: 'Magnus Carlsen', elo: 2882, wins: 450, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=magnus' },
                     { rank: 2, name: 'Hikaru Nakamura', elo: 2875, wins: 412, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=hikaru' },
                     { rank: 3, name: 'Phan Hồng Sơn', elo: user?.eloRating || 1200, wins: 12, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=sonsamset' },
                   ].map((player) => (
-                    <div key={player.rank} className="flex items-center justify-between p-3.5 rounded-xl bg-[#2F2D2A] border border-[#3A3733]">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                    <div key={player.rank} className="flex items-center justify-between p-3 rounded-xl bg-[#2F2D2A] border border-[#3A3733]">
+                      <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+                        <span className={`w-6 h-6 md:w-7 md:h-7 rounded-lg flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 ${
                           player.rank === 1 ? 'bg-amber-500 text-slate-950' : player.rank === 2 ? 'bg-slate-300 text-slate-950' : 'bg-pink-600 text-white'
                         }`}>
                           #{player.rank}
                         </span>
-                        <img src={player.avatar} alt="Avatar" className="w-9 h-9 rounded-lg bg-[#363431]" />
-                        <div>
-                          <p className="font-bold text-sm text-[#FFFFFF]">{player.name}</p>
-                          <p className="text-[11px] text-[#8B8987]">Thắng: {player.wins} trận</p>
+                        <img src={player.avatar} alt="Avatar" className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-[#363431] shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs md:text-sm text-[#FFFFFF] truncate">{player.name}</p>
+                          <p className="text-[10px] md:text-[11px] text-[#8B8987]">Thắng: {player.wins} trận</p>
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <p className="font-black text-base text-amber-400 font-mono">🏆 {player.elo}</p>
+                      <div className="text-right shrink-0">
+                        <p className="font-black text-sm md:text-base text-amber-400 font-mono">🏆 {player.elo}</p>
                       </div>
                     </div>
                   ))}
@@ -517,7 +613,14 @@ export default function Home() {
         onCancelRoom={cancelFriendRoom}
       />
 
-      {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU (KÈM BIẾN ĐỘNG ELO) */}
+      {/* POPUP LỊCH SỬ NƯỚC ĐI TRÊN MOBILE */}
+      <MoveHistoryModal
+        isOpen={isMoveHistoryModalOpen}
+        onClose={() => setIsMoveHistoryModalOpen(false)}
+        moveHistory={moveHistory}
+      />
+
+      {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
       <GameOverModal
         gameStatus={currentStatus}
         playerColor={playerColor}
