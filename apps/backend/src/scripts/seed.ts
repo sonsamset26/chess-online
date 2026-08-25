@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 import { connectDB } from '../config/db';
 import { User } from '../modules/user/user.model';
 import { Match } from '../modules/match/match.model';
@@ -18,12 +19,14 @@ const seedData = async () => {
 
     console.log('🌱 Đang khởi tạo dữ liệu mẫu (Seed Data)...');
 
+    const defaultPasswordHash = await bcrypt.hash('admin123', 10);
+
     // 1. Tạo các Tài khoản Mẫu (Users)
     const admin = await User.create({
       email: 'admin@chess.online',
       username: 'chess_admin',
       name: 'Phan Hồng Sơn (Admin)',
-      passwordHash: '$2a$10$X8XzQ1K2K3K4K5K6K7K8K.z9y8x7w6v5u4t3s2r1q0p9o8n7m6',
+      passwordHash: defaultPasswordHash,
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
       eloRating: 2000,
       role: 'ADMIN',
@@ -33,7 +36,7 @@ const seedData = async () => {
       email: 'magnus@chess.online',
       username: 'Magnus Carlsen',
       name: 'Magnus Carlsen',
-      passwordHash: '$2a$10$X8XzQ1K2K3K4K5K6K7K8K.z9y8x7w6v5u4t3s2r1q0p9o8n7m6',
+      passwordHash: defaultPasswordHash,
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=magnus',
       eloRating: 2882,
       wins: 45,
@@ -46,7 +49,7 @@ const seedData = async () => {
       email: 'hikaru@chess.online',
       username: 'Hikaru Nakamura',
       name: 'Hikaru Nakamura',
-      passwordHash: '$2a$10$X8XzQ1K2K3K4K5K6K7K8K.z9y8x7w6v5u4t3s2r1q0p9o8n7m6',
+      passwordHash: defaultPasswordHash,
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=hikaru',
       eloRating: 2875,
       wins: 40,
