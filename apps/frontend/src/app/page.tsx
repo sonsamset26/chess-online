@@ -284,7 +284,7 @@ export default function Home() {
 
   return (
     <div className="h-[100dvh] w-screen overflow-hidden bg-[#161512] text-[#C3C1C0] flex select-none">
-      {/* Sidebar (Desktop cố định, Mobile trượt Drawer khi mở) */}
+      {/* Sidebar (Desktop cố định bên trái, Mobile trượt Drawer khi mở nút 3 gạch) */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -296,10 +296,10 @@ export default function Home() {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 h-full overflow-hidden flex flex-col p-2 md:p-4 bg-radial-glow">
+      <main className="flex-1 h-full overflow-hidden flex flex-col p-1.5 sm:p-2 md:p-4 bg-radial-glow">
         
-        {/* TOP HEADER BAR CHO MOBILE (< lg) */}
-        <header className="lg:hidden flex items-center justify-between p-2.5 bg-[#262421] rounded-2xl border border-[#312E2B] mb-2 shadow-lg shrink-0">
+        {/* TOP HEADER BAR CHO MOBILE (< md) */}
+        <header className="md:hidden flex items-center justify-between p-2 sm:p-2.5 bg-[#262421] rounded-2xl border border-[#312E2B] mb-1.5 shadow-lg shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -315,7 +315,7 @@ export default function Home() {
           </div>
 
           {/* Cụm nút thao tác trên Mobile khi đang trong ván đấu */}
-          {(activeMode || activeMatch) && activeTab === 'play' && (
+          {(activeMode || activeMatch) && activeTab === 'play' ? (
             <div className="flex items-center gap-1.5">
               {/* Nút xem Lịch sử nước đi */}
               <button
@@ -345,6 +345,10 @@ export default function Home() {
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
             </div>
+          ) : (
+            <div className="text-[11px] text-pink-400 font-bold bg-pink-500/10 px-2.5 py-1 rounded-full border border-pink-500/20">
+              v1.2 Mobile
+            </div>
           )}
         </header>
 
@@ -359,10 +363,10 @@ export default function Home() {
               </div>
             ) : (
               /* MÀN HÌNH BÀN CỜ THI ĐẤU */
-              <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-2 md:gap-4 items-center justify-center">
+              <div className="w-full h-full grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center justify-center">
                 
-                {/* Left Column (8/12 Cols Desktop, 100% Mobile): Bàn cờ & Player Cards */}
-                <div className="lg:col-span-8 flex flex-col items-center justify-between h-full py-0.5 md:py-1">
+                {/* Left Column (Desktop 7-8/12 Cols, Mobile 100%): Bàn cờ & Player Cards */}
+                <div className="md:col-span-7 lg:col-span-8 flex flex-col items-center justify-between h-full py-0.5 md:py-1">
                   
                   {/* Card ĐỐI THỦ */}
                   <PlayerCard
@@ -420,8 +424,8 @@ export default function Home() {
                     gameStatus={currentStatus}
                   />
 
-                  {/* BẢNG CẤU HÌNH NHỎ GỌN TRÊN MOBILE (< lg) */}
-                  <div className="lg:hidden w-full max-w-[500px] mt-1.5 p-2 bg-[#262421] rounded-2xl border border-[#312E2B] shadow-xl flex flex-col gap-1.5 shrink-0">
+                  {/* BẢNG CẤU HÌNH NHỎ GỌN TRÊN MOBILE (< md) */}
+                  <div className="md:hidden w-full max-w-[500px] mt-1.5 p-2 bg-[#262421] rounded-2xl border border-[#312E2B] shadow-xl flex flex-col gap-1.5 shrink-0">
                     {activeMode === 'bots' && (
                       <div className="flex flex-col gap-1.5">
                         <DifficultySelector
@@ -459,8 +463,8 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Right Column (4/12 Cols Desktop, Ẩn trên Mobile vì đã có Top Bar & Bottom Panel) */}
-                <div className="hidden lg:flex lg:col-span-4 flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
+                {/* Right Column (Desktop 4-5/12 Cols, Ẩn trên Mobile) */}
+                <div className="hidden md:flex md:col-span-5 lg:col-span-4 flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
                   <div className="flex flex-col gap-3 h-full justify-between">
                     
                     {/* Top Bar: Nút Rời Phòng & Nút Đầu Hàng */}
