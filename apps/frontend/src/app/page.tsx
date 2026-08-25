@@ -96,6 +96,8 @@ export default function Home() {
 
   const currentStatus = localGameOverStatus || engineStatus;
 
+  const currentActiveRoomIdRef = useRef<string | null>(null);
+
   // 1. Đếm lùi thời gian Grace Period 45s khi đối thủ mất kết nối
   useEffect(() => {
     if (!disconnectedOpponent) {
@@ -135,9 +137,10 @@ export default function Home() {
     }
   }, [isConnected, activeMatch]);
 
-  // 2. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi ghép trận / bạn bè / reconnect thành công
+  // 3. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi bắt đầu phòng mới
   useEffect(() => {
-    if (activeMatch) {
+    if (activeMatch && activeMatch.roomId !== currentActiveRoomIdRef.current) {
+      currentActiveRoomIdRef.current = activeMatch.roomId;
       setIsFriendModalOpen(false);
       setActiveMode('online');
       setLocalGameOverStatus(null);
@@ -152,7 +155,7 @@ export default function Home() {
 
       // Lưu thông tin trận đấu vào LocalStorage để hỗ trợ F5 Reconnect
       try {
-        const myUserId = user?.username || (myColor === 'w' ? activeMatch.whitePlayer.userId : activeMatch.blackPlayer.userId);
+        const myUserId = (myColor === 'w' ? activeMatch.whitePlayer.userId : activeMatch.blackPlayer.userId);
         localStorage.setItem(
           'chess_active_online_match',
           JSON.stringify({
@@ -163,8 +166,10 @@ export default function Home() {
       } catch (err) {
         console.error('Error saving active online match to localStorage:', err);
       }
+    } else if (!activeMatch) {
+      currentActiveRoomIdRef.current = null;
     }
-  }, [activeMatch, user]);
+  }, [activeMatch]);
 
   // 3. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
   useEffect(() => {
@@ -216,24 +221,7 @@ export default function Home() {
     }
   }, [resignationEvent, playerColor]);
 
-  // 4. Phát âm thanh KẾT THÚC TRẬN & Bắt Elo khi Chiếu Hết qua latestMove
-  useEffect(() => {
-    if (latestMove && latestMove.isGameOver) {
-      localStorage.removeItem('chess_active_online_match');
-      if (latestMove.eloResult) {
-        const myElo = playerColor === 'w' ? latestMove.eloResult.white : latestMove.eloResult.black;
-        setCurrentMatchEloResult(myElo);
-        setUser((prev) => {
-          if (!prev) return null;
-          const updated = { ...prev, eloRating: myElo.newElo };
-          localStorage.setItem('chess_user', JSON.stringify(updated));
-          return updated;
-        });
-      }
-    }
-  }, [latestMove, playerColor]);
-
-  // Phát âm thanh khi kết thúc ván đấu
+  // 4. Phát âm thanh khi kết thúc ván đấu
   useEffect(() => {
     if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && !resignationEvent) {
       localStorage.removeItem('chess_active_online_match');
@@ -254,7 +242,7 @@ export default function Home() {
     prevStatusRef.current = currentStatus;
   }, [currentStatus, playerColor, resignationEvent]);
 
-  // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật thế cờ chiếu hết
+  // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật kết thúc trận (Checkmate / Draw)
   useEffect(() => {
     if (latestMove && activeMode === 'online') {
       setBoardFen(latestMove.fen, latestMove.history);
@@ -274,6 +262,17 @@ export default function Home() {
         } else if (latestMove.isDraw) {
           setLocalGameOverStatus('DRAW');
           setCustomGameOverMsg('Ván cờ kết thúc với tỷ số Hòa (Hết nước đi hợp lệ - Stalemate hoặc Không đủ quân).');
+        }
+
+        if (latestMove.eloResult) {
+          const myElo = playerColor === 'w' ? latestMove.eloResult.white : latestMove.eloResult.black;
+          setCurrentMatchEloResult(myElo);
+          setUser((prev) => {
+            if (!prev) return null;
+            const updated = { ...prev, eloRating: myElo.newElo };
+            localStorage.setItem('chess_user', JSON.stringify(updated));
+            return updated;
+          });
         }
       }
     }
