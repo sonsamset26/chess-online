@@ -306,6 +306,7 @@ export class MatchGateway {
           if (isGameOver) {
             room.status = 'FINISHED';
             if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+            if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
 
             if (isCheckmate) {
               winnerColor = nextTurn === 'w' ? 'b' : 'w';
@@ -364,14 +365,105 @@ export class MatchGateway {
         }
       });
 
-      // 7. Xử lý ngắt kết nối (Disconnect)
+      // 7. XỬ LÝ KẾT NỐI LẠI PHÒNG (RECONNECT / F5 GRACE PERIOD)
+      socket.on('reconnect_match', (data: { roomId: string; userId: string }) => {
+        const room = this.activeRooms.get(data.roomId);
+        if (!room || room.status === 'FINISHED') {
+          return socket.emit('reconnect_error', { message: 'Ván đấu không tồn tại hoặc đã kết thúc.' });
+        }
+
+        const isWhite = room.players.white.userId === data.userId;
+        const isBlack = room.players.black.userId === data.userId;
+
+        if (!isWhite && !isBlack) {
+          return socket.emit('reconnect_error', { message: 'Bạn không thuộc ván đấu này.' });
+        }
+
+        const player = isWhite ? room.players.white : room.players.black;
+        const opponent = isWhite ? room.players.black : room.players.white;
+
+        // Hủy bộ đếm 45s Disconnect nếu đang chạy
+        if (room.reconnectTimer) {
+          clearTimeout(room.reconnectTimer);
+          room.reconnectTimer = undefined;
+        }
+
+        // Cập nhật Socket mới
+        this.socketToRoom.delete(player.socketId);
+        player.socketId = socket.id;
+        player.isConnected = true;
+        player.disconnectedAt = undefined;
+        this.socketToRoom.set(socket.id, room.roomId);
+
+        socket.join(room.roomId);
+        room.status = 'PLAYING';
+
+        console.log(`🔄 [Reconnect Thành Công] ${player.username} kết nối lại phòng ${room.roomId}`);
+
+        // Gửi toàn bộ Game State khôi phục cho người chơi vừa F5
+        socket.emit('match_reconnected', {
+          roomId: room.roomId,
+          whitePlayer: { userId: room.players.white.userId, username: room.players.white.username, eloRating: room.players.white.eloRating },
+          blackPlayer: { userId: room.players.black.userId, username: room.players.black.username, eloRating: room.players.black.eloRating },
+          fen: room.game.fen(),
+          history: room.game.history(),
+          turn: room.game.turn(),
+          isRated: room.isRated,
+          yourColor: isWhite ? 'w' : 'b',
+          clock: {
+            whiteTimeMs: room.clock.whiteTimeMs,
+            blackTimeMs: room.clock.blackTimeMs,
+            activeColor: room.clock.activeColor,
+            turnStartedAt: room.clock.turnStartedAt,
+            incrementMs: room.clock.incrementMs,
+            serverTimestamp: Date.now(),
+          },
+        });
+
+        // Thông báo cho đối thủ để tắt cảnh báo đang chờ
+        this.io.to(room.roomId).emit('player_reconnected', {
+          reconnectedPlayer: player.username,
+          message: `Đối thủ (${player.username}) đã kết nối lại ván đấu!`,
+        });
+      });
+
+      // 8. XỬ LÝ NGẮT KẾT NỐI (DISCONNECT 45S GRACE PERIOD)
       socket.on('disconnect', () => {
         console.log(`🔌 [Socket.io] Client ngắt kết nối: ${socket.id}`);
         this.waitingQueue = this.waitingQueue.filter((p) => p.socketId !== socket.id);
 
         const roomId = this.socketToRoom.get(socket.id);
         if (roomId) {
-          this.handlePlayerResignation(socket.id, roomId, 'DISCONNECT');
+          const room = this.activeRooms.get(roomId);
+          if (room && (room.status === 'PLAYING' || room.status === 'RECONNECTING')) {
+            const isWhite = room.players.white.socketId === socket.id;
+            const isBlack = room.players.black.socketId === socket.id;
+
+            if (isWhite || isBlack) {
+              const disconnectedPlayer = isWhite ? room.players.white : room.players.black;
+              disconnectedPlayer.isConnected = false;
+              disconnectedPlayer.disconnectedAt = Date.now();
+              room.status = 'RECONNECTING';
+
+              console.log(`⚠️ [Disconnect] ${disconnectedPlayer.username} mất kết nối phòng ${roomId}. Bắt đầu 45s Grace Period...`);
+
+              // Thông báo cho đối thủ đang trong phòng
+              this.io.to(roomId).emit('player_disconnected', {
+                disconnectedPlayer: disconnectedPlayer.username,
+                gracePeriodSeconds: 45,
+                message: `Đối thủ (${disconnectedPlayer.username}) tạm mất kết nối. Đang chờ 45s kết nối lại...`,
+              });
+
+              // Hủy timer cũ nếu có
+              if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
+
+              // Cho phép 45 giây để F5 / kết nối lại trước khi xử thua
+              room.reconnectTimer = setTimeout(() => {
+                console.log(`⏰ [Grace Period Hết hạn] ${disconnectedPlayer.username} không vào lại sau 45s -> Xử thua.`);
+                this.handlePlayerResignation(disconnectedPlayer.socketId, roomId, 'DISCONNECT');
+              }, 45000);
+            }
+          }
         }
       });
     });
@@ -401,6 +493,7 @@ export class MatchGateway {
 
     room.status = 'FINISHED';
     if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+    if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
 
     const winnerColor: 'w' | 'b' = timedOutColor === 'w' ? 'b' : 'w';
     const winnerPlayer = winnerColor === 'w' ? room.players.white : room.players.black;
@@ -471,6 +564,7 @@ export class MatchGateway {
 
     room.status = 'FINISHED';
     if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+    if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
 
     const isWhiteResigned = room.players.white.socketId === socketId;
     const winnerColor = isWhiteResigned ? 'b' : 'w';
@@ -493,7 +587,7 @@ export class MatchGateway {
       loserName: loserPlayer.username,
       reason,
       message: reason === 'DISCONNECT' 
-        ? `Đối thủ ${loserPlayer.username} đã ngắt kết nối (F5/Đóng tab). Bạn thắng!` 
+        ? `Đối thủ ${loserPlayer.username} đã rời trận (quá 45s không kết nối lại). Bạn thắng!` 
         : `Đối thủ ${loserPlayer.username} đã đầu hàng. Bạn thắng!`,
       eloResult: room.isRated ? eloResult : null,
     });

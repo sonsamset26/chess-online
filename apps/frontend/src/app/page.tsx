@@ -22,7 +22,7 @@ import { useChessEngine } from '../hooks/useChessEngine';
 import { useSocket, EloPlayerResult } from '../hooks/useSocket';
 import { sounds } from '../utils/soundEffects';
 import { Chess, Square } from 'chess.js';
-import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText, RotateCcw } from 'lucide-react';
+import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText, RotateCcw, AlertTriangle } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
@@ -64,11 +64,13 @@ export default function Home() {
     activeMatch,
     latestMove,
     resignationEvent,
+    disconnectedOpponent,
     joinQueue,
     leaveQueue,
     createFriendRoom,
     joinFriendRoom,
     cancelFriendRoom,
+    reconnectMatch,
     resignMatch,
     sendMove,
     clearActiveMatch,
@@ -93,7 +95,25 @@ export default function Home() {
 
   const currentStatus = localGameOverStatus || engineStatus;
 
-  // 1. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi ghép trận / bạn bè thành công
+  // 1. Tự động kiểm tra và kết nối lại ván đấu (Reconnect Grace Period khi F5)
+  useEffect(() => {
+    if (isConnected && !activeMatch) {
+      try {
+        const savedMatchStr = localStorage.getItem('chess_active_online_match');
+        if (savedMatchStr) {
+          const saved = JSON.parse(savedMatchStr);
+          if (saved?.roomId && saved?.userId) {
+            console.log('🔄 [Auto Reconnect] Đang gửi yêu cầu kết nối lại:', saved);
+            reconnectMatch(saved.roomId, saved.userId);
+          }
+        }
+      } catch (err) {
+        console.error('Error attempting match reconnect:', err);
+      }
+    }
+  }, [isConnected, activeMatch]);
+
+  // 2. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi ghép trận / bạn bè / reconnect thành công
   useEffect(() => {
     if (activeMatch) {
       setIsFriendModalOpen(false);
@@ -105,14 +125,29 @@ export default function Home() {
 
       const myColor = activeMatch.yourColor || 'w';
       setPlayerColor(myColor);
-      setBoardFen(activeMatch.fen, []);
+      setBoardFen(activeMatch.fen, activeMatch.history || []);
       sounds.playGameStart();
-    }
-  }, [activeMatch]);
 
-  // 2. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
+      // Lưu thông tin trận đấu vào LocalStorage để hỗ trợ F5 Reconnect
+      try {
+        const myUserId = user?.username || (myColor === 'w' ? activeMatch.whitePlayer.userId : activeMatch.blackPlayer.userId);
+        localStorage.setItem(
+          'chess_active_online_match',
+          JSON.stringify({
+            roomId: activeMatch.roomId,
+            userId: myUserId,
+          })
+        );
+      } catch (err) {
+        console.error('Error saving active online match to localStorage:', err);
+      }
+    }
+  }, [activeMatch, user]);
+
+  // 3. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
   useEffect(() => {
     if (resignationEvent) {
+      localStorage.removeItem('chess_active_online_match');
       const winningStatus = resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
       setLocalGameOverStatus(winningStatus);
       setIsGameOverModalOpen(true);
@@ -126,7 +161,7 @@ export default function Home() {
           : `Bạn (${resignationEvent.loserName}) đã hết thời gian thi đấu (Lost on Time)!`;
       } else if (resignationEvent.reason === 'DISCONNECT') {
         msg = isMeWin
-          ? `Đối thủ (${resignationEvent.loserName}) đã ngắt kết nối/rời trận. Bạn Thắng!`
+          ? `Đối thủ (${resignationEvent.loserName}) đã rời trận (quá 45s không kết nối lại). Bạn Thắng!`
           : `Bạn đã bị mất kết nối khỏi ván đấu.`;
       } else if (resignationEvent.reason === 'RESIGNATION') {
         msg = isMeWin
@@ -159,23 +194,27 @@ export default function Home() {
     }
   }, [resignationEvent, playerColor]);
 
-  // 3. Phát âm thanh KẾT THÚC TRẬN & Bắt Elo khi Chiếu Hết qua latestMove
+  // 4. Phát âm thanh KẾT THÚC TRẬN & Bắt Elo khi Chiếu Hết qua latestMove
   useEffect(() => {
-    if (latestMove && latestMove.isGameOver && latestMove.eloResult) {
-      const myElo = playerColor === 'w' ? latestMove.eloResult.white : latestMove.eloResult.black;
-      setCurrentMatchEloResult(myElo);
-      setUser((prev) => {
-        if (!prev) return null;
-        const updated = { ...prev, eloRating: myElo.newElo };
-        localStorage.setItem('chess_user', JSON.stringify(updated));
-        return updated;
-      });
+    if (latestMove && latestMove.isGameOver) {
+      localStorage.removeItem('chess_active_online_match');
+      if (latestMove.eloResult) {
+        const myElo = playerColor === 'w' ? latestMove.eloResult.white : latestMove.eloResult.black;
+        setCurrentMatchEloResult(myElo);
+        setUser((prev) => {
+          if (!prev) return null;
+          const updated = { ...prev, eloRating: myElo.newElo };
+          localStorage.setItem('chess_user', JSON.stringify(updated));
+          return updated;
+        });
+      }
     }
   }, [latestMove, playerColor]);
 
   // Phát âm thanh khi kết thúc ván đấu
   useEffect(() => {
     if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && !resignationEvent) {
+      localStorage.removeItem('chess_active_online_match');
       setIsGameOverModalOpen(true);
       const isWhiteWin = currentStatus === 'WHITE_WIN';
       const isBlackWin = currentStatus === 'BLACK_WIN';
@@ -193,12 +232,13 @@ export default function Home() {
     prevStatusRef.current = currentStatus;
   }, [currentStatus, playerColor, resignationEvent]);
 
-  // 4. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật thế cờ chiếu hết
+  // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật thế cờ chiếu hết
   useEffect(() => {
     if (latestMove && activeMode === 'online') {
       setBoardFen(latestMove.fen, latestMove.history);
 
       if (latestMove.isGameOver) {
+        localStorage.removeItem('chess_active_online_match');
         setIsGameOverModalOpen(true);
         if (latestMove.isCheckmate) {
           const winningStatus = latestMove.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
@@ -245,6 +285,7 @@ export default function Home() {
     }
 
     clearActiveMatch();
+    localStorage.removeItem('chess_active_online_match');
     setActiveMode(mode);
     resetGame();
     sounds.playGameStart();
@@ -273,6 +314,7 @@ export default function Home() {
     if (activeMatch) {
       resignMatch(activeMatch.roomId);
     }
+    localStorage.removeItem('chess_active_online_match');
     setIsLeaveModalOpen(false);
     setActiveMode(null);
     clearActiveMatch();
@@ -286,6 +328,7 @@ export default function Home() {
   // Xác nhận Đầu hàng
   const handleConfirmResign = () => {
     setIsResignModalOpen(false);
+    localStorage.removeItem('chess_active_online_match');
 
     if (activeMatch) {
       resignMatch(activeMatch.roomId);
@@ -306,6 +349,7 @@ export default function Home() {
     setIsGameOverModalOpen(true);
 
     const wasRated = activeMatch?.isRated;
+    localStorage.removeItem('chess_active_online_match');
     clearActiveMatch();
     resetGame();
 
@@ -349,6 +393,7 @@ export default function Home() {
   const handleLogout = () => {
     localStorage.removeItem('chess_token');
     localStorage.removeItem('chess_user');
+    localStorage.removeItem('chess_active_online_match');
     setUser(null);
   };
 
@@ -451,6 +496,16 @@ export default function Home() {
                 {/* Left Column (Desktop 7-8/12 Cols, Mobile 100%): Bàn cờ & Player Cards */}
                 <div className="md:col-span-7 lg:col-span-8 flex flex-col items-center justify-between h-full py-0.5 md:py-1">
                   
+                  {/* BANNER THÔNG BÁO ĐỐI THỦ MẤT KẾT NỐI (RECONNECT GRACE PERIOD) */}
+                  {disconnectedOpponent && (
+                    <div className="w-full max-w-[480px] mb-1 p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-2xl flex items-center justify-between text-amber-300 text-xs font-bold shadow-lg animate-pulse shrink-0">
+                      <span className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Đối thủ ({disconnectedOpponent.disconnectedPlayer}) tạm mất kết nối. Đang chờ 45s...</span>
+                      </span>
+                    </div>
+                  )}
+
                   {/* Card ĐỐI THỦ */}
                   <PlayerCard
                     isAi={activeMode === 'bots' || (!activeMode && !activeMatch)}
