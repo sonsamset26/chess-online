@@ -25,6 +25,7 @@ export interface ActiveMatch {
   whitePlayer: PlayerInfo;
   blackPlayer: PlayerInfo;
   fen: string;
+  history?: string[];
   isRated?: boolean;
   clock?: ClockPayload;
 }
@@ -64,6 +65,12 @@ export interface ResignationData {
   eloResult?: EloCalculationResult | null;
 }
 
+export interface DisconnectedOpponentInfo {
+  disconnectedPlayer: string;
+  gracePeriodSeconds: number;
+  message: string;
+}
+
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -76,6 +83,9 @@ export function useSocket() {
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const [friendRoomError, setFriendRoomError] = useState<string | null>(null);
   const [resignationEvent, setResignationEvent] = useState<ResignationData | null>(null);
+
+  // States cho sự kiện Mất kết nối & Kết nối lại (Reconnect 45s Grace Period)
+  const [disconnectedOpponent, setDisconnectedOpponent] = useState<DisconnectedOpponentInfo | null>(null);
 
   useEffect(() => {
     const socketInstance = io(SOCKET_URL, {
@@ -116,12 +126,37 @@ export function useSocket() {
       setCreatedRoomCode(null);
       setFriendRoomError(null);
       setResignationEvent(null);
+      setDisconnectedOpponent(null);
       setActiveMatch(data);
       setLatestMove(null);
 
       if (data.clock) {
         setCurrentClock(data.clock);
       }
+    });
+
+    // Nhận lại trạng thái ván đấu khi vừa Reconnect / F5
+    socketInstance.on('match_reconnected', (data: ActiveMatch) => {
+      console.log('🔄 [Socket.io Client] Khôi phục ván đấu sau Reconnect / F5:', data);
+      setIsSearchingQueue(false);
+      setResignationEvent(null);
+      setDisconnectedOpponent(null);
+      setActiveMatch(data);
+      if (data.clock) {
+        setCurrentClock(data.clock);
+      }
+    });
+
+    // Đối thủ bị mất kết nối (bắt đầu đếm lùi 45s)
+    socketInstance.on('player_disconnected', (data: DisconnectedOpponentInfo) => {
+      console.log('⚠️ [Socket.io Client] Đối thủ mất kết nối:', data);
+      setDisconnectedOpponent(data);
+    });
+
+    // Đối thủ đã kết nối lại thành công
+    socketInstance.on('player_reconnected', () => {
+      console.log('✅ [Socket.io Client] Đối thủ đã kết nối lại!');
+      setDisconnectedOpponent(null);
     });
 
     socketInstance.on('receive_move', (moveData: MoveData) => {
@@ -134,6 +169,7 @@ export function useSocket() {
     // Lắng nghe thông báo Đối thủ Đầu hàng hoặc F5 / Thoát web hoặc Hết giờ
     socketInstance.on('opponent_resigned', (data: ResignationData) => {
       console.log('🏳️ [Match Ended Event]:', data);
+      setDisconnectedOpponent(null);
       setResignationEvent(data);
     });
 
@@ -179,6 +215,13 @@ export function useSocket() {
     }
   };
 
+  // Reconnect lại phòng đấu khi F5 web
+  const reconnectMatch = (roomId: string, userId: string) => {
+    if (socket && isConnected) {
+      socket.emit('reconnect_match', { roomId, userId });
+    }
+  };
+
   // Đầu hàng trận đấu
   const resignMatch = (roomId: string) => {
     if (socket && isConnected) {
@@ -199,6 +242,7 @@ export function useSocket() {
     setCreatedRoomCode(null);
     setFriendRoomError(null);
     setResignationEvent(null);
+    setDisconnectedOpponent(null);
   };
 
   return {
@@ -211,11 +255,13 @@ export function useSocket() {
     latestMove,
     currentClock,
     resignationEvent,
+    disconnectedOpponent,
     joinQueue,
     leaveQueue,
     createFriendRoom,
     joinFriendRoom,
     cancelFriendRoom,
+    reconnectMatch,
     resignMatch,
     sendMove,
     clearActiveMatch,
