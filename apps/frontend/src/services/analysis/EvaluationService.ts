@@ -33,6 +33,8 @@ const KNIGHT_TABLE = [
   -50,-40,-30,-30,-30,-30,-40,-50,
 ];
 
+import { StockfishBridge } from './StockfishBridge';
+
 export class EvaluationService {
   /**
    * Đánh giá tĩnh trạng thái bàn cờ hiện tại theo góc nhìn của bên đang tới lượt đi (Side to Move)
@@ -106,7 +108,7 @@ export class EvaluationService {
 
   /**
    * Tìm nước đi tối ưu (Best Move) và điểm đánh giá tối ưu (Eval Best)
-   * tại một thế cờ cụ thể
+   * tại một thế cờ cụ thể (Bản đồng bộ cho fallback)
    */
   public static findBestMoveAndEval(game: Chess, depth: number = 2): {
     bestMoveUci: string;
@@ -138,6 +140,56 @@ export class EvaluationService {
       bestMoveSan: bestMove.san,
       evalBest: bestScore,
     };
+  }
+
+  /**
+   * Đánh giá bất đồng bộ bằng Stockfish Bridge (có fallback Negamax)
+   */
+  public static async findBestMoveAndEvalAsync(
+    game: Chess,
+    depth: number = 10,
+    bridge?: StockfishBridge | null,
+    abortSignal?: AbortSignal
+  ): Promise<{
+    bestMoveUci: string;
+    bestMoveSan: string;
+    evalBest: number;
+  }> {
+    if (bridge && bridge.isAvailable()) {
+      try {
+        const fen = game.fen();
+        const result = await bridge.evaluateFen(fen, depth, abortSignal);
+
+        let bestMoveSan = result.bestMoveUci;
+        try {
+          const moveObj = game.move({
+            from: result.bestMoveUci.slice(0, 2) as any,
+            to: result.bestMoveUci.slice(2, 4) as any,
+            promotion: (result.bestMoveUci.slice(4, 5) || undefined) as any,
+          });
+          if (moveObj) {
+            bestMoveSan = moveObj.san;
+            game.undo();
+          }
+        } catch {
+          // ignore
+        }
+
+        return {
+          bestMoveUci: result.bestMoveUci,
+          bestMoveSan,
+          evalBest: result.evalBest,
+        };
+      } catch (err: any) {
+        if (err?.message === 'Analysis aborted') {
+          throw err;
+        }
+        console.warn('EvaluationService: Stockfish eval thất bại, fallback sang Negamax:', err);
+      }
+    }
+
+    // Fallback sang Negamax
+    return this.findBestMoveAndEval(game, Math.min(depth, 3));
   }
 
   /**

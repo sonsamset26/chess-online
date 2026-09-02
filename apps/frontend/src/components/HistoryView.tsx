@@ -7,7 +7,7 @@ export interface MatchRecord {
   blackUserId: string;
   whiteUsername: string;
   blackUsername: string;
-  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM';
+  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM' | 'TOURNAMENT';
   winnerColor: 'w' | 'b' | 'draw';
   endReason: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
   isRated: boolean;
@@ -31,9 +31,10 @@ export interface MatchRecord {
 interface HistoryViewProps {
   currentUser: { username: string; eloRating: number; token?: string } | null;
   onSelectReplay: (match: MatchRecord) => void;
+  onOpenAnalysis?: (match: MatchRecord) => void;
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ currentUser, onSelectReplay }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ currentUser, onSelectReplay, onOpenAnalysis }) => {
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -332,6 +333,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ currentUser, onSelectR
                           <Eye className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Xem lại</span>
                         </button>
+
+                        {onOpenAnalysis && m.moves && m.moves.length > 0 && (
+                          <button
+                            onClick={() => onOpenAnalysis(m)}
+                            className="px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl bg-indigo-950/60 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
+                            title="Phân tích ván cờ với AI Engine"
+                          >
+                            <span>📊</span>
+                            <span className="hidden sm:inline">Phân tích</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
