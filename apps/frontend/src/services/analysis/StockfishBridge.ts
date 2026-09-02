@@ -19,6 +19,7 @@ export class StockfishBridge {
   private isReady: boolean = false;
   private readyPromise: Promise<void> | null = null;
   private activeQueue: Promise<any> = Promise.resolve();
+  private activeReject?: (err: Error) => void;
 
   constructor() {
     if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
@@ -44,9 +45,11 @@ export class StockfishBridge {
         return;
       }
 
+      let timer: NodeJS.Timeout | null = null;
       const handler = (e: MessageEvent) => {
         const line = typeof e.data === 'string' ? e.data : '';
         if (line.includes('uciok') || line.includes('readyok')) {
+          if (timer) clearTimeout(timer);
           this.isReady = true;
           this.worker?.removeEventListener('message', handler);
           resolve();
@@ -58,7 +61,7 @@ export class StockfishBridge {
       this.worker.postMessage('isready');
 
       // Timeout dự phòng 3 giây
-      setTimeout(() => {
+      timer = setTimeout(() => {
         this.isReady = true;
         this.worker?.removeEventListener('message', handler);
         resolve();
@@ -120,6 +123,7 @@ export class StockfishBridge {
       const cleanup = () => {
         if (isCompleted) return;
         isCompleted = true;
+        this.activeReject = undefined;
         clearTimeout(safetyTimer);
         worker.removeEventListener('message', messageHandler);
         worker.removeEventListener('error', onError);
@@ -159,6 +163,8 @@ export class StockfishBridge {
         }
       };
 
+      this.activeReject = drainAndReject;
+
       const safetyTimer = setTimeout(() => {
         drainAndReject(new Error('Evaluation timeout'));
       }, timeoutMs);
@@ -187,10 +193,10 @@ export class StockfishBridge {
           }
         }
 
-        // Bắt bestmove: hỗ trợ cả bestmove thường và bestmove (none) / 0000 khi hết ván
-        const bestMoveMatch = line.match(/^bestmove\s+(\(none\)|0000|[a-h][1-8][a-h][1-8][qrbn]?)/m);
+        // Bắt bestmove: hỗ trợ cả bestmove thường và bestmove (none) / 0000 khi hết ván, hỗ trợ phong cấp in hoa
+        const bestMoveMatch = line.match(/^bestmove\s+(\(none\)|0000|[a-h][1-8][a-h][1-8][qrbnQRBN]?)/im);
         if (bestMoveMatch) {
-          const rawMove = bestMoveMatch[1];
+          const rawMove = bestMoveMatch[1].toLowerCase();
           cleanup();
 
           if (rawMove === '(none)' || rawMove === '0000') {
@@ -238,6 +244,14 @@ export class StockfishBridge {
    * Dọn dẹp và giải phóng tài nguyên Worker
    */
   public terminate(): void {
+    if (this.activeReject) {
+      try {
+        this.activeReject(new Error('Worker terminated'));
+      } catch (e) {
+        // ignore
+      }
+      this.activeReject = undefined;
+    }
     if (this.worker) {
       try {
         this.worker.postMessage('quit');

@@ -209,6 +209,7 @@ export class EvaluationService {
           };
         }
 
+        let isMoved = false;
         try {
           const moveObj = game.move({
             from: result.bestMoveUci.slice(0, 2) as any,
@@ -217,10 +218,14 @@ export class EvaluationService {
           });
           if (moveObj) {
             bestMoveSan = moveObj.san;
-            game.undo();
+            isMoved = true;
           }
         } catch {
           // ignore
+        } finally {
+          if (isMoved) {
+            game.undo();
+          }
         }
 
         return {

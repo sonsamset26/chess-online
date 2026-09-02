@@ -14,6 +14,9 @@ export interface CreateMatchInput {
   isRated: boolean;
   isArmageddon?: boolean;
   tournamentWinnerId?: string;
+  tournamentId?: string;
+  tournamentRound?: number;
+  tournamentMatchIndex?: number;
   whiteEloDelta?: number;
   blackEloDelta?: number;
   whiteOldElo?: number;
@@ -104,7 +107,11 @@ export class MatchService {
       userFilter.push({ whitePlayer: objId }, { blackPlayer: objId });
     }
 
-    const query = { $or: userFilter };
+    const query = {
+      $or: userFilter,
+      gameMode: { $ne: 'TOURNAMENT' },
+      tournamentId: { $in: [null, undefined] },
+    };
 
     const [matches, total] = await Promise.all([
       Match.find(query)
@@ -144,18 +151,21 @@ export class MatchService {
       return match;
     }
 
-    if (requestingUserId) {
-      const isParticipant =
-        match.whiteUserId === requestingUserId ||
-        match.blackUserId === requestingUserId ||
-        match.whiteUsername === requestingUserId ||
-        match.blackUsername === requestingUserId ||
-        (match.whitePlayer && match.whitePlayer.toString() === requestingUserId) ||
-        (match.blackPlayer && match.blackPlayer.toString() === requestingUserId);
+    // Với các ván đấu riêng tư (PVP_RATED, PVP_CUSTOM, PV_AI): Bắt buộc phải đăng nhập
+    if (!requestingUserId) {
+      throw { statusCode: 401, message: 'Yêu cầu đăng nhập để xem ván đấu riêng tư này' };
+    }
 
-      if (!isParticipant) {
-        throw { statusCode: 403, message: 'Bạn không có quyền truy cập ván đấu này' };
-      }
+    const isParticipant =
+      match.whiteUserId === requestingUserId ||
+      match.blackUserId === requestingUserId ||
+      match.whiteUsername === requestingUserId ||
+      match.blackUsername === requestingUserId ||
+      (match.whitePlayer && match.whitePlayer.toString() === requestingUserId) ||
+      (match.blackPlayer && match.blackPlayer.toString() === requestingUserId);
+
+    if (!isParticipant) {
+      throw { statusCode: 403, message: 'Bạn không có quyền truy cập ván đấu này' };
     }
 
     return match;

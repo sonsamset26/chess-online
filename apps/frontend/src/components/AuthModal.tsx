@@ -32,7 +32,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include', // Cho phép nhận httpOnly Cookie refreshToken từ Backend
-          body: JSON.stringify({ token: tokenResponse.access_token }),
+          body: JSON.stringify({
+            idToken: tokenResponse.access_token,
+            token: tokenResponse.access_token,
+            accessToken: tokenResponse.access_token,
+          }),
         });
 
         const data = await res.json();

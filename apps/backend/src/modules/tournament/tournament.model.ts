@@ -116,4 +116,8 @@ const TournamentSchema = new Schema<ITournament>(
   }
 );
 
+TournamentSchema.index({ 'players.userId': 1, status: 1, createdAt: -1 });
+TournamentSchema.index({ 'players.username': 1, status: 1, createdAt: -1 });
+TournamentSchema.index({ 'players.userId': 1, createdAt: -1 });
+
 export const Tournament = model<ITournament>('Tournament', TournamentSchema);

@@ -6,18 +6,14 @@ import { calculateElo, EloCalculationResult } from '../../utils/elo';
 import { User } from '../user/user.model';
 import { MatchService } from './match.service';
 import { TournamentService } from '../tournament/tournament.service';
+import { Tournament } from '../tournament/tournament.model';
 
 // Xác thực JWT token từ client gửi lên khi đăng ký Socket session
 function verifySocketToken(token: string): string | null {
   try {
-    const primarySecret = process.env.JWT_SECRET || 'supersecretchesskey123';
-    const fallbackSecret = 'supersecretchessaccesskey123';
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, primarySecret);
-    } catch {
-      decoded = jwt.verify(token, fallbackSecret);
-    }
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return null;
+    const decoded: any = jwt.verify(token, secret);
     return decoded?.userId || null;
   } catch {
     return null;
@@ -69,6 +65,7 @@ export interface GameState {
   winnerColor?: 'w' | 'b' | 'draw';
   endReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
   timeoutTimer?: NodeJS.Timeout;
+  disconnectTimers?: { white?: NodeJS.Timeout; black?: NodeJS.Timeout };
   reconnectTimer?: NodeJS.Timeout;
   tournamentContext?: {
     tournamentId: string;
@@ -115,6 +112,7 @@ export class MatchGateway {
   private activeFriendMatches: Map<string, string> = new Map(); // roomCode -> roomId (Trận đấu bạn bè đang diễn ra)
   private socketToRoom: Map<string, string> = new Map(); // SocketId -> RoomId
   private userSockets: Map<string, Socket> = new Map();  // UserId -> Socket
+  private activeTournamentTimers: Map<string, NodeJS.Timeout> = new Map(); // tournamentId -> Timer 30s
   private matchmakerTimer?: NodeJS.Timeout;
 
   constructor(io: Server) {
@@ -178,21 +176,23 @@ export class MatchGateway {
 
       // 1. Gia nhập hàng chờ ghép trận theo Elo Window (ĐẤU XẾP HẠNG ONLINE)
       socket.on('join_queue', (data: {
-        userId: string;
-        username: string;
-        eloRating?: number;
         timeControl?: { initialTimeMs?: number; incrementMs?: number };
       }) => {
+        const verifiedUserId = (socket as any).authenticatedUserId;
+        if (!verifiedUserId || verifiedUserId.startsWith('guest_')) {
+          return socket.emit('queue_error', { message: 'Cần đăng nhập để tham gia xếp hạng.' });
+        }
+
         const timeControl: TimeControlConfig = {
-          initialTimeMs: data.timeControl?.initialTimeMs || 600000,
-          incrementMs: data.timeControl?.incrementMs || 0,
+          initialTimeMs: data?.timeControl?.initialTimeMs || 600000,
+          incrementMs: data?.timeControl?.incrementMs || 0,
         };
 
         const entry: QueueEntry = {
           socketId: socket.id,
-          userId: data.userId || `guest_${socket.id.substring(0, 5)}`,
-          username: data.username || 'Người chơi',
-          eloRating: data.eloRating || 1200,
+          userId: verifiedUserId,
+          username: (data as any)?.username || 'Người chơi',
+          eloRating: (data as any)?.eloRating || 1200,
           joinedAt: Date.now(),
           timeControl,
           isRated: true,
@@ -478,7 +478,12 @@ export class MatchGateway {
             serverTimestamp: serverNow,
           });
 
-          setTimeout(() => {
+          // M-04 Fix: Lưu timer vào activeTournamentTimers để có thể clear nếu giải bị hủy
+          if (this.activeTournamentTimers.has(tournament.tournamentId)) {
+            clearTimeout(this.activeTournamentTimers.get(tournament.tournamentId)!);
+          }
+          const round1Timer = setTimeout(() => {
+            this.activeTournamentTimers.delete(tournament.tournamentId);
             // Tạo phòng thi đấu cho các cặp đấu vòng 1 sau khi hết thời gian chờ
             for (let mIdx = 0; mIdx < round1Matches.length; mIdx++) {
               const m = round1Matches[mIdx];
@@ -487,6 +492,7 @@ export class MatchGateway {
               }
             }
           }, countdownSeconds * 1000);
+          this.activeTournamentTimers.set(tournament.tournamentId, round1Timer);
         } catch (err: any) {
           socket.emit('tournament_error', { message: err?.message || 'Không thể bắt đầu giải đấu' });
         }
@@ -499,6 +505,10 @@ export class MatchGateway {
 
       // 6. GỬI NƯỚC ĐI - KIỂM TRA BẢO MẬT ZERO-TRUST & TÍNH TOÁN CLOCK ENGINE
       socket.on('send_move', async (data: { roomId: string; from: Square; to: Square; promotion?: string }) => {
+        if (!data || !data.roomId || !data.from || !data.to) {
+          return socket.emit('move_error', { message: 'Dữ liệu nước đi không hợp lệ' });
+        }
+
         const room = this.activeRooms.get(data.roomId);
         if (!room) {
           return socket.emit('move_error', { message: 'Phòng thi đấu không tồn tại hoặc đã kết thúc' });
@@ -523,34 +533,42 @@ export class MatchGateway {
           return socket.emit('move_error', { message: 'Chưa đến lượt đi của bạn' });
         }
 
-        // 6.4. Tính toán thời gian thực tế đã suy nghĩ (Event-Driven Clock Engine)
+        // 6.4. Kiểm tra tính hợp lệ của nước đi TRƯỚC (C-01 Fix: Không trừ giờ nếu nước đi sai)
+        let move;
+        try {
+          move = room.game.move({
+            from: data.from,
+            to: data.to,
+            promotion: data.promotion || 'q',
+          });
+        } catch {
+          move = null;
+        }
+
+        if (!move) {
+          return socket.emit('move_error', { message: 'Nước đi không hợp lệ theo luật cờ vua' });
+        }
+
+        // 6.5. Tính toán thời gian thực tế đã suy nghĩ (Event-Driven Clock Engine)
+        // C-01 Fix: Chỉ trừ giờ SAU KHI nước đi đã được xác nhận hợp lệ
         const serverNow = Date.now();
         const elapsed = Math.max(0, serverNow - room.clock.turnStartedAt);
 
         if (playerColor === 'w') {
           room.clock.whiteTimeMs = Math.max(0, room.clock.whiteTimeMs - elapsed + room.clock.incrementMs);
           if (room.clock.whiteTimeMs <= 0) {
+            room.game.undo(); // Hoàn tác nước đi nếu đã hết giờ trước khi kịp đi
             return this.handleTimeout(room.roomId, 'w');
           }
         } else {
           room.clock.blackTimeMs = Math.max(0, room.clock.blackTimeMs - elapsed + room.clock.incrementMs);
           if (room.clock.blackTimeMs <= 0) {
+            room.game.undo(); // Hoàn tác nước đi nếu đã hết giờ trước khi kịp đi
             return this.handleTimeout(room.roomId, 'b');
           }
         }
 
-        // 6.5. Kiểm tra tính hợp lệ của nước đi bằng chess.js
         try {
-          const move = room.game.move({
-            from: data.from,
-            to: data.to,
-            promotion: data.promotion || 'q',
-          });
-
-          if (!move) {
-            return socket.emit('move_error', { message: 'Nước đi không hợp lệ theo luật cờ vua' });
-          }
-
           // 6.6. Chuyển lượt và cập nhật mốc thời gian
           const nextTurn = room.game.turn();
           room.clock.activeColor = nextTurn;
@@ -558,12 +576,14 @@ export class MatchGateway {
           room.version += 1;
           room.status = 'PLAYING';
 
-          // 6.7. Lập lịch phát hiện hết giờ cho lượt tiếp theo
-          this.scheduleTimeout(room);
-
           const isGameOver = room.game.isGameOver();
           const isCheckmate = room.game.isCheckmate();
           const isDraw = room.game.isDraw();
+
+          // 6.7. Lập lịch phát hiện hết giờ cho lượt tiếp theo (C-02 Fix: Chỉ lập lịch nếu ván chưa kết thúc)
+          if (!isGameOver) {
+            this.scheduleTimeout(room);
+          }
 
           let eloResult: EloCalculationResult | null = null;
           let winnerColor: 'w' | 'b' | null = null;
@@ -572,6 +592,8 @@ export class MatchGateway {
           if (isGameOver) {
             room.status = 'FINISHED';
             if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+            if (room.disconnectTimers?.white) clearTimeout(room.disconnectTimers.white);
+            if (room.disconnectTimers?.black) clearTimeout(room.disconnectTimers.black);
             if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
 
             if (isCheckmate) {
@@ -602,12 +624,19 @@ export class MatchGateway {
               }
             }
 
-            // Lưu lịch sử ván cờ vào MongoDB Atlas
-            const savedMatchId = await this.persistMatchRecord(room, room.winnerColor || 'draw', room.endReason || 'CHECKMATE', eloResult);
+            // M-02 Fix: Lưu match và cleanup trong try/finally để không leak room dù exception
+            let savedMatchId: string | undefined;
+            try {
+              // Lưu lịch sử ván cờ vào MongoDB Atlas
+              savedMatchId = await this.persistMatchRecord(room, room.winnerColor || 'draw', room.endReason || 'CHECKMATE', eloResult);
 
-            // Báo cáo kết quả giải đấu nếu có tournamentContext
-            if (room.tournamentContext) {
-              await this.handleTournamentMatchEnd(room, room.winnerColor || 'draw', savedMatchId);
+              // Báo cáo kết quả giải đấu nếu có tournamentContext
+              if (room.tournamentContext) {
+                await this.handleTournamentMatchEnd(room, room.winnerColor || 'draw', savedMatchId);
+              }
+            } finally {
+              // Dọn dẹp luôn xảy ra dù có exception hay không
+              this.cleanupRoomResources(room, data.roomId);
             }
           }
 
@@ -633,27 +662,39 @@ export class MatchGateway {
             isCheckmate,
             isDraw,
             winnerColor,
+            isArmageddonDraw: room.isArmageddon && isDraw,
+            armageddonWinnerColor: room.isArmageddon && isDraw ? 'b' : undefined,
             moveTimeMs: elapsed,
             eloResult: room.isRated ? eloResult : null,
           });
-
-          if (isGameOver) {
-            this.cleanupRoomResources(room, data.roomId);
-          }
         } catch (err) {
           socket.emit('move_error', { message: 'Nước đi không hợp lệ' });
         }
       });
 
       // 7. XỬ LÝ KẾT NỐI LẠI PHÒNG (RECONNECT / F5 GRACE PERIOD)
-      socket.on('reconnect_match', (data: { roomId: string; userId: string }) => {
+      socket.on('reconnect_match', (data: { roomId: string; userId?: string; token?: string }) => {
+        if (!data || !data.roomId) {
+          return socket.emit('reconnect_error', { message: 'Dữ liệu kết nối lại không hợp lệ.' });
+        }
+
         const room = this.activeRooms.get(data.roomId);
         if (!room || room.status === 'FINISHED') {
           return socket.emit('reconnect_error', { message: 'Ván đấu không tồn tại hoặc đã kết thúc.' });
         }
 
-        const isWhite = room.players.white.userId === data.userId;
-        const isBlack = room.players.black.userId === data.userId;
+        // S-03: Xác thực danh tính người dùng qua JWT hoặc session
+        const verifiedUserId = data.token
+          ? verifySocketToken(data.token)
+          : ((socket as any).authenticatedUserId as string | null);
+
+        const effectiveUserId = verifiedUserId || data.userId;
+        if (!effectiveUserId) {
+          return socket.emit('reconnect_error', { message: 'Xác thực thất bại. Vui lòng đăng nhập lại.' });
+        }
+
+        const isWhite = room.players.white.userId === effectiveUserId;
+        const isBlack = room.players.black.userId === effectiveUserId;
 
         if (!isWhite && !isBlack) {
           return socket.emit('reconnect_error', { message: 'Bạn không thuộc ván đấu này.' });
@@ -661,8 +702,14 @@ export class MatchGateway {
 
         const player = isWhite ? room.players.white : room.players.black;
         const opponent = isWhite ? room.players.black : room.players.white;
+        const playerKey: 'white' | 'black' = isWhite ? 'white' : 'black';
 
-        // Hủy bộ đếm 45s Disconnect nếu đang chạy
+        // C-03 Fix: Hủy bộ đếm 45s Disconnect của RIÊNG người chơi này
+        if (!room.disconnectTimers) room.disconnectTimers = {};
+        if (room.disconnectTimers[playerKey]) {
+          clearTimeout(room.disconnectTimers[playerKey]);
+          room.disconnectTimers[playerKey] = undefined;
+        }
         if (room.reconnectTimer) {
           clearTimeout(room.reconnectTimer);
           room.reconnectTimer = undefined;
@@ -733,7 +780,10 @@ export class MatchGateway {
           }
         }
 
+        // M-03 Fix: Lấy roomId TRƯỚC, rồi xóa socketToRoom
         const roomId = this.socketToRoom.get(socket.id);
+        this.socketToRoom.delete(socket.id);
+
         if (roomId) {
           const room = this.activeRooms.get(roomId);
           if (room && (room.status === 'PLAYING' || room.status === 'RECONNECTING')) {
@@ -742,6 +792,7 @@ export class MatchGateway {
 
             if (isWhite || isBlack) {
               const disconnectedPlayer = isWhite ? room.players.white : room.players.black;
+              const playerKey: 'white' | 'black' = isWhite ? 'white' : 'black';
               disconnectedPlayer.isConnected = false;
               disconnectedPlayer.disconnectedAt = Date.now();
               room.status = 'RECONNECTING';
@@ -755,11 +806,14 @@ export class MatchGateway {
                 message: `Đối thủ (${disconnectedPlayer.username}) tạm mất kết nối. Đang chờ 45s kết nối lại...`,
               });
 
-              // Hủy timer cũ nếu có
-              if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
+              // C-03 Fix: Quản lý timer disconnect riêng cho từng bên
+              if (!room.disconnectTimers) room.disconnectTimers = {};
+              if (room.disconnectTimers[playerKey]) {
+                clearTimeout(room.disconnectTimers[playerKey]);
+              }
 
               // Cho phép 45 giây để F5 / kết nối lại trước khi xử thua
-              room.reconnectTimer = setTimeout(() => {
+              room.disconnectTimers[playerKey] = setTimeout(() => {
                 console.log(`⏰ [Grace Period Hết hạn] ${disconnectedPlayer.username} không vào lại sau 45s -> Xử thua.`);
                 this.handlePlayerResignation(disconnectedPlayer.socketId, roomId, 'DISCONNECT');
               }, 45000);
@@ -794,6 +848,8 @@ export class MatchGateway {
 
     room.status = 'FINISHED';
     if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+    if (room.disconnectTimers?.white) clearTimeout(room.disconnectTimers.white);
+    if (room.disconnectTimers?.black) clearTimeout(room.disconnectTimers.black);
     if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
 
     const winnerColor: 'w' | 'b' = timedOutColor === 'w' ? 'b' : 'w';
@@ -834,6 +890,14 @@ export class MatchGateway {
     if (room.timeoutTimer) {
       clearTimeout(room.timeoutTimer);
       room.timeoutTimer = undefined;
+    }
+    if (room.disconnectTimers?.white) {
+      clearTimeout(room.disconnectTimers.white);
+      room.disconnectTimers.white = undefined;
+    }
+    if (room.disconnectTimers?.black) {
+      clearTimeout(room.disconnectTimers.black);
+      room.disconnectTimers.black = undefined;
     }
     if (room.reconnectTimer) {
       clearTimeout(room.reconnectTimer);
@@ -904,6 +968,8 @@ export class MatchGateway {
 
     room.status = 'FINISHED';
     if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+    if (room.disconnectTimers?.white) clearTimeout(room.disconnectTimers.white);
+    if (room.disconnectTimers?.black) clearTimeout(room.disconnectTimers.black);
     if (room.reconnectTimer) clearTimeout(room.reconnectTimer);
 
     const isWhiteResigned = room.players.white.socketId === socketId;
@@ -956,6 +1022,9 @@ export class MatchGateway {
         whiteUsername: room.players.white.username,
         blackUsername: room.players.black.username,
         gameMode: room.tournamentContext ? 'TOURNAMENT' : (room.isRated ? 'PVP_RATED' : 'PVP_CUSTOM'),
+        tournamentId: room.tournamentContext?.tournamentId,
+        tournamentRound: room.tournamentContext?.roundNumber,
+        tournamentMatchIndex: room.tournamentContext?.matchIndex,
         winnerColor,
         endReason,
         isRated: room.isRated,
@@ -991,9 +1060,12 @@ export class MatchGateway {
   ) {
     if (!room.tournamentContext) return;
 
-    // Nếu ván chính hòa và không phải Armageddon -> tổ chức ván Armageddon phân định
+    // Nếu ván chính hòa và không phải Armageddon -> Lưu ván chính vào bracket trước khi tổ chức ván Armageddon phân định
     if (winnerColor === 'draw' && !room.isArmageddon) {
-      console.log(`⚔️ [Tournament] Trận đấu ${room.roomId} kết thúc HÒA. Bắt đầu ván phụ Armageddon!`);
+      console.log(`⚔️ [Tournament] Trận đấu ${room.roomId} kết thúc HÒA. Lưu ván chính và bắt đầu ván phụ Armageddon!`);
+      if (savedMatchId) {
+        await TournamentService.linkMainMatch(room.tournamentContext, savedMatchId);
+      }
       this.startArmageddonMatch(room);
       return;
     }
@@ -1027,41 +1099,65 @@ export class MatchGateway {
             championId: result.championId,
           });
         } else {
+          // SINGLETON TIMER GUARD: Tránh tạo nhiều timer đếm ngược song song cho cùng 1 giải
+          if (this.activeTournamentTimers.has(tournamentId)) {
+            return;
+          }
+
+          // 1. TẠO NGAY VÒNG MỚI ĐỂ HIỂN THỊ CẶP ĐẤU TRÊN BRACKET TRONG KHI ĐỢI
+          const adv = await TournamentService.advanceNextRound(tournamentId);
+          const currentTournament = adv.tournament || result.tournament;
+
+          if (currentTournament.status === 'FINISHED') {
+            console.log(`🏆 [Tournament] Giải đấu ${tournamentId} kết thúc! Vô địch: ${currentTournament.championId}`);
+            this.io.to(`tournament_${tournamentId}`).emit('tournament_finished', {
+              tournament: currentTournament,
+              championId: currentTournament.championId,
+            });
+            this.io.to(`tournament_${tournamentId}`).emit('tournament_updated', {
+              tournament: currentTournament,
+            });
+            return;
+          }
+
+          // Emit bản cập nhật giải đấu có ngay vòng mới và cặp đấu mới!
+          this.io.to(`tournament_${tournamentId}`).emit('tournament_updated', {
+            tournament: currentTournament,
+          });
+
           // Bắt đầu đếm ngược 30 giây nghỉ giữa 2 vòng (dựa trên mốc thời gian tuyệt đối)
           const countdownSeconds = 30;
-          const targetTimestamp = result.tournament.roundBreakUntil
-            ? new Date(result.tournament.roundBreakUntil).getTime()
+          const targetTimestamp = currentTournament.roundBreakUntil
+            ? new Date(currentTournament.roundBreakUntil).getTime()
             : Date.now() + 30000;
           const serverNow = Date.now();
 
-          console.log(`⏳ [Tournament] Vòng hoàn thành. Đếm ngược ${countdownSeconds}s trước vòng tiếp theo...`);
+          console.log(`⏳ [Tournament] Vòng hoàn thành và đã tạo vòng ${adv.nextRound?.roundNumber || ''}. Đếm ngược ${countdownSeconds}s trước khi vào bàn cờ...`);
           this.io.to(`tournament_${tournamentId}`).emit('round_countdown', {
-            nextRound: result.tournament.rounds.length + 1,
+            nextRound: adv.nextRound?.roundNumber || currentTournament.rounds.length,
             countdownSeconds,
             targetTimestamp,
             serverTimestamp: serverNow,
           });
 
-          setTimeout(async () => {
+          const timer = setTimeout(async () => {
+            this.activeTournamentTimers.delete(tournamentId);
             try {
-              const adv = await TournamentService.advanceNextRound(tournamentId);
               if (adv.nextRound) {
-                this.io.to(`tournament_${tournamentId}`).emit('tournament_updated', {
-                  tournament: adv.tournament,
-                });
-
-                // Khởi tạo các ván đấu của vòng mới
+                // Khởi tạo các ván đấu của vòng mới sau khi hết 30s đếm ngược
                 for (let mIdx = 0; mIdx < adv.nextRound.matches.length; mIdx++) {
                   const m = adv.nextRound.matches[mIdx];
                   if (m.player1 && m.player2 && m.status === 'PENDING') {
-                    this.startTournamentMatch(adv.tournament, adv.nextRound.roundNumber, mIdx, m.player1, m.player2);
+                    this.startTournamentMatch(currentTournament, adv.nextRound.roundNumber, mIdx, m.player1, m.player2);
                   }
                 }
               }
             } catch (err) {
-              console.error('❌ [Tournament] Lỗi tạo vòng mới sau đếm ngược:', err);
+              console.error('❌ [Tournament] Lỗi khởi tạo trận đấu sau đếm ngược:', err);
             }
           }, countdownSeconds * 1000);
+
+          this.activeTournamentTimers.set(tournamentId, timer);
         }
       }
     } catch (err) {
@@ -1122,6 +1218,14 @@ export class MatchGateway {
     if (prevRoom.timeoutTimer) {
       clearTimeout(prevRoom.timeoutTimer);
       prevRoom.timeoutTimer = undefined;
+    }
+    if (prevRoom.disconnectTimers?.white) {
+      clearTimeout(prevRoom.disconnectTimers.white);
+      prevRoom.disconnectTimers.white = undefined;
+    }
+    if (prevRoom.disconnectTimers?.black) {
+      clearTimeout(prevRoom.disconnectTimers.black);
+      prevRoom.disconnectTimers.black = undefined;
     }
     if (prevRoom.reconnectTimer) {
       clearTimeout(prevRoom.reconnectTimer);
@@ -1256,6 +1360,13 @@ export class MatchGateway {
       },
     };
 
+    // Cập nhật trạng thái trận đấu trong MongoDB sang PLAYING
+    Tournament.updateOne(
+      { tournamentId: tournament.tournamentId, 'rounds.roundNumber': roundNumber },
+      { $set: { [`rounds.$[r].matches.${matchIndex}.status`]: 'PLAYING' } },
+      { arrayFilters: [{ 'r.roundNumber': roundNumber }] }
+    ).catch((e: any) => console.error('Lỗi cập nhật status PLAYING cho trận đấu:', e));
+
     const isP1Online = !!socket1?.connected;
     const isP2Online = !!socket2?.connected;
 
@@ -1263,7 +1374,21 @@ export class MatchGateway {
     if (socket2) socket2.emit('match_found', { ...matchPayload, yourColor: 'b' });
 
     // OFFLINE PLAYER HANDLING:
-    // Nếu có kỳ thủ offline khi bắt đầu trận, chuyển sang RECONNECTING và kích hoạt Grace Period 45s để xử thua vắng mặt (Walkover)
+    // 1. Nếu CẢ HAI kỳ thủ đều offline -> Xử Double Forfeit, không ai được thắng khống
+    if (!isP1Online && !isP2Online) {
+      console.log(`⚠️ [Tournament] Cả 2 kỳ thủ ${player1Id} và ${player2Id} đều offline -> Double Forfeit.`);
+      room.status = 'FINISHED';
+      this.cleanupRoomResources(room, roomId);
+      TournamentService.reportMatchResult(
+        room.tournamentContext!,
+        '',
+        undefined,
+        false
+      ).catch((e) => console.error('Lỗi reportMatchResult khi double forfeit:', e));
+      return;
+    }
+
+    // 2. Nếu có 1 kỳ thủ offline, chuyển sang RECONNECTING và kích hoạt Grace Period 45s để xử thua vắng mặt (Walkover)
     if (!isP1Online || !isP2Online) {
       room.status = 'RECONNECTING';
       const offlinePlayer = !isP1Online ? room.players.white : room.players.black;
@@ -1279,7 +1404,9 @@ export class MatchGateway {
         });
       }
 
-      room.reconnectTimer = setTimeout(() => {
+      if (!room.disconnectTimers) room.disconnectTimers = {};
+      const offlineKey: 'white' | 'black' = !isP1Online ? 'white' : 'black';
+      room.disconnectTimers[offlineKey] = setTimeout(() => {
         console.log(`⏰ [Tournament Walkover] ${offlinePlayer.username} không vào bàn sau 45s -> Xử thua vắng mặt.`);
         this.handlePlayerResignation(offlinePlayer.socketId || '', roomId, 'DISCONNECT');
       }, 45000);
@@ -1469,8 +1596,23 @@ export class MatchGateway {
 
   // Dọn dẹp Timer khi ứng dụng tắt
   public destroy() {
+    // M-05 Fix: Dọn sạch tất cả timer, không chỉ matchmakerTimer
     if (this.matchmakerTimer) {
       clearInterval(this.matchmakerTimer);
     }
+
+    // Dọn timer của giải đấu
+    for (const timer of this.activeTournamentTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.activeTournamentTimers.clear();
+
+    // Dọn timer của từng phòng thi đấu
+    for (const room of this.activeRooms.values()) {
+      if (room.timeoutTimer) clearTimeout(room.timeoutTimer);
+      if ((room as any).disconnectTimers?.white) clearTimeout((room as any).disconnectTimers.white);
+      if ((room as any).disconnectTimers?.black) clearTimeout((room as any).disconnectTimers.black);
+    }
+    this.activeRooms.clear();
   }
 }

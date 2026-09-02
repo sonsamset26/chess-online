@@ -109,7 +109,12 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
         }));
       }
     } catch (err: any) {
-      if (err?.name !== 'AbortError' && nextJob.generation === generationRef.current) {
+      if (
+        err?.name !== 'AbortError' &&
+        err?.message !== 'Analysis aborted' &&
+        err?.message !== 'Worker terminated' &&
+        nextJob.generation === generationRef.current
+      ) {
         setAnalysisByPly((prev) => ({
           ...prev,
           [nextJob.ply]: {

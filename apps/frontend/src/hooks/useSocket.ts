@@ -54,6 +54,8 @@ export interface MoveData {
   isDraw: boolean;
   turn: string;
   winnerColor?: 'w' | 'b' | null;
+  isArmageddonDraw?: boolean;
+  armageddonWinnerColor?: 'w' | 'b';
   eloResult?: EloCalculationResult | null;
   clock?: ClockPayload;
   moveTimeMs?: number;
