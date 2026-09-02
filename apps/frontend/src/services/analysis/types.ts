@@ -24,6 +24,8 @@ export const DEFAULT_CLASSIFICATION_CONFIG: MoveClassificationConfig = {
   mistakeMax: 200,
 };
 
+export type MoveAnalysisStatus = 'PENDING' | 'ANALYZED' | 'STALE' | 'FAILED';
+
 export interface MoveAnalysis {
   ply: number;                   // Số thứ tự nước đi (1, 2, 3...)
   moveNumber: number;            // Số thứ tự ván (1, 1, 2, 2...)
@@ -41,8 +43,21 @@ export interface MoveAnalysis {
   classification: MoveClassification;
   accuracy: number;              // Độ chính xác nước đi (0 - 100%)
   phase: GamePhase;              // Giai đoạn: Khai cuộc / Trung cuộc / Tàn cuộc
+  status?: MoveAnalysisStatus;   // Trạng thái phân tích trong hàng đợi Live Analysis
   timeSpentMs?: number;          // Thời gian suy nghĩ của nước đi (nếu có)
   isTimePressure?: boolean;      // Đi khi thời gian còn dưới 30s
+}
+
+export interface AnalyzeSingleMoveInput {
+  ply: number;
+  fenBefore: string;
+  fenAfter: string;
+  moveSan: string;
+  moveUci?: string;
+  playerColor: 'w' | 'b';
+  depth?: number;
+  movetimeMs?: number;
+  abortSignal?: AbortSignal;
 }
 
 export interface PhaseStats {
