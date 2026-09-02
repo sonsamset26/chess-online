@@ -1,18 +1,19 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerDocument } from './config/swagger';
 import { requestLogger } from './middlewares/logger';
 import { globalErrorHandler } from './middlewares/errorHandler';
 import authRoutes from './modules/auth/auth.routes';
 import userRoutes from './modules/user/user.routes';
+import matchRoutes from './modules/match/match.routes';
 import healthRoutes from './modules/health/health.routes';
 import puzzleRoutes from './modules/puzzle/puzzle.routes';
 import { ApiResponse } from './utils/apiResponse';
-
-dotenv.config();
 
 const app: Application = express();
 
@@ -32,6 +33,7 @@ app.use(requestLogger);
 app.use('/api/v1', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/matches', matchRoutes);
 app.use('/api/v1/puzzles', puzzleRoutes);
 app.use('/api/puzzles', puzzleRoutes);
 

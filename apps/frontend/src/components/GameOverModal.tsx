@@ -9,6 +9,7 @@ interface GameOverModalProps {
   playerColor: PlayerColor;
   isOnlineMatch?: boolean;
   isRated?: boolean;
+  endReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW' | string;
   customMessage?: string;
   myEloResult?: EloPlayerResult | null;
   onPlayAgain: () => void;
@@ -22,6 +23,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   playerColor,
   isOnlineMatch = false,
   isRated = false,
+  endReason,
   customMessage,
   myEloResult,
   onPlayAgain,
@@ -37,9 +39,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const isPlayerWin = (isWhiteWin && playerColor === 'w') || (isBlackWin && playerColor === 'b');
   const isPlayerLose = (isWhiteWin && playerColor === 'b') || (isBlackWin && playerColor === 'w');
 
-  // Xác định nhãn lý do kết thúc
+  // Xác định nhãn lý do kết thúc chuẩn xác từ Backend
   let reasonBadge = 'KẾT THÚC VÁN';
-  if (customMessage?.includes('hết giờ') || customMessage?.includes('thời gian') || customMessage?.includes('Timeout')) {
+  if (endReason === 'RESIGNED') {
+    reasonBadge = '🏳️ ĐẦU HÀNG (RESIGNED)';
+  } else if (endReason === 'TIMEOUT') {
+    reasonBadge = '⏱️ HẾT THỜI GIAN (TIMEOUT)';
+  } else if (endReason === 'ABANDONED') {
+    reasonBadge = '⚠️ ĐỐI THỦ RỜI TRẬN (ABANDONED)';
+  } else if (endReason === 'DRAW' || isDraw) {
+    reasonBadge = '🤝 HÒA CỜ (STALEMATE / DRAW)';
+  } else if (endReason === 'CHECKMATE') {
+    reasonBadge = '👑 CHIẾU HẾT (CHECKMATE)';
+  } else if (customMessage?.includes('hết giờ') || customMessage?.includes('thời gian') || customMessage?.includes('Timeout')) {
     reasonBadge = '⏱️ HẾT THỜI GIAN (TIMEOUT)';
   } else if (customMessage?.includes('đầu hàng') || customMessage?.includes('ngắt kết nối')) {
     reasonBadge = '🏳️ ĐẦU HÀNG / RỜI TRẬN';
