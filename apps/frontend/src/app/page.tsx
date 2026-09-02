@@ -45,7 +45,7 @@ export default function Home() {
   // Trạng thái Giải đấu & Phân tích trận đấu
   const [tournamentData, setTournamentData] = useState<TournamentData | null>(null);
   const [analysisReport, setAnalysisReport] = useState<GameAnalysisReport | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isReviewAnalyzing, setIsReviewAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStatusText, setAnalysisStatusText] = useState('');
   const analysisAbortControllerRef = useRef<AbortController | null>(null);
@@ -164,8 +164,7 @@ export default function Home() {
   const isLiveAnalysisEnabled =
     activeMode === 'bots' &&
     activeTab === 'play' &&
-    replayMatch === null &&
-    !isAnalyzing;
+    replayMatch === null;
 
   const {
     analysisByPly,
@@ -562,7 +561,7 @@ export default function Home() {
   const handleStartAnalysis = async (moves: string[]) => {
     if (!moves || moves.length === 0) return;
     try {
-      setIsAnalyzing(true);
+      setIsReviewAnalyzing(true);
       setAnalysisProgress(0);
       setAnalysisStatusText('Đang nạp AI Engine Stockfish...');
       const controller = new AbortController();
@@ -583,7 +582,7 @@ export default function Home() {
         console.error('Lỗi phân tích ván đấu:', err);
       }
     } finally {
-      setIsAnalyzing(false);
+      setIsReviewAnalyzing(false);
       analysisAbortControllerRef.current = null;
     }
   };
@@ -1387,7 +1386,7 @@ export default function Home() {
       )}
 
       {/* OVERLAY TIẾN TRÌNH PHÂN TÍCH STOCKFISH */}
-      {isAnalyzing && (
+      {isReviewAnalyzing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in select-none">
           <div className="w-full max-w-sm bg-[#262421] border border-[#3A3733] rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center">
             <div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin mb-4" />
@@ -1403,7 +1402,7 @@ export default function Home() {
             <button
               onClick={() => {
                 analysisAbortControllerRef.current?.abort();
-                setIsAnalyzing(false);
+                setIsReviewAnalyzing(false);
               }}
               className="py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-xs font-bold text-[#BAB8B6] transition-colors"
             >

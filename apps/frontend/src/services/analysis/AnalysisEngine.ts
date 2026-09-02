@@ -1,6 +1,7 @@
 import { Chess, Square } from 'chess.js';
 import {
   MoveAnalysis,
+  CompletedMoveAnalysis,
   GamePhase,
   MoveClassificationConfig,
   DEFAULT_CLASSIFICATION_CONFIG,
@@ -71,46 +72,56 @@ export class AnalysisEngine {
       phase = 'MIDDLEGAME';
     }
 
-    let gameBefore: Chess;
-    let moveObj: any = null;
-    try {
-      gameBefore = new Chess(fenBefore);
-      moveObj = gameBefore.move(moveSan);
-    } catch {
-      gameBefore = new Chess(fenBefore);
-    }
-
-    const from: Square = moveObj?.from || ('a1' as Square);
-    const to: Square = moveObj?.to || ('a1' as Square);
-    const promotion = moveObj?.promotion || undefined;
-
-    // 1. Guard nước cờ Chiếu Hết (Checkmate): Nước chiếu hết luôn là BEST (cpl = 0, evalAfter = 10000)
-    const gameAfter = new Chess(fenAfter);
-    const isCheckmateMove = gameAfter.isCheckmate() || moveSan.includes('#');
-
-    if (isCheckmateMove) {
-      return {
-        ply,
-        moveNumber,
-        color: playerColor,
-        san: moveSan,
-        from,
-        to,
-        fenBefore,
-        fenAfter,
-        bestMoveSan: moveSan,
-        bestMoveUci: toCanonicalUci(from, to, promotion),
-        evalBefore: 9990,
-        evalAfter: 10000,
-        cpl: 0,
-        classification: 'BEST',
-        accuracy: 100,
-        phase,
-        status: 'ANALYZED',
-      };
-    }
+    let from: Square = 'a1' as Square;
+    let to: Square = 'a1' as Square;
 
     try {
+      let gameBefore: Chess;
+      let moveObj: any = null;
+      try {
+        gameBefore = new Chess(fenBefore);
+        moveObj = gameBefore.move(moveSan);
+      } catch {
+        gameBefore = new Chess();
+      }
+
+      if (moveObj) {
+        from = moveObj.from;
+        to = moveObj.to;
+      }
+      const promotion = moveObj?.promotion || undefined;
+
+      // 1. Guard nước cờ Chiếu Hết (Checkmate): Nước chiếu hết luôn là BEST (cpl = 0, evalAfter = 10000)
+      let gameAfter: Chess;
+      try {
+        gameAfter = new Chess(fenAfter);
+      } catch {
+        gameAfter = new Chess();
+      }
+
+      const isCheckmateMove = moveSan.includes('#') || gameAfter.isCheckmate();
+
+      if (isCheckmateMove) {
+        return {
+          ply,
+          moveNumber,
+          color: playerColor,
+          san: moveSan,
+          from,
+          to,
+          fenBefore,
+          fenAfter,
+          bestMoveSan: moveSan,
+          bestMoveUci: toCanonicalUci(from, to, promotion),
+          evalBefore: 9990,
+          evalAfter: 10000,
+          cpl: 0,
+          classification: 'BEST',
+          accuracy: 100,
+          phase,
+          status: 'ANALYZED',
+        };
+      }
       // 2. Tìm nước tối ưu tại fenBefore với PositionKey Cache
       const cacheKeyBefore = getPositionKey(fenBefore);
       let bestMoveResult = sessionCache?.get(cacheKeyBefore);
@@ -203,11 +214,6 @@ export class AnalysisEngine {
         fenAfter,
         bestMoveSan: '',
         bestMoveUci: '',
-        evalBefore: 0,
-        evalAfter: 0,
-        cpl: 0,
-        classification: 'GOOD',
-        accuracy: 100,
         phase,
         status: 'FAILED',
       };
@@ -232,7 +238,7 @@ export class AnalysisEngine {
 
     const startTime = Date.now();
     const game = new Chess();
-    const analyzedMoves: MoveAnalysis[] = [];
+    const analyzedMoves: CompletedMoveAnalysis[] = [];
     const totalPlies = moveHistory.length;
 
     // Khởi tạo 1 session bridge cho toàn bộ ván đấu
@@ -381,7 +387,7 @@ export class AnalysisEngine {
   ): GameAnalysisReport {
     const startTime = Date.now();
     const game = new Chess();
-    const analyzedMoves: MoveAnalysis[] = [];
+    const analyzedMoves: CompletedMoveAnalysis[] = [];
 
     for (let i = 0; i < moveHistory.length; i++) {
       const san = moveHistory[i];

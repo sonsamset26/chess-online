@@ -122,29 +122,53 @@ export class StockfishBridge {
         isCompleted = true;
         clearTimeout(safetyTimer);
         worker.removeEventListener('message', messageHandler);
+        worker.removeEventListener('error', onError);
         if (abortSignal) {
           abortSignal.removeEventListener('abort', onAbort);
         }
       };
 
-      const safetyTimer = setTimeout(() => {
+      // Rào chắn đồng bộ UCI Barrier: xả sạch buffer trước khi nhường luồng cho request tiếp theo
+      const drainAndReject = (err: Error) => {
         cleanup();
+        let drainTimer: NodeJS.Timeout | null = null;
+
+        const drainHandler = (e: MessageEvent) => {
+          const line = typeof e.data === 'string' ? e.data : '';
+          // readyok bảo đảm Stockfish đã hoàn thành xả bestmove từ lệnh stop
+          if (line.includes('readyok')) {
+            if (drainTimer) clearTimeout(drainTimer);
+            worker.removeEventListener('message', drainHandler);
+            reject(err);
+          }
+        };
+
+        drainTimer = setTimeout(() => {
+          worker.removeEventListener('message', drainHandler);
+          reject(err);
+        }, 150);
+
+        worker.addEventListener('message', drainHandler);
         try {
           worker.postMessage('stop');
+          worker.postMessage('isready');
         } catch (e) {
-          // ignore
+          if (drainTimer) clearTimeout(drainTimer);
+          worker.removeEventListener('message', drainHandler);
+          reject(err);
         }
-        reject(new Error('Evaluation timeout'));
+      };
+
+      const safetyTimer = setTimeout(() => {
+        drainAndReject(new Error('Evaluation timeout'));
       }, timeoutMs);
 
       const onAbort = () => {
-        cleanup();
-        try {
-          worker.postMessage('stop');
-        } catch (e) {
-          // ignore
-        }
-        reject(new Error('Analysis aborted'));
+        drainAndReject(new Error('Analysis aborted'));
+      };
+
+      const onError = (e: ErrorEvent) => {
+        drainAndReject(new Error(`Worker error: ${e.message}`));
       };
 
       const messageHandler = (e: MessageEvent) => {
@@ -200,6 +224,7 @@ export class StockfishBridge {
       }
 
       worker.addEventListener('message', messageHandler);
+      worker.addEventListener('error', onError);
       worker.postMessage(`position fen ${fen}`);
       if (movetimeMs && movetimeMs > 0) {
         worker.postMessage(`go depth ${depth} movetime ${movetimeMs}`);

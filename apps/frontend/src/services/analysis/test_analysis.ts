@@ -101,7 +101,36 @@ async function runTests() {
     throw new Error('TEST FAILED: Nước chiếu hết không đạt tiêu chuẩn BEST / CPL 0 / evalAfter 10000!');
   }
 
-  console.log('✅ KIỂM THỬ HOÀN THÀNH THÀNH CÔNG 100%!');
+  console.log('\n🛡️ 5. KIỂM THỬ TRẠNG THÁI FAILED (KHÔNG TRẢ VỀ DỮ LIỆU GIẢ)');
+  const failedTest = await AnalysisEngine.analyzeSingleMove({
+    ply: 1,
+    fenBefore: 'invalid-fen-format',
+    fenAfter: 'invalid-fen-format',
+    moveSan: 'e4',
+    playerColor: 'w',
+  });
+
+  console.log('Kết quả khi phân tích bị lỗi (FAILED):', {
+    status: failedTest.status,
+    classification: failedTest.classification,
+    cpl: failedTest.cpl,
+    accuracy: failedTest.accuracy,
+  });
+
+  if (
+    failedTest.status !== 'FAILED' ||
+    failedTest.classification !== undefined ||
+    failedTest.cpl !== undefined ||
+    failedTest.accuracy !== undefined
+  ) {
+    throw new Error('TEST FAILED: Trạng thái FAILED vẫn bị gán dữ liệu giả!');
+  }
+  console.log('✅ PASS: Trạng thái FAILED hoàn toàn sạch dữ liệu, không có giá trị giả GOOD/100%.');
+
+  console.log('\n✅ KIỂM THỬ HOÀN THÀNH THÀNH CÔNG 100%!');
 }
 
-runTests().catch(console.error);
+runTests().catch((err) => {
+  console.error('Lỗi khi chạy kiểm thử:', err);
+  process.exit(1);
+});
