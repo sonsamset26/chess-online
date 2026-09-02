@@ -7,11 +7,13 @@ export interface CreateMatchInput {
   blackUserId: string;
   whiteUsername: string;
   blackUsername: string;
-  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM';
+  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM' | 'TOURNAMENT';
   aiDifficulty?: number;
   winnerColor: 'w' | 'b' | 'draw';
   endReason: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
   isRated: boolean;
+  isArmageddon?: boolean;
+  tournamentWinnerId?: string;
   whiteEloDelta?: number;
   blackEloDelta?: number;
   whiteOldElo?: number;
@@ -137,8 +139,8 @@ export class MatchService {
     const match = await Match.findById(matchId).lean() as unknown as IMatch | null;
     if (!match) return null;
 
-    // Quản trị viên (Admin) có quyền xem lại mọi ván đấu
-    if (requestingUserRole === 'ADMIN') {
+    // Quản trị viên (Admin) hoặc các ván đấu thuộc giải đấu (TOURNAMENT) có quyền xem công khai
+    if (requestingUserRole === 'ADMIN' || match.gameMode === 'TOURNAMENT') {
       return match;
     }
 

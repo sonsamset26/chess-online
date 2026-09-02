@@ -13,6 +13,7 @@ import userRoutes from './modules/user/user.routes';
 import matchRoutes from './modules/match/match.routes';
 import healthRoutes from './modules/health/health.routes';
 import puzzleRoutes from './modules/puzzle/puzzle.routes';
+import tournamentRoutes from './modules/tournament/tournament.routes';
 import { ApiResponse } from './utils/apiResponse';
 
 const app: Application = express();
@@ -35,6 +36,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/matches', matchRoutes);
 app.use('/api/v1/puzzles', puzzleRoutes);
+app.use('/api/v1/tournaments', tournamentRoutes);
 app.use('/api/puzzles', puzzleRoutes);
 
 // 2. GẮN CỔNG TÀI LIỆU SWAGGER UI TẠI /api/docs VÀ REDIRECT /api -> /api/docs

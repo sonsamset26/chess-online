@@ -7,11 +7,13 @@ export interface IMatch extends Document {
   blackUserId: string;
   whiteUsername: string;
   blackUsername: string;
-  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM';
+  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM' | 'TOURNAMENT';
   aiDifficulty?: number;
   winnerColor: 'w' | 'b' | 'draw';
   endReason: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
   isRated: boolean;
+  isArmageddon?: boolean;
+  tournamentWinnerId?: string;
   whiteEloDelta?: number;
   blackEloDelta?: number;
   whiteOldElo?: number;
@@ -62,8 +64,15 @@ const MatchSchema = new Schema<IMatch>(
     },
     gameMode: {
       type: String,
-      enum: ['PV_AI', 'PVP_RATED', 'PVP_CUSTOM'],
+      enum: ['PV_AI', 'PVP_RATED', 'PVP_CUSTOM', 'TOURNAMENT'],
       default: 'PVP_RATED',
+    },
+    isArmageddon: {
+      type: Boolean,
+      default: false,
+    },
+    tournamentWinnerId: {
+      type: String,
     },
     aiDifficulty: {
       type: Number,

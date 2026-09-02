@@ -15,6 +15,10 @@ interface GameOverModalProps {
   onPlayAgain: () => void;
   onBackToMenu: () => void;
   onCloseToReview: () => void;
+  onOpenAnalysis?: () => void;
+  moveHistory?: string[];
+  isTournamentMatch?: boolean;
+  onViewBracket?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -29,6 +33,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onPlayAgain,
   onBackToMenu,
   onCloseToReview,
+  onOpenAnalysis,
+  moveHistory = [],
+  isTournamentMatch = false,
+  onViewBracket,
 }) => {
   if (!isOpen || gameStatus === 'IN_PROGRESS') return null;
 
@@ -159,43 +167,108 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* CÁC NÚT ĐIỀU KHIỂN CHÍNH */}
         <div className="w-full flex flex-col gap-2">
-          <button
-            onClick={onPlayAgain}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
-          >
-            {isRated ? (
+          {isTournamentMatch ? (
+            // LUỒNG GIẢI ĐẤU (TOURNAMENT)
+            isPlayerWin ? (
               <>
-                <Swords className="w-4 h-4" />
-                <span>Tìm Trận Xếp Hạng Mới</span>
-              </>
-            ) : isOnlineMatch ? (
-              <>
-                <PlusCircle className="w-4 h-4" />
-                <span>Tạo / Nhập Phòng Mới</span>
+                {onViewBracket && (
+                  <button
+                    onClick={onViewBracket}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-pink-500 hover:from-rose-500 hover:to-pink-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-rose-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <Trophy className="w-4 h-4" />
+                    <span>Xem Nhánh Đấu / Chờ Vòng Sau</span>
+                  </button>
+                )}
+                <button
+                  onClick={onCloseToReview}
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Xem lại bàn cờ</span>
+                </button>
               </>
             ) : (
               <>
-                <RotateCcw className="w-4 h-4" />
-                <span>Chơi Ván Mới</span>
+                {onOpenAnalysis && moveHistory.length > 0 && (
+                  <button
+                    onClick={onOpenAnalysis}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-500 hover:from-indigo-500 hover:to-purple-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <span>📊</span>
+                    <span>Phân Tích Ván Đấu</span>
+                  </button>
+                )}
+                {onViewBracket && (
+                  <button
+                    onClick={onViewBracket}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    <Trophy className="w-4 h-4" />
+                    <span>Xem Nhánh Đấu</span>
+                  </button>
+                )}
+                <button
+                  onClick={onCloseToReview}
+                  className="w-full py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Xem lại bàn cờ</span>
+                </button>
               </>
-            )}
-          </button>
+            )
+          ) : (
+            // LUỒNG CHƠI THƯỜNG (PV_AI / PVP)
+            <>
+              <button
+                onClick={onPlayAgain}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                {isRated ? (
+                  <>
+                    <Swords className="w-4 h-4" />
+                    <span>Tìm Trận Xếp Hạng Mới</span>
+                  </>
+                ) : isOnlineMatch ? (
+                  <>
+                    <PlusCircle className="w-4 h-4" />
+                    <span>Tạo / Nhập Phòng Mới</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Chơi Ván Mới</span>
+                  </>
+                )}
+              </button>
 
-          <button
-            onClick={onCloseToReview}
-            className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
-          >
-            <Eye className="w-4 h-4" />
-            <span>Xem lại bàn cờ</span>
-          </button>
+              {onOpenAnalysis && moveHistory.length > 0 && (
+                <button
+                  onClick={onOpenAnalysis}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-950/80 to-purple-950/80 hover:from-indigo-900/90 hover:to-purple-900/90 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                  <span>📊</span>
+                  <span>Phân Tích Ván Đấu</span>
+                </button>
+              )}
 
-          <button
-            onClick={onBackToMenu}
-            className="w-full py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Trở về Menu</span>
-          </button>
+              <button
+                onClick={onCloseToReview}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                <Eye className="w-4 h-4" />
+                <span>Xem lại bàn cờ</span>
+              </button>
+
+              <button
+                onClick={onBackToMenu}
+                className="w-full py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Trở về Menu</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
