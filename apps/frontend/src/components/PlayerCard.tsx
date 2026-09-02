@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, User, Brain, AlertCircle, CheckCircle2, Flag } from 'lucide-react';
+import { Bot, User, Brain, AlertCircle, CheckCircle2, Flag, Clock } from 'lucide-react';
 import { PlayerColor } from '../hooks/useChessEngine';
 
 interface PlayerCardProps {
@@ -10,7 +10,22 @@ interface PlayerCardProps {
   isThinking?: boolean;
   gameStatus?: string;
   capturedPieces?: string[];
+  timeLeftMs?: number;
+  isClockActive?: boolean;
 }
+
+const formatClock = (ms?: number): string => {
+  if (ms === undefined || ms === null) return '--:--';
+  if (ms <= 0) return '00:00';
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (ms < 10000) {
+    const tenths = Math.floor((ms % 1000) / 100);
+    return `0:0${seconds}.${tenths}`;
+  }
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
 
 export const PlayerCard: React.FC<PlayerCardProps> = ({
   isAi = false,
@@ -20,6 +35,8 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   isThinking = false,
   gameStatus,
   capturedPieces = [],
+  timeLeftMs,
+  isClockActive = false,
 }) => {
   const isWinner =
     (gameStatus === 'WHITE_WIN' && color === 'w') ||
@@ -63,8 +80,21 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         </div>
       </div>
 
-      {/* Dynamic Status / Action Banner */}
-      <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+      {/* Clock & Dynamic Status */}
+      <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
+        {timeLeftMs !== undefined && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 md:px-3 md:py-1.5 rounded-xl font-mono font-black text-xs md:text-sm tracking-wider border transition-all duration-300 ${
+            timeLeftMs < 30000 && isClockActive
+              ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-lg shadow-rose-500/20 animate-pulse'
+              : isClockActive
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
+              : 'bg-[#1A1816] text-[#A6A4A0] border-[#312E2B]'
+          }`}>
+            <Clock className={`w-3.5 h-3.5 shrink-0 ${isClockActive ? 'text-amber-400' : 'text-[#73716E]'}`} />
+            <span>{formatClock(timeLeftMs)}</span>
+          </div>
+        )}
+
         {isThinking && (
           <div className="flex items-center gap-1 px-2 py-0.5 md:px-2.5 md:py-1 bg-pink-500/20 text-pink-300 text-[9px] md:text-[10px] font-bold rounded-full border border-pink-500/30 animate-pulse">
             <Brain className="w-3 h-3 animate-spin text-pink-400" />

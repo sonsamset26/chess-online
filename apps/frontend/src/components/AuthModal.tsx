@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Mail, Lock, User as UserIcon, Crown, ArrowRight } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -85,6 +85,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         credentials: 'include', // Cho phép nhận httpOnly Cookie refreshToken từ Backend
         body: JSON.stringify(payload),
       });
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Máy chủ phản hồi không đúng định dạng JSON. Vui lòng đảm bảo Backend cổng 5000 đang hoạt động.');
+      }
 
       const data = await res.json();
 

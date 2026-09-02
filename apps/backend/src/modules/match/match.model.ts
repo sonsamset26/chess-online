@@ -1,16 +1,33 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IMatch extends Document {
-  whitePlayer: Types.ObjectId;
+  whitePlayer?: Types.ObjectId;
   blackPlayer?: Types.ObjectId;
-  gameMode: 'PV_AI' | 'PVP_REALTIME';
+  whiteUserId: string;
+  blackUserId: string;
+  whiteUsername: string;
+  blackUsername: string;
+  gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM';
   aiDifficulty?: number;
+  winnerColor: 'w' | 'b' | 'draw';
+  endReason: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
+  isRated: boolean;
+  whiteEloDelta?: number;
+  blackEloDelta?: number;
+  whiteOldElo?: number;
+  blackOldElo?: number;
+  moves: string[];
   pgn: string;
   finalFen: string;
-  result: 'WHITE_WIN' | 'BLACK_WIN' | 'DRAW' | 'IN_PROGRESS';
   movesCount: number;
+  timeControl?: {
+    initialSeconds: number;
+    incrementSeconds: number;
+  };
   startedAt: Date;
   endedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const MatchSchema = new Schema<IMatch>(
@@ -18,7 +35,6 @@ const MatchSchema = new Schema<IMatch>(
     whitePlayer: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
       index: true,
     },
     blackPlayer: {
@@ -26,14 +42,64 @@ const MatchSchema = new Schema<IMatch>(
       ref: 'User',
       index: true,
     },
+    whiteUserId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    blackUserId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    whiteUsername: {
+      type: String,
+      required: true,
+    },
+    blackUsername: {
+      type: String,
+      required: true,
+    },
     gameMode: {
       type: String,
-      enum: ['PV_AI', 'PVP_REALTIME'],
-      default: 'PV_AI',
+      enum: ['PV_AI', 'PVP_RATED', 'PVP_CUSTOM'],
+      default: 'PVP_RATED',
     },
     aiDifficulty: {
       type: Number,
       enum: [1, 2, 3],
+    },
+    winnerColor: {
+      type: String,
+      enum: ['w', 'b', 'draw'],
+      required: true,
+    },
+    endReason: {
+      type: String,
+      enum: ['CHECKMATE', 'TIMEOUT', 'RESIGNED', 'ABANDONED', 'DRAW'],
+      default: 'CHECKMATE',
+    },
+    isRated: {
+      type: Boolean,
+      default: false,
+    },
+    whiteEloDelta: {
+      type: Number,
+      default: 0,
+    },
+    blackEloDelta: {
+      type: Number,
+      default: 0,
+    },
+    whiteOldElo: {
+      type: Number,
+    },
+    blackOldElo: {
+      type: Number,
+    },
+    moves: {
+      type: [String],
+      default: [],
     },
     pgn: {
       type: String,
@@ -44,14 +110,19 @@ const MatchSchema = new Schema<IMatch>(
       required: true,
       default: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
     },
-    result: {
-      type: String,
-      enum: ['WHITE_WIN', 'BLACK_WIN', 'DRAW', 'IN_PROGRESS'],
-      default: 'IN_PROGRESS',
-    },
     movesCount: {
       type: Number,
       default: 0,
+    },
+    timeControl: {
+      initialSeconds: {
+        type: Number,
+        default: 600,
+      },
+      incrementSeconds: {
+        type: Number,
+        default: 0,
+      },
     },
     startedAt: {
       type: Date,
@@ -59,11 +130,18 @@ const MatchSchema = new Schema<IMatch>(
     },
     endedAt: {
       type: Date,
+      default: Date.now,
     },
   },
   {
     timestamps: true,
   }
 );
+
+// Compound index tối ưu hóa truy vấn lịch sử đấu theo người chơi và thời gian
+MatchSchema.index({ whiteUserId: 1, endedAt: -1 });
+MatchSchema.index({ blackUserId: 1, endedAt: -1 });
+MatchSchema.index({ whitePlayer: 1, endedAt: -1 });
+MatchSchema.index({ blackPlayer: 1, endedAt: -1 });
 
 export const Match = model<IMatch>('Match', MatchSchema);

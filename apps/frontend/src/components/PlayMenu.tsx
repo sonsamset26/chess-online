@@ -55,7 +55,6 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
       icon: Trophy,
       iconBg: 'bg-rose-500/20 border-rose-500/30',
       iconColor: 'text-rose-400',
-      badge: 'Phase 2',
     },
   ];
 

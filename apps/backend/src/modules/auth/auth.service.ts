@@ -10,9 +10,15 @@ export interface AuthTokens {
 }
 
 export class AuthService {
-  private static JWT_ACCESS_SECRET: Secret = process.env.JWT_SECRET || 'supersecretchessaccesskey123';
-  private static JWT_REFRESH_SECRET: Secret = process.env.JWT_REFRESH_SECRET || 'supersecretchessrefreshkey456';
-  private static googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  private static get JWT_ACCESS_SECRET(): Secret {
+    return process.env.JWT_SECRET || 'supersecretchessaccesskey123';
+  }
+  private static get JWT_REFRESH_SECRET(): Secret {
+    return process.env.JWT_REFRESH_SECRET || 'supersecretchessrefreshkey456';
+  }
+  private static get googleClient(): OAuth2Client {
+    return new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  }
 
   // 1. Đăng ký Tài khoản mới (Tên hiển thị: name, Email, Mật khẩu)
   public static async register(data: {
@@ -192,10 +198,10 @@ export class AuthService {
     }
   }
 
-  // Sinh cặp Token: accessToken (15 phút, lưu RAM) & refreshToken (7 ngày, lưu httpOnly cookie)
+  // Sinh cặp Token: accessToken (7 ngày) & refreshToken (30 ngày)
   private static generateTokens(userId: string, role: string): { accessToken: string; refreshToken: string } {
-    const accessOptions: SignOptions = { expiresIn: '15m' };
-    const refreshOptions: SignOptions = { expiresIn: '7d' };
+    const accessOptions: SignOptions = { expiresIn: '7d' };
+    const refreshOptions: SignOptions = { expiresIn: '30d' };
 
     const accessToken = jwt.sign({ userId, role }, this.JWT_ACCESS_SECRET, accessOptions);
     const refreshToken = jwt.sign({ userId, role }, this.JWT_REFRESH_SECRET, refreshOptions);
