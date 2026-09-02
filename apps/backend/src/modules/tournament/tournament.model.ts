@@ -30,6 +30,7 @@ export interface ITournament extends Document {
   players: ITournamentPlayer[];
   rounds: ITournamentRound[];
   championId: string | null;
+  roundBreakUntil?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -103,6 +104,10 @@ const TournamentSchema = new Schema<ITournament>(
     rounds: [TournamentRoundSchema],
     championId: {
       type: String,
+      default: null,
+    },
+    roundBreakUntil: {
+      type: Date,
       default: null,
     },
   },

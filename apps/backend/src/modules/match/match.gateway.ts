@@ -395,16 +395,43 @@ export class MatchGateway {
         this.activeFriendMatches.set(roomCode, friendRoom.roomId);
       });
 
-      // 4b. THAM GIA GIẢI ĐẤU
-      socket.on('join_tournament', async (data: { code: string; userId: string; username: string; eloRating?: number }) => {
+      // 4b. THAM GIA GIẢI ĐẤU (BẢO MẬT ZERO-TRUST: XÁC THỰC JWT & TRUY VẤN DB)
+      socket.on('join_tournament', async (data: { code: string; token?: string; userId?: string }) => {
         try {
-          if (!data?.code || !data?.userId) return;
-          this.userSockets.set(data.userId, socket);
+          if (!data?.code) {
+            return socket.emit('tournament_error', { message: 'Mã giải đấu không hợp lệ.' });
+          }
+
+          // 1. Xác thực định danh người dùng qua Socket Session hoặc JWT Token
+          let verifiedUserId = (socket as any).authenticatedUserId;
+          if (!verifiedUserId && data.token) {
+            verifiedUserId = verifySocketToken(data.token);
+          }
+
+          if (!verifiedUserId || verifiedUserId.startsWith('guest_')) {
+            return socket.emit('tournament_error', { message: 'Vui lòng đăng nhập tài khoản chính thức để tham gia giải đấu.' });
+          }
+
+          // 2. Truy vấn Database MongoDB để lấy thông tin thực tế (Chống làm giả Username/Elo)
+          let user = null;
+          if (mongoose.isValidObjectId(verifiedUserId)) {
+            user = await User.findById(verifiedUserId);
+          } else {
+            user = await User.findOne({ username: verifiedUserId });
+          }
+
+          if (!user) {
+            return socket.emit('tournament_error', { message: 'Tài khoản không tồn tại trên hệ thống.' });
+          }
+
+          // Gán phiên socket chính thức
+          (socket as any).authenticatedUserId = user._id.toString();
+          this.userSockets.set(user._id.toString(), socket);
 
           const tournament = await TournamentService.joinTournament(data.code, {
-            userId: data.userId,
-            username: data.username,
-            eloRating: data.eloRating || 1200,
+            userId: user._id.toString(),
+            username: user.name || user.username,
+            eloRating: user.eloRating || 1200,
           });
 
           socket.join(`tournament_${tournament.tournamentId}`);
@@ -414,24 +441,52 @@ export class MatchGateway {
         }
       });
 
-      // 4c. BẮT ĐẦU GIẢI ĐẤU
-      socket.on('start_tournament', async (data: { code: string; userId: string }) => {
+      // 4c. BẮT ĐẦU GIẢI ĐẤU (XÁC THỰC CHỦ PHÒNG SERVER-SIDE)
+      socket.on('start_tournament', async (data: { code: string; token?: string }) => {
         try {
-          this.userSockets.set(data.userId, socket);
-          const { tournament, round1Matches } = await TournamentService.startTournament(data.code, data.userId);
+          if (!data?.code) {
+            return socket.emit('tournament_error', { message: 'Mã giải đấu không hợp lệ.' });
+          }
+
+          let verifiedUserId = (socket as any).authenticatedUserId;
+          if (!verifiedUserId && data.token) {
+            verifiedUserId = verifySocketToken(data.token);
+          }
+
+          if (!verifiedUserId || verifiedUserId.startsWith('guest_')) {
+            return socket.emit('tournament_error', { message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.' });
+          }
+
+          this.userSockets.set(verifiedUserId, socket);
+          const { tournament, round1Matches } = await TournamentService.startTournament(data.code, verifiedUserId);
 
           this.io.to(`tournament_${tournament.tournamentId}`).emit('tournament_started', {
             tournament,
             round1Matches,
           });
 
-          // Tạo phòng thi đấu cho các cặp đấu vòng 1
-          for (let mIdx = 0; mIdx < round1Matches.length; mIdx++) {
-            const m = round1Matches[mIdx];
-            if (m.player1 && m.player2 && m.status === 'PENDING') {
-              this.startTournamentMatch(tournament, 1, mIdx, m.player1, m.player2);
+          // Bắt đầu đếm ngược thời gian chờ vào trận vòng 1 (30 giây để người chơi xem bảng đấu)
+          const countdownSeconds = 30;
+          const serverNow = Date.now();
+          const targetTimestamp = serverNow + countdownSeconds * 1000;
+
+          console.log(`⏳ [Tournament] Giải đấu ${tournament.tournamentId} bắt đầu! Đếm ngược ${countdownSeconds}s trước Vòng 1...`);
+          this.io.to(`tournament_${tournament.tournamentId}`).emit('round_countdown', {
+            nextRound: 1,
+            countdownSeconds,
+            targetTimestamp,
+            serverTimestamp: serverNow,
+          });
+
+          setTimeout(() => {
+            // Tạo phòng thi đấu cho các cặp đấu vòng 1 sau khi hết thời gian chờ
+            for (let mIdx = 0; mIdx < round1Matches.length; mIdx++) {
+              const m = round1Matches[mIdx];
+              if (m.player1 && m.player2 && m.status === 'PENDING') {
+                this.startTournamentMatch(tournament, 1, mIdx, m.player1, m.player2);
+              }
             }
-          }
+          }, countdownSeconds * 1000);
         } catch (err: any) {
           socket.emit('tournament_error', { message: err?.message || 'Không thể bắt đầu giải đấu' });
         }
@@ -583,12 +638,7 @@ export class MatchGateway {
           });
 
           if (isGameOver) {
-            this.socketToRoom.delete(room.players.white.socketId);
-            this.socketToRoom.delete(room.players.black.socketId);
-            if (room.friendRoomCode) {
-              this.activeFriendMatches.delete(room.friendRoomCode);
-            }
-            this.activeRooms.delete(data.roomId);
+            this.cleanupRoomResources(room, data.roomId);
           }
         } catch (err) {
           socket.emit('move_error', { message: 'Nước đi không hợp lệ' });
@@ -627,6 +677,12 @@ export class MatchGateway {
 
         socket.join(room.roomId);
         room.status = 'PLAYING';
+
+        // Nếu ván cờ chưa từng chạy clock (do khởi đầu thiếu người chơi), kích hoạt clock ngay khi người chơi vào bàn
+        if (!room.timeoutTimer && room.players.white.isConnected && room.players.black.isConnected) {
+          room.clock.turnStartedAt = Date.now();
+          this.scheduleTimeout(room);
+        }
 
         console.log(`🔄 [Reconnect Thành Công] ${player.username} kết nối lại phòng ${room.roomId}`);
 
@@ -769,12 +825,42 @@ export class MatchGateway {
       await this.handleTournamentMatchEnd(room, winnerColor, savedMatchId);
     }
 
-    this.socketToRoom.delete(room.players.white.socketId);
-    this.socketToRoom.delete(room.players.black.socketId);
+    this.cleanupRoomResources(room, roomId);
+  }
+
+  // Dọn dẹp tài nguyên phòng thi đấu an toàn (Safe Conditional Cleanup & Memory Deallocation)
+  private cleanupRoomResources(room: GameState, targetRoomId: string) {
+    // 1. Hủy các bộ đếm thời gian đang chạy ngầm của ván cờ
+    if (room.timeoutTimer) {
+      clearTimeout(room.timeoutTimer);
+      room.timeoutTimer = undefined;
+    }
+    if (room.reconnectTimer) {
+      clearTimeout(room.reconnectTimer);
+      room.reconnectTimer = undefined;
+    }
+
+    // 2. Rời Socket.IO room để giải phóng bộ nhớ trong Adapter
+    const sockW = this.io.sockets.sockets.get(room.players.white.socketId);
+    const sockB = this.io.sockets.sockets.get(room.players.black.socketId);
+    if (sockW) sockW.leave(targetRoomId);
+    if (sockB) sockB.leave(targetRoomId);
+
+    // 3. Xóa mapping socketToRoom CÓ ĐIỀU KIỆN (Tránh xóa đè phòng mới như Armageddon)
+    if (this.socketToRoom.get(room.players.white.socketId) === targetRoomId) {
+      this.socketToRoom.delete(room.players.white.socketId);
+    }
+    if (this.socketToRoom.get(room.players.black.socketId) === targetRoomId) {
+      this.socketToRoom.delete(room.players.black.socketId);
+    }
+
+    // 4. Xóa Friend Room active nếu có
     if (room.friendRoomCode) {
       this.activeFriendMatches.delete(room.friendRoomCode);
     }
-    this.activeRooms.delete(roomId);
+
+    // 5. Xóa GameState khỏi activeRooms
+    this.activeRooms.delete(targetRoomId);
   }
 
   // Cập nhật điểm Elo vào MongoDB Atlas
@@ -853,12 +939,7 @@ export class MatchGateway {
       await this.handleTournamentMatchEnd(room, winnerColor, savedMatchId);
     }
 
-    this.socketToRoom.delete(room.players.white.socketId);
-    this.socketToRoom.delete(room.players.black.socketId);
-    if (room.friendRoomCode) {
-      this.activeFriendMatches.delete(room.friendRoomCode);
-    }
-    this.activeRooms.delete(roomId);
+    this.cleanupRoomResources(room, roomId);
   }
 
   // Ghi nhận và lưu trữ ván đấu hoàn chỉnh vào MongoDB Atlas
@@ -941,13 +1022,24 @@ export class MatchGateway {
             tournament: result.tournament,
             championId: result.championId,
           });
+          this.io.to(room.roomId).emit('tournament_finished', {
+            tournament: result.tournament,
+            championId: result.championId,
+          });
         } else {
-          // Bắt đầu đếm ngược 30 giây nghỉ giữa 2 vòng
+          // Bắt đầu đếm ngược 30 giây nghỉ giữa 2 vòng (dựa trên mốc thời gian tuyệt đối)
           const countdownSeconds = 30;
+          const targetTimestamp = result.tournament.roundBreakUntil
+            ? new Date(result.tournament.roundBreakUntil).getTime()
+            : Date.now() + 30000;
+          const serverNow = Date.now();
+
           console.log(`⏳ [Tournament] Vòng hoàn thành. Đếm ngược ${countdownSeconds}s trước vòng tiếp theo...`);
           this.io.to(`tournament_${tournamentId}`).emit('round_countdown', {
             nextRound: result.tournament.rounds.length + 1,
             countdownSeconds,
+            targetTimestamp,
+            serverTimestamp: serverNow,
           });
 
           setTimeout(async () => {
@@ -1026,6 +1118,16 @@ export class MatchGateway {
       isArmageddon: true,
     };
 
+    // Hủy các bộ đếm thời gian của ván đấu chính trước đó
+    if (prevRoom.timeoutTimer) {
+      clearTimeout(prevRoom.timeoutTimer);
+      prevRoom.timeoutTimer = undefined;
+    }
+    if (prevRoom.reconnectTimer) {
+      clearTimeout(prevRoom.reconnectTimer);
+      prevRoom.reconnectTimer = undefined;
+    }
+
     this.activeRooms.set(roomId, room);
     this.socketToRoom.set(whitePlayerState.socketId, roomId);
     this.socketToRoom.set(blackPlayerState.socketId, roomId);
@@ -1033,8 +1135,14 @@ export class MatchGateway {
     const socketWhite = this.io.sockets.sockets.get(whitePlayerState.socketId);
     const socketBlack = this.io.sockets.sockets.get(blackPlayerState.socketId);
 
-    if (socketWhite) socketWhite.join(roomId);
-    if (socketBlack) socketBlack.join(roomId);
+    if (socketWhite) {
+      socketWhite.leave(prevRoom.roomId);
+      socketWhite.join(roomId);
+    }
+    if (socketBlack) {
+      socketBlack.leave(prevRoom.roomId);
+      socketBlack.join(roomId);
+    }
 
     const matchPayload = {
       roomId,
@@ -1044,6 +1152,7 @@ export class MatchGateway {
       isRated: false,
       isArmageddon: true,
       drawOdds: 'b',
+      isTournament: true,
       clock: {
         whiteTimeMs: 300000,
         blackTimeMs: 240000,
@@ -1136,6 +1245,7 @@ export class MatchGateway {
       blackPlayer: { userId: p2Info.userId, username: p2Info.username, eloRating: p2Info.eloRating },
       fen: game.fen(),
       isRated: false,
+      isTournament: true,
       clock: {
         whiteTimeMs: initialTimeMs,
         blackTimeMs: initialTimeMs,
@@ -1146,8 +1256,37 @@ export class MatchGateway {
       },
     };
 
+    const isP1Online = !!socket1?.connected;
+    const isP2Online = !!socket2?.connected;
+
     if (socket1) socket1.emit('match_found', { ...matchPayload, yourColor: 'w' });
     if (socket2) socket2.emit('match_found', { ...matchPayload, yourColor: 'b' });
+
+    // OFFLINE PLAYER HANDLING:
+    // Nếu có kỳ thủ offline khi bắt đầu trận, chuyển sang RECONNECTING và kích hoạt Grace Period 45s để xử thua vắng mặt (Walkover)
+    if (!isP1Online || !isP2Online) {
+      room.status = 'RECONNECTING';
+      const offlinePlayer = !isP1Online ? room.players.white : room.players.black;
+      const onlineSocket = !isP1Online ? socket2 : socket1;
+      offlinePlayer.isConnected = false;
+      offlinePlayer.disconnectedAt = serverNow;
+
+      if (onlineSocket) {
+        onlineSocket.emit('player_disconnected', {
+          disconnectedPlayer: offlinePlayer.username,
+          gracePeriodSeconds: 45,
+          message: `Đối thủ (${offlinePlayer.username}) chưa có mặt. Đang chờ 45s để kết nối...`,
+        });
+      }
+
+      room.reconnectTimer = setTimeout(() => {
+        console.log(`⏰ [Tournament Walkover] ${offlinePlayer.username} không vào bàn sau 45s -> Xử thua vắng mặt.`);
+        this.handlePlayerResignation(offlinePlayer.socketId || '', roomId, 'DISCONNECT');
+      }, 45000);
+
+      // Tuyệt đối không khởi động đồng hồ 10 phút khi chưa đủ người
+      return;
+    }
 
     this.scheduleTimeout(room);
   }

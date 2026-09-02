@@ -64,8 +64,11 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
   const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
-    if (externalTournament) {
-      setTournament(externalTournament);
+    setTournament(externalTournament || null);
+    if (!externalTournament) {
+      setView('menu');
+      setInputCode('');
+      setErrorMessage(null);
     }
   }, [externalTournament]);
 
@@ -83,17 +86,23 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       if (onTournamentUpdated) onTournamentUpdated(data.tournament);
     };
 
-    const handleRoundCountdown = (data: { nextRound: number; countdownSeconds: number }) => {
-      setCountdown(data.countdownSeconds);
+    const handleRoundCountdown = (data: { nextRound: number; countdownSeconds: number; targetTimestamp?: number; serverTimestamp?: number }) => {
+      const offset = data.serverTimestamp ? data.serverTimestamp - Date.now() : 0;
+      const target = data.targetTimestamp || (Date.now() + (data.countdownSeconds || 30) * 1000);
+
+      const updateRemaining = () => {
+        const remaining = Math.max(0, Math.ceil((target - (Date.now() + offset)) / 1000));
+        setCountdown(remaining > 0 ? remaining : null);
+        return remaining;
+      };
+
+      updateRemaining();
       const interval = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev === null || prev <= 1) {
-            clearInterval(interval);
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        const remaining = updateRemaining();
+        if (remaining <= 0) {
+          clearInterval(interval);
+        }
+      }, 500);
     };
 
     const handleTournamentError = (data: { message: string }) => {
@@ -101,15 +110,23 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       setLoading(false);
     };
 
+    const handleTournamentFinished = (data: { tournament: TournamentData; championId: string }) => {
+      setTournament(data.tournament);
+      setCountdown(null);
+      if (onTournamentUpdated) onTournamentUpdated(data.tournament);
+    };
+
     socket.on('tournament_updated', handleTournamentUpdated);
     socket.on('tournament_started', handleTournamentStarted);
     socket.on('round_countdown', handleRoundCountdown);
+    socket.on('tournament_finished', handleTournamentFinished);
     socket.on('tournament_error', handleTournamentError);
 
     return () => {
       socket.off('tournament_updated', handleTournamentUpdated);
       socket.off('tournament_started', handleTournamentStarted);
       socket.off('round_countdown', handleRoundCountdown);
+      socket.off('tournament_finished', handleTournamentFinished);
       socket.off('tournament_error', handleTournamentError);
     };
   }, [socket, onTournamentUpdated]);
@@ -153,6 +170,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       if (socket && currentUserId) {
         socket.emit('join_tournament', {
           code: createdTournament.code,
+          token: token || undefined,
           userId: currentUserId,
           username: currentUsername || 'Host',
           eloRating: currentUserElo,
@@ -178,8 +196,10 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
 
     setLoading(true);
     setErrorMessage(null);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
     socket.emit('join_tournament', {
       code: cleanCode,
+      token: token || undefined,
       userId: currentUserId,
       username: currentUsername || 'Player',
       eloRating: currentUserElo,
@@ -190,14 +210,20 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
   const handleStartTournament = () => {
     if (!socket || !tournament || !currentUserId) return;
     setLoading(true);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
     socket.emit('start_tournament', {
       code: tournament.code,
-      userId: currentUserId,
+      token: token || undefined,
     });
   };
 
-  const isHost = tournament?.hostUserId === currentUserId;
-  const canStart = isHost && tournament?.status === 'WAITING' && (tournament?.players.length || 0) >= 2;
+  const hostPlayer = tournament?.players.find((p) => p.userId === tournament.hostUserId);
+  const isHost =
+    tournament?.hostUserId === currentUserId ||
+    tournament?.hostUsername === currentUsername ||
+    (!!currentUsername && hostPlayer?.username === currentUsername) ||
+    (!!currentUserId && hostPlayer?.userId === currentUserId);
+  const canStart = isHost && tournament?.status === 'WAITING' && (tournament?.players.length || 0) === (tournament?.size || 4);
 
   // Lấy tên người chơi theo userId
   const getPlayerName = (uid: string | null) => {
@@ -398,7 +424,6 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                   <span className="text-lg font-black text-amber-300 uppercase tracking-wide">
                     🏆 QUÁN QUÂN GIẢI ĐẤU: {getPlayerName(tournament.championId)}
                   </span>
-                  <span className="text-xs text-[#BAB8B6]">Chúc mừng bạn đã xuất sắc chiến thắng toàn bộ các vòng đấu!</span>
                 </div>
               )}
 
@@ -443,7 +468,13 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                       className="w-full mt-3 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-40 transition-all active:scale-95"
                     >
                       <Play className="w-4 h-4" />
-                      <span>{loading ? 'Đang khởi tạo...' : 'Bắt đầu giải đấu ngay'}</span>
+                      <span>
+                        {loading
+                          ? 'Đang khởi tạo...'
+                          : canStart
+                          ? 'Bắt đầu giải đấu ngay'
+                          : `Cần đủ ${tournament.size} người (${tournament.players.length}/${tournament.size})`}
+                      </span>
                     </button>
                   )}
                   {!isHost && (
@@ -455,6 +486,26 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
               ) : (
                 // GIAI ĐOẠN 2: SƠ ĐỒ NHÁNH ĐẤU (BRACKET TREE)
                 <div className="flex flex-col gap-4">
+                  {/* BANNER ĐẾM NGƯỢC THỜI GIAN CHỜ VÀO TRẬN */}
+                  {countdown !== null && (
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-2 border-amber-500/50 flex items-center justify-between text-amber-300 animate-pulse shadow-lg shadow-amber-500/10">
+                      <div className="flex items-center gap-2.5">
+                        <Swords className="w-5 h-5 text-amber-400 animate-bounce" />
+                        <div className="flex flex-col text-left">
+                          <span className="font-extrabold text-xs uppercase tracking-wider text-white">
+                            Thời gian chờ vào trận
+                          </span>
+                          <span className="text-[10px] text-amber-300/80 font-medium">
+                            Đang mở bảng đấu. Chuẩn bị vào bàn cờ...
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 font-mono font-black text-xl bg-black/60 px-3.5 py-1.5 rounded-xl border border-amber-500/40 text-amber-300 shadow-inner">
+                        <span>00:{countdown < 10 ? `0${countdown}` : countdown}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <h4 className="text-xs font-bold text-[#BAB8B6] uppercase tracking-wider flex items-center gap-1.5">
                     <Swords className="w-3.5 h-3.5 text-amber-400" />
                     <span>Sơ đồ thi đấu (Bracket)</span>
@@ -534,6 +585,21 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                       </div>
                     ))}
                   </div>
+
+                  {/* NÚT TẠO HOẶC THAM GIA GIẢI ĐẤU MỚI KHI GIẢI ĐÃ KẾT THÚC */}
+                  {tournament.status === 'FINISHED' && (
+                    <button
+                      onClick={() => {
+                        setTournament(null);
+                        setView('menu');
+                        if (onTournamentUpdated) onTournamentUpdated(null as any);
+                      }}
+                      className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      <span>Tạo hoặc Tham gia Giải đấu mới</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
