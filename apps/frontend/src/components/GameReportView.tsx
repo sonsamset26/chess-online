@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Chess } from 'chess.js';
-import { GameAnalysisReport, MoveAnalysis, MoveClassification } from '../services/analysis/types';
+import { GameAnalysisReport, CompletedMoveAnalysis, MoveClassification } from '../services/analysis/types';
 import { ChessBoardComponent } from './ChessBoard';
 
 interface GameReportViewProps {
@@ -28,7 +28,7 @@ export const GameReportView: React.FC<GameReportViewProps> = ({
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number>(
     report.moves.length > 0 ? report.moves.length - 1 : -1
   );
-  const [hoveredMove, setHoveredMove] = useState<MoveAnalysis | null>(null);
+  const [hoveredMove, setHoveredMove] = useState<CompletedMoveAnalysis | null>(null);
 
   // Instance Chess độc lập để xem lại nước đi mà không ảnh hưởng tới ván chính
   const replayGame = useMemo(() => new Chess(), []);
