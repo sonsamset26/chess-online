@@ -25,7 +25,11 @@ export function getPositionKey(fen: string): string {
  * Chuẩn hóa nước đi về dạng Canonical UCI chữ thường (ví dụ: e7e8q)
  */
 export function toCanonicalUci(from: string, to: string, promotion?: string): string {
-  const promo = promotion ? promotion.charAt(0).toLowerCase() : '';
+  let promo = '';
+  if (promotion) {
+    const cleaned = promotion.replace('=', '').trim().toLowerCase();
+    promo = cleaned.charAt(0);
+  }
   return `${from.toLowerCase()}${to.toLowerCase()}${promo}`;
 }
 
@@ -288,6 +292,7 @@ export class AnalysisEngine {
         const engineUci = (bestMoveResult.bestMoveUci || '').trim().toLowerCase();
 
         const isCheckmateMove = game.isCheckmate() || san.includes('#');
+        const isDrawMove = game.isDraw() || game.isStalemate();
         let evalPlayed = 0;
         let cpl = 0;
         let classification: any = 'BEST';
@@ -297,6 +302,11 @@ export class AnalysisEngine {
           evalPlayed = 10000;
           cpl = 0;
           classification = 'BEST';
+          accuracy = 100;
+        } else if (isDrawMove && Math.abs(bestMoveResult.evalBest) <= 150) {
+          evalPlayed = 0;
+          cpl = 0;
+          classification = 'EXCELLENT';
           accuracy = 100;
         } else {
           const isBestMovePlayed = playedUci === engineUci || san === bestMoveResult.bestMoveSan;

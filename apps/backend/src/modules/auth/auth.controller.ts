@@ -73,7 +73,7 @@ export class AuthController {
   // 3. Đăng nhập Google
   public static async googleLogin(req: Request, res: Response, next: NextFunction) {
     try {
-      const { idToken } = req.body;
+      const idToken = req.body?.idToken || req.body?.token || req.body?.accessToken || req.body?.access_token;
       if (!idToken) {
         return ApiResponse.error(res, 'Thiếu Google idToken xác thực', 400);
       }

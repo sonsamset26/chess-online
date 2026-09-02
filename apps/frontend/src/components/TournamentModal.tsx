@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trophy, Users, PlusCircle, LogIn, Copy, Check, Swords, Shield, Crown, Play } from 'lucide-react';
+import { TournamentBracketView } from './TournamentBracketView';
 
 export interface TournamentPlayer {
   userId: string;
@@ -234,7 +235,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none">
-      <div className="w-full max-w-2xl bg-[#262421] border border-[#3A3733] rounded-3xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+      <div className={`w-full ${tournament?.status === 'IN_PROGRESS' || tournament?.status === 'FINISHED' ? 'max-w-5xl' : 'max-w-2xl'} bg-[#262421] border border-[#3A3733] rounded-3xl p-4 sm:p-6 shadow-2xl relative max-h-[92vh] flex flex-col transition-all duration-300`}>
         {/* Nút Đóng */}
         <button
           onClick={onClose}
@@ -408,15 +409,6 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                 </div>
               </div>
 
-              {/* BANNER ĐẾM NGƯỢC NGHỈ GIỮA 2 VÒNG */}
-              {countdown !== null && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/40 text-center animate-pulse">
-                  <span className="text-sm font-black text-amber-300">
-                    ⏱️ Vòng tiếp theo sẽ bắt đầu sau {countdown} giây...
-                  </span>
-                </div>
-              )}
-
               {/* BANNER NHÀ VÔ ĐỊCH */}
               {tournament.status === 'FINISHED' && tournament.championId && (
                 <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/50 text-center flex flex-col items-center gap-1 shadow-lg shadow-amber-500/10">
@@ -484,107 +476,18 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                   )}
                 </div>
               ) : (
-                // GIAI ĐOẠN 2: SƠ ĐỒ NHÁNH ĐẤU (BRACKET TREE)
                 <div className="flex flex-col gap-4">
-                  {/* BANNER ĐẾM NGƯỢC THỜI GIAN CHỜ VÀO TRẬN */}
-                  {countdown !== null && (
-                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-2 border-amber-500/50 flex items-center justify-between text-amber-300 animate-pulse shadow-lg shadow-amber-500/10">
-                      <div className="flex items-center gap-2.5">
-                        <Swords className="w-5 h-5 text-amber-400 animate-bounce" />
-                        <div className="flex flex-col text-left">
-                          <span className="font-extrabold text-xs uppercase tracking-wider text-white">
-                            Thời gian chờ vào trận
-                          </span>
-                          <span className="text-[10px] text-amber-300/80 font-medium">
-                            Đang mở bảng đấu. Chuẩn bị vào bàn cờ...
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 font-mono font-black text-xl bg-black/60 px-3.5 py-1.5 rounded-xl border border-amber-500/40 text-amber-300 shadow-inner">
-                        <span>00:{countdown < 10 ? `0${countdown}` : countdown}</span>
-                      </div>
-                    </div>
-                  )}
-
                   <h4 className="text-xs font-bold text-[#BAB8B6] uppercase tracking-wider flex items-center gap-1.5">
                     <Swords className="w-3.5 h-3.5 text-amber-400" />
                     <span>Sơ đồ thi đấu (Bracket)</span>
                   </h4>
 
-                  <div className="flex flex-col gap-4">
-                    {tournament.rounds.map((round) => (
-                      <div key={round.roundNumber} className="flex flex-col gap-2">
-                        <span className="text-[11px] font-extrabold text-amber-400 font-mono uppercase">
-                          Vòng {round.roundNumber}{' '}
-                          {round.roundNumber === tournament.rounds.length && tournament.status === 'FINISHED'
-                            ? '(Chung kết)'
-                            : round.matches.length === 1
-                            ? '(Chung kết)'
-                            : `(${round.matches.length} Trận)`}
-                        </span>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {round.matches.map((m, mIdx) => {
-                            const isBye = m.player1 && !m.player2;
-                            const isP1Winner = m.winnerId === m.player1;
-                            const isP2Winner = m.winnerId === m.player2;
-
-                            return (
-                              <div
-                                key={mIdx}
-                                className={`p-3 rounded-2xl border flex flex-col gap-2 transition-all ${
-                                  m.status === 'PLAYING'
-                                    ? 'bg-amber-950/20 border-amber-500/50 shadow-md shadow-amber-500/10'
-                                    : 'bg-[#1C1A17] border-[#312E2B]'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between text-[10px] text-[#8B8987] font-bold">
-                                  <span>Trận #{mIdx + 1}</span>
-                                  {isBye ? (
-                                    <span className="text-blue-400">Miễn đấu (Bye)</span>
-                                  ) : m.status === 'DONE' ? (
-                                    <span className="text-emerald-400">Đã xong</span>
-                                  ) : m.status === 'PLAYING' ? (
-                                    <span className="text-amber-400 animate-pulse">Đang thi đấu...</span>
-                                  ) : (
-                                    <span className="text-[#8B8987]">Chờ đấu</span>
-                                  )}
-                                </div>
-
-                                <div className="flex flex-col gap-1 text-xs">
-                                  {/* Player 1 */}
-                                  <div
-                                    className={`p-1.5 px-2.5 rounded-lg flex items-center justify-between font-bold ${
-                                      isP1Winner
-                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                        : 'bg-[#262421] text-[#BAB8B6]'
-                                    }`}
-                                  >
-                                    <span>{getPlayerName(m.player1)}</span>
-                                    {isP1Winner && <Crown className="w-3.5 h-3.5 text-emerald-400" />}
-                                  </div>
-
-                                  {/* Player 2 */}
-                                  <div
-                                    className={`p-1.5 px-2.5 rounded-lg flex items-center justify-between font-bold ${
-                                      isBye
-                                        ? 'bg-transparent text-[#63615E] italic text-[11px]'
-                                        : isP2Winner
-                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                        : 'bg-[#262421] text-[#BAB8B6]'
-                                    }`}
-                                  >
-                                    <span>{isBye ? '(Không có đối thủ)' : getPlayerName(m.player2)}</span>
-                                    {isP2Winner && <Crown className="w-3.5 h-3.5 text-emerald-400" />}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <TournamentBracketView
+                    tournament={tournament}
+                    isLive={true}
+                    countdown={countdown}
+                    currentUserId={currentUserId}
+                  />
 
                   {/* NÚT TẠO HOẶC THAM GIA GIẢI ĐẤU MỚI KHI GIẢI ĐÃ KẾT THÚC */}
                   {tournament.status === 'FINISHED' && (

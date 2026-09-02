@@ -128,6 +128,7 @@ export function useChessEngine() {
   const setBoardFen = (newFen: string, history?: string[]) => {
     try {
       generationRef.current++;
+      workerRef.current?.postMessage('stop');
       if (pendingBotMoveTimerRef.current) {
         clearTimeout(pendingBotMoveTimerRef.current);
         pendingBotMoveTimerRef.current = null;
@@ -176,8 +177,9 @@ export function useChessEngine() {
   };
 
   // Reset Game
-  const resetGame = () => {
+  const resetGame = (options?: { autoTriggerAi?: boolean }) => {
     generationRef.current++;
+    workerRef.current?.postMessage('stop');
     if (pendingBotMoveTimerRef.current) {
       clearTimeout(pendingBotMoveTimerRef.current);
       pendingBotMoveTimerRef.current = null;
@@ -192,7 +194,7 @@ export function useChessEngine() {
     setGameStatus('IN_PROGRESS');
     setIsAiThinking(false);
 
-    if (playerColor === 'b') {
+    if (options?.autoTriggerAi && playerColor === 'b') {
       triggerAiMove(gameRef.current.fen());
     }
   };
@@ -200,6 +202,7 @@ export function useChessEngine() {
   // Đổi bên (Trắng/Đen)
   const togglePlayerColor = () => {
     generationRef.current++;
+    workerRef.current?.postMessage('stop');
     if (pendingBotMoveTimerRef.current) {
       clearTimeout(pendingBotMoveTimerRef.current);
       pendingBotMoveTimerRef.current = null;
