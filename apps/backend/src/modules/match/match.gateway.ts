@@ -3,6 +3,7 @@ import { Chess, Square } from 'chess.js';
 import mongoose from 'mongoose';
 import { calculateElo, EloCalculationResult } from '../../utils/elo';
 import { User } from '../user/user.model';
+import { MatchService } from './match.service';
 
 // -----------------------------------------------------------------------------
 // DOMAIN MODELS & TYPINGS CHO HỆ THỐNG TRẬN ĐẤU CỜ VUA (MODULAR GAME STATE)
@@ -32,6 +33,7 @@ export interface TimeControlConfig {
 
 export interface GameState {
   roomId: string;
+  gameStartedAt: number;   // Timestamp Date.now() khi ván đấu được tạo
   version: number;         // Tăng dần 1, 2, 3... chống Race Condition
   status: 'READY' | 'PLAYING' | 'RECONNECTING' | 'FINISHED';
   isRated: boolean;        // true = Đấu Xếp Hạng (Tính Elo), false = Đấu Bạn Bè (Giao Hữu)
@@ -48,6 +50,24 @@ export interface GameState {
   reconnectTimer?: NodeJS.Timeout;
 }
 
+// Cấu hình các bước mở rộng khung Elo theo thời gian chờ (Heuristic Policy)
+export const ELO_WINDOW_STEPS = [
+  { maxWaitSeconds: 5, delta: 50 },
+  { maxWaitSeconds: 15, delta: 100 },
+  { maxWaitSeconds: 30, delta: 200 },
+  { maxWaitSeconds: Infinity, delta: 400 },
+];
+
+export interface QueueEntry {
+  socketId: string;
+  userId: string;
+  username: string;
+  eloRating: number;
+  joinedAt: number;
+  timeControl: TimeControlConfig;
+  isRated: boolean;
+}
+
 interface FriendRoom {
   roomCode: string;
   roomId: string;
@@ -61,37 +81,62 @@ interface FriendRoom {
 
 export class MatchGateway {
   private io: Server;
-  private waitingQueue: PlayerState[] = [];
+  private waitingQueue: QueueEntry[] = [];
   private activeRooms: Map<string, GameState> = new Map();
   private friendRooms: Map<string, FriendRoom> = new Map();
   private socketToRoom: Map<string, string> = new Map(); // SocketId -> RoomId
+  private matchmakerTimer?: NodeJS.Timeout;
 
   constructor(io: Server) {
     this.io = io;
     this.initializeSockets();
+
+    // Khởi động Matchmaker Loop định kỳ mỗi 1.5 giây
+    this.matchmakerTimer = setInterval(() => {
+      this.processMatchmakingQueue();
+    }, 1500);
   }
 
   private initializeSockets() {
     this.io.on('connection', (socket: Socket) => {
       console.log(`🔌 [Socket.io] Client kết nối: ${socket.id}`);
 
-      // 1. Gia nhập hàng chờ ghép trận ngẫu nhiên (ĐẤU XẾP HẠNG ONLINE -> CÓ TÍNH ELO)
-      socket.on('join_queue', (data: { userId: string; username: string; eloRating?: number }) => {
-        const player: PlayerState = {
+      // 1. Gia nhập hàng chờ ghép trận theo Elo Window (ĐẤU XẾP HẠNG ONLINE)
+      socket.on('join_queue', (data: {
+        userId: string;
+        username: string;
+        eloRating?: number;
+        timeControl?: { initialTimeMs?: number; incrementMs?: number };
+      }) => {
+        const timeControl: TimeControlConfig = {
+          initialTimeMs: data.timeControl?.initialTimeMs || 600000,
+          incrementMs: data.timeControl?.incrementMs || 0,
+        };
+
+        const entry: QueueEntry = {
           socketId: socket.id,
           userId: data.userId || `guest_${socket.id.substring(0, 5)}`,
           username: data.username || 'Người chơi',
           eloRating: data.eloRating || 1200,
-          isConnected: true,
+          joinedAt: Date.now(),
+          timeControl,
+          isRated: true,
         };
 
-        this.waitingQueue = this.waitingQueue.filter((p) => p.socketId !== socket.id && p.userId !== player.userId);
-        this.waitingQueue.push(player);
+        // Edge Case A: Loại bỏ trùng lặp nếu người chơi bấm tìm trận nhiều lần
+        this.waitingQueue = this.waitingQueue.filter((p) => p.socketId !== socket.id && p.userId !== entry.userId);
+        this.waitingQueue.push(entry);
 
-        console.log(`🎮 [Matchmaker - Rated] Player ${player.username} (Elo: ${player.eloRating}) gia nhập hàng chờ.`);
-        socket.emit('queue_joined', { message: 'Đã gia nhập hàng chờ ghép trận...' });
+        console.log(`🎮 [Matchmaker - Rated] ${entry.username} (Elo: ${entry.eloRating}, ${Math.round(timeControl.initialTimeMs / 60000)}+${Math.round(timeControl.incrementMs / 1000)}) gia nhập hàng chờ.`);
+        socket.emit('queue_joined', {
+          message: 'Đã gia nhập hàng chờ ghép trận...',
+          joinedAt: entry.joinedAt,
+          eloRating: entry.eloRating,
+          initialDelta: 50,
+        });
 
-        this.tryMatchmaking();
+        // Thử ghép cặp ngay lập tức
+        this.processMatchmakingQueue();
       });
 
       // 2. Rời hàng chờ ghép trận
@@ -167,6 +212,7 @@ export class MatchGateway {
 
         const newRoom: GameState = {
           roomId: friendRoom.roomId,
+          gameStartedAt: serverNow,
           version: 1,
           status: 'PLAYING',
           isRated: false, // Phòng bạn bè không tính Elo
@@ -328,6 +374,9 @@ export class MatchGateway {
                 await this.updateUserElo(room.players.black.userId, eloResult.black.delta, 'draw');
               }
             }
+
+            // Lưu lịch sử ván cờ vào MongoDB Atlas
+            await this.persistMatchRecord(room, room.winnerColor || 'draw', room.endReason || 'CHECKMATE', eloResult);
           }
 
           // 6.9. Broadcast gói tin Event-driven kèm mốc thời gian chuẩn
@@ -352,6 +401,7 @@ export class MatchGateway {
             isCheckmate,
             isDraw,
             winnerColor,
+            moveTimeMs: elapsed,
             eloResult: room.isRated ? eloResult : null,
           });
 
@@ -518,6 +568,8 @@ export class MatchGateway {
       eloResult: room.isRated ? eloResult : null,
     });
 
+    await this.persistMatchRecord(room, winnerColor, 'TIMEOUT', eloResult);
+
     this.socketToRoom.delete(room.players.white.socketId);
     this.socketToRoom.delete(room.players.black.socketId);
     this.activeRooms.delete(roomId);
@@ -592,86 +644,231 @@ export class MatchGateway {
       eloResult: room.isRated ? eloResult : null,
     });
 
+    const endReason = reason === 'DISCONNECT' ? 'ABANDONED' : 'RESIGNED';
+    await this.persistMatchRecord(room, winnerColor, endReason, eloResult);
+
     this.socketToRoom.delete(room.players.white.socketId);
     this.socketToRoom.delete(room.players.black.socketId);
     this.activeRooms.delete(roomId);
   }
 
-  // Ghép trận ngẫu nhiên (Matchmaking)
-  private tryMatchmaking() {
-    while (this.waitingQueue.length >= 2) {
-      const p1 = this.waitingQueue.shift()!;
-      const p2 = this.waitingQueue.shift()!;
-
-      const isP1White = Math.random() < 0.5;
-      const whitePlayer = isP1White ? p1 : p2;
-      const blackPlayer = isP1White ? p2 : p1;
-
-      const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const game = new Chess();
-      const serverNow = Date.now();
-
-      const initialTimeMs = 600000; // 10 phút mặc định (Rapid 10+0)
-      const incrementMs = 0;
-
-      const newRoom: GameState = {
-        roomId,
-        version: 1,
-        status: 'PLAYING',
-        isRated: true, // Ghép trận Online luôn là Rated (Tính Elo)
-        game,
-        players: {
-          white: whitePlayer,
-          black: blackPlayer,
-        },
-        clock: {
-          whiteTimeMs: initialTimeMs,
-          blackTimeMs: initialTimeMs,
-          activeColor: 'w',
-          turnStartedAt: serverNow,
-          incrementMs,
-        },
+  // Ghi nhận và lưu trữ ván đấu hoàn chỉnh vào MongoDB Atlas
+  private async persistMatchRecord(
+    room: GameState,
+    winnerColor: 'w' | 'b' | 'draw',
+    endReason: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW',
+    eloResult: EloCalculationResult | null
+  ) {
+    try {
+      await MatchService.saveMatch({
+        whiteUserId: room.players.white.userId,
+        blackUserId: room.players.black.userId,
+        whiteUsername: room.players.white.username,
+        blackUsername: room.players.black.username,
+        gameMode: room.isRated ? 'PVP_RATED' : 'PVP_CUSTOM',
+        winnerColor,
+        endReason,
+        isRated: room.isRated,
+        whiteEloDelta: eloResult?.white.delta || 0,
+        blackEloDelta: eloResult?.black.delta || 0,
+        whiteOldElo: eloResult?.white.oldElo || room.players.white.eloRating,
+        blackOldElo: eloResult?.black.oldElo || room.players.black.eloRating,
+        moves: room.game.history(),
+        pgn: room.game.pgn(),
+        finalFen: room.game.fen(),
+        movesCount: room.game.history().length,
         timeControl: {
-          initialTimeMs,
-          incrementMs,
+          initialSeconds: Math.round(room.timeControl.initialTimeMs / 1000),
+          incrementSeconds: Math.round(room.timeControl.incrementMs / 1000),
         },
-      };
+        startedAt: new Date(room.gameStartedAt || room.clock.turnStartedAt),
+        endedAt: new Date(),
+      });
+    } catch (err) {
+      console.error('❌ [MatchGateway] Lỗi ghi nhận ván đấu vào CSDL:', err);
+    }
+  }
 
-      this.activeRooms.set(roomId, newRoom);
-      this.socketToRoom.set(whitePlayer.socketId, roomId);
-      this.socketToRoom.set(blackPlayer.socketId, roomId);
-
-      this.scheduleTimeout(newRoom);
-
-      const socketWhite = this.io.sockets.sockets.get(whitePlayer.socketId);
-      const socketBlack = this.io.sockets.sockets.get(blackPlayer.socketId);
-
-      // ⚠️ GẮN SOCKET CỦA CẢ 2 VÀO ROOM ID TRƯỚC KHI EMIT SỰ KIỆN
-      if (socketWhite) {
-        socketWhite.join(roomId);
+  // Lấy độ lệch Elo cho phép theo thời gian chờ (Heuristic Policy)
+  private getEloWindowDelta(joinedAt: number): number {
+    const elapsedSec = Math.max(0, (Date.now() - joinedAt) / 1000);
+    for (const step of ELO_WINDOW_STEPS) {
+      if (elapsedSec <= step.maxWaitSeconds) {
+        return step.delta;
       }
-      if (socketBlack) {
-        socketBlack.join(roomId);
+    }
+    return 400;
+  }
+
+  // Thuật toán Ghép trận theo khung Elo mở rộng (Expanding Elo Window Matchmaker)
+  private processMatchmakingQueue() {
+    if (this.waitingQueue.length < 2) return;
+
+    // 1. Dọn dẹp các socket chết trước khi quét (Edge Case B)
+    this.waitingQueue = this.waitingQueue.filter((p) => {
+      const s = this.io.sockets.sockets.get(p.socketId);
+      return s && s.connected;
+    });
+
+    if (this.waitingQueue.length < 2) return;
+
+    // 2. Sắp xếp người chờ theo joinedAt tăng dần (người chờ lâu nhất được xét ưu tiên)
+    this.waitingQueue.sort((a, b) => a.joinedAt - b.joinedAt);
+
+    const matchedIndices = new Set<number>();
+
+    for (let i = 0; i < this.waitingQueue.length; i++) {
+      if (matchedIndices.has(i)) continue;
+      const p1 = this.waitingQueue[i];
+      const delta1 = this.getEloWindowDelta(p1.joinedAt);
+
+      let bestCandidateIndex = -1;
+      let bestEloDiff = Infinity;
+      let bestWaitTime = -1;
+
+      for (let j = i + 1; j < this.waitingQueue.length; j++) {
+        if (matchedIndices.has(j)) continue;
+        const p2 = this.waitingQueue[j];
+
+        // Không tự ghép với chính mình
+        if (p1.userId === p2.userId || p1.socketId === p2.socketId) continue;
+
+        // Nguyên tắc 2: Phải cùng Thể thức thời gian & Cùng chế độ Rated/Unrated
+        if (p1.isRated !== p2.isRated) continue;
+        if (
+          p1.timeControl.initialTimeMs !== p2.timeControl.initialTimeMs ||
+          p1.timeControl.incrementMs !== p2.timeControl.incrementMs
+        ) {
+          continue;
+        }
+
+        // Nguyên tắc 1: Điều kiện giao thoa cả hai bên cùng chấp nhận: |Elo1 - Elo2| <= min(Δ1, Δ2)
+        const delta2 = this.getEloWindowDelta(p2.joinedAt);
+        const allowedDelta = Math.min(delta1, delta2);
+        const eloDiff = Math.abs(p1.eloRating - p2.eloRating);
+
+        if (eloDiff <= allowedDelta) {
+          // Nguyên tắc 3: Ưu tiên giải phóng người chờ lâu hơn, sau đó đến độ lệch Elo nhỏ nhất
+          const p2WaitTime = Date.now() - p2.joinedAt;
+          if (
+            bestCandidateIndex === -1 ||
+            p2WaitTime > bestWaitTime ||
+            (p2WaitTime === bestWaitTime && eloDiff < bestEloDiff)
+          ) {
+            bestCandidateIndex = j;
+            bestEloDiff = eloDiff;
+            bestWaitTime = p2WaitTime;
+          }
+        }
       }
 
-      const matchPayload = {
-        roomId,
-        whitePlayer: { userId: whitePlayer.userId, username: whitePlayer.username, eloRating: whitePlayer.eloRating },
-        blackPlayer: { userId: blackPlayer.userId, username: blackPlayer.username, eloRating: blackPlayer.eloRating },
-        fen: game.fen(),
-        isRated: true,
-        clock: {
-          whiteTimeMs: initialTimeMs,
-          blackTimeMs: initialTimeMs,
-          activeColor: 'w',
-          turnStartedAt: serverNow,
-          incrementMs,
-          serverTimestamp: serverNow,
-        },
-      };
+      if (bestCandidateIndex !== -1) {
+        matchedIndices.add(i);
+        matchedIndices.add(bestCandidateIndex);
 
-      if (socketWhite) socketWhite.emit('match_found', { ...matchPayload, yourColor: 'w' });
-      if (socketBlack) socketBlack.emit('match_found', { ...matchPayload, yourColor: 'b' });
+        const p2 = this.waitingQueue[bestCandidateIndex];
+        console.log(
+          `🤝 [Matchmaker] Ghép thành công: ${p1.username} (Elo ${p1.eloRating}, chờ ${(Date.now() - p1.joinedAt) / 1000}s) vs ` +
+          `${p2.username} (Elo ${p2.eloRating}, chờ ${(Date.now() - p2.joinedAt) / 1000}s) - Lệch: ${Math.abs(p1.eloRating - p2.eloRating)} Elo`
+        );
+
+        this.createMatchedGame(p1, p2);
+      }
+    }
+
+    // Xóa những người đã ghép trận thành công ra khỏi hàng chờ
+    if (matchedIndices.size > 0) {
+      this.waitingQueue = this.waitingQueue.filter((_, idx) => !matchedIndices.has(idx));
+    }
+  }
+
+  // Khởi tạo phòng thi đấu cho cặp đấu thỏa mãn Elo Window
+  private createMatchedGame(p1: QueueEntry, p2: QueueEntry) {
+    const isP1White = Math.random() < 0.5;
+    const whitePlayer: PlayerState = {
+      socketId: isP1White ? p1.socketId : p2.socketId,
+      userId: isP1White ? p1.userId : p2.userId,
+      username: isP1White ? p1.username : p2.username,
+      eloRating: isP1White ? p1.eloRating : p2.eloRating,
+      isConnected: true,
+    };
+    const blackPlayer: PlayerState = {
+      socketId: isP1White ? p2.socketId : p1.socketId,
+      userId: isP1White ? p2.userId : p1.userId,
+      username: isP1White ? p2.username : p1.username,
+      eloRating: isP1White ? p2.eloRating : p1.eloRating,
+      isConnected: true,
+    };
+
+    const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const game = new Chess();
+    const serverNow = Date.now();
+
+    const initialTimeMs = p1.timeControl.initialTimeMs;
+    const incrementMs = p1.timeControl.incrementMs;
+
+    const newRoom: GameState = {
+      roomId,
+      gameStartedAt: serverNow,
+      version: 1,
+      status: 'PLAYING',
+      isRated: p1.isRated,
+      game,
+      players: {
+        white: whitePlayer,
+        black: blackPlayer,
+      },
+      clock: {
+        whiteTimeMs: initialTimeMs,
+        blackTimeMs: initialTimeMs,
+        activeColor: 'w',
+        turnStartedAt: serverNow,
+        incrementMs,
+      },
+      timeControl: p1.timeControl,
+    };
+
+    this.activeRooms.set(roomId, newRoom);
+    this.socketToRoom.set(whitePlayer.socketId, roomId);
+    this.socketToRoom.set(blackPlayer.socketId, roomId);
+
+    this.scheduleTimeout(newRoom);
+
+    const socketWhite = this.io.sockets.sockets.get(whitePlayer.socketId);
+    const socketBlack = this.io.sockets.sockets.get(blackPlayer.socketId);
+
+    // Gắn socket của cả hai vào room trước khi emit
+    if (socketWhite) {
+      socketWhite.join(roomId);
+    }
+    if (socketBlack) {
+      socketBlack.join(roomId);
+    }
+
+    const matchPayload = {
+      roomId,
+      whitePlayer: { userId: whitePlayer.userId, username: whitePlayer.username, eloRating: whitePlayer.eloRating },
+      blackPlayer: { userId: blackPlayer.userId, username: blackPlayer.username, eloRating: blackPlayer.eloRating },
+      fen: game.fen(),
+      isRated: p1.isRated,
+      clock: {
+        whiteTimeMs: initialTimeMs,
+        blackTimeMs: initialTimeMs,
+        activeColor: 'w',
+        turnStartedAt: serverNow,
+        incrementMs,
+        serverTimestamp: serverNow,
+      },
+    };
+
+    if (socketWhite) socketWhite.emit('match_found', { ...matchPayload, yourColor: 'w' });
+    if (socketBlack) socketBlack.emit('match_found', { ...matchPayload, yourColor: 'b' });
+  }
+
+  // Dọn dẹp Timer khi ứng dụng tắt
+  public destroy() {
+    if (this.matchmakerTimer) {
+      clearInterval(this.matchmakerTimer);
     }
   }
 }

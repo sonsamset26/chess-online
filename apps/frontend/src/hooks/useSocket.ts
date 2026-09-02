@@ -53,6 +53,7 @@ export interface MoveData {
   winnerColor?: 'w' | 'b' | null;
   eloResult?: EloCalculationResult | null;
   clock?: ClockPayload;
+  moveTimeMs?: number;
 }
 
 export interface ResignationData {

@@ -3,8 +3,13 @@ import './globals.css';
 import { GoogleAuthProvider } from '../components/GoogleAuthProvider';
 
 export const metadata: Metadata = {
-  title: 'Chess Online - Đánh Cờ Vua Trực Tuyến Realtime tích hợp AI',
-  description: 'Nền tảng thi đấu cờ vua trực tuyến realtime qua WebSocket và luyện tập với Stockfish AI.',
+  title: 'Chess online - Chơi cờ vua trực tuyến',
+  description: 'Nền tảng thi đấu và chơi cờ vua trực tuyến.',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export const viewport: Viewport = {
