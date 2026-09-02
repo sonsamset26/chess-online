@@ -79,7 +79,29 @@ async function runTests() {
   console.log('Black Feature Vector:', report.features.black);
 
   console.log(`\n⏱️ Thời gian phân tích toàn bộ ván: ${report.analysisDurationMs} ms`);
-  console.log('✅ KIỂM THỬ HOÀN THÀNH THÀNH CÔNG!');
+
+  console.log('\n🎯 4. KIỂM THỬ LIVE COACH: ANALYZESINGLEMOVE');
+  const singleMateTest = await AnalysisEngine.analyzeSingleMove({
+    ply: 7,
+    fenBefore: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
+    fenAfter: 'r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4',
+    moveSan: 'Qxf7#',
+    playerColor: 'w',
+  });
+
+  console.log('Kết quả phân tích nước Chiếu Hết (Qxf7#):', {
+    classification: singleMateTest.classification,
+    cpl: singleMateTest.cpl,
+    evalAfter: singleMateTest.evalAfter,
+    accuracy: singleMateTest.accuracy,
+    status: singleMateTest.status,
+  });
+
+  if (singleMateTest.classification !== 'BEST' || singleMateTest.cpl !== 0 || singleMateTest.evalAfter !== 10000) {
+    throw new Error('TEST FAILED: Nước chiếu hết không đạt tiêu chuẩn BEST / CPL 0 / evalAfter 10000!');
+  }
+
+  console.log('✅ KIỂM THỬ HOÀN THÀNH THÀNH CÔNG 100%!');
 }
 
 runTests().catch(console.error);

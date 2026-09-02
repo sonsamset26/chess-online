@@ -115,9 +115,15 @@ export class EvaluationService {
     bestMoveSan: string;
     evalBest: number;
   } {
+    if (game.isGameOver() || game.moves().length === 0) {
+      const evalBest = game.isCheckmate() ? -10000 : 0;
+      return { bestMoveUci: '(none)', bestMoveSan: '(none)', evalBest };
+    }
+
     const moves = game.moves({ verbose: true });
     if (moves.length === 0) {
-      return { bestMoveUci: '(none)', bestMoveSan: '(none)', evalBest: 0 };
+      const evalBest = game.isCheckmate() ? -10000 : 0;
+      return { bestMoveUci: '(none)', bestMoveSan: '(none)', evalBest };
     }
 
     let bestScore = -Infinity;
@@ -143,24 +149,66 @@ export class EvaluationService {
   }
 
   /**
-   * Đánh giá bất đồng bộ bằng Stockfish Bridge (có fallback Negamax)
+   * Đánh giá bất đồng bộ bằng Stockfish Bridge (có tùy chọn fallback an toàn)
    */
   public static async findBestMoveAndEvalAsync(
     game: Chess,
-    depth: number = 10,
-    bridge?: StockfishBridge | null,
-    abortSignal?: AbortSignal
+    depthOrOptions: number | {
+      depth?: number;
+      movetimeMs?: number;
+      bridge?: StockfishBridge | null;
+      abortSignal?: AbortSignal;
+      allowSyncFallback?: boolean;
+    } = 10,
+    legacyBridge?: StockfishBridge | null,
+    legacyAbortSignal?: AbortSignal
   ): Promise<{
     bestMoveUci: string;
     bestMoveSan: string;
     evalBest: number;
   }> {
+    // 1. Guard thế cờ kết thúc ván: không gửi sang Stockfish
+    if (game.isGameOver() || game.moves().length === 0) {
+      const evalBest = game.isCheckmate() ? -10000 : 0;
+      return { bestMoveUci: '(none)', bestMoveSan: '(none)', evalBest };
+    }
+
+    const opts =
+      typeof depthOrOptions === 'number'
+        ? {
+            depth: depthOrOptions,
+            bridge: legacyBridge,
+            abortSignal: legacyAbortSignal,
+            allowSyncFallback: true,
+          }
+        : {
+            depth: 10,
+            allowSyncFallback: true,
+            ...depthOrOptions,
+          };
+
+    const bridge = opts.bridge;
+    const depth = opts.depth || 10;
+    const abortSignal = opts.abortSignal;
+
     if (bridge && bridge.isAvailable()) {
       try {
         const fen = game.fen();
-        const result = await bridge.evaluateFen(fen, depth, abortSignal);
+        const result = await bridge.evaluateFen(fen, {
+          depth,
+          movetimeMs: opts.movetimeMs,
+          abortSignal,
+        });
 
         let bestMoveSan = result.bestMoveUci;
+        if (result.bestMoveUci === '(none)' || result.bestMoveUci === '0000') {
+          return {
+            bestMoveUci: '(none)',
+            bestMoveSan: '(none)',
+            evalBest: result.evalBest,
+          };
+        }
+
         try {
           const moveObj = game.move({
             from: result.bestMoveUci.slice(0, 2) as any,
@@ -184,11 +232,18 @@ export class EvaluationService {
         if (err?.message === 'Analysis aborted') {
           throw err;
         }
+        if (!opts.allowSyncFallback) {
+          throw err;
+        }
         console.warn('EvaluationService: Stockfish eval thất bại, fallback sang Negamax:', err);
       }
     }
 
-    // Fallback sang Negamax
+    if (!opts.allowSyncFallback) {
+      throw new Error('Stockfish evaluation failed and sync fallback is disabled');
+    }
+
+    // Fallback sang Negamax chỉ khi được phép (Game Review / Test)
     return this.findBestMoveAndEval(game, Math.min(depth, 3));
   }
 
