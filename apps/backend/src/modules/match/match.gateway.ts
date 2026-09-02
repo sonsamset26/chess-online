@@ -1,10 +1,28 @@
 import { Server, Socket } from 'socket.io';
 import { Chess, Square } from 'chess.js';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 import { calculateElo, EloCalculationResult } from '../../utils/elo';
 import { User } from '../user/user.model';
 import { MatchService } from './match.service';
 import { TournamentService } from '../tournament/tournament.service';
+
+// Xác thực JWT token từ client gửi lên khi đăng ký Socket session
+function verifySocketToken(token: string): string | null {
+  try {
+    const primarySecret = process.env.JWT_SECRET || 'supersecretchesskey123';
+    const fallbackSecret = 'supersecretchessaccesskey123';
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, primarySecret);
+    } catch {
+      decoded = jwt.verify(token, fallbackSecret);
+    }
+    return decoded?.userId || null;
+  } catch {
+    return null;
+  }
+}
 
 // -----------------------------------------------------------------------------
 // DOMAIN MODELS & TYPINGS CHO HỆ THỐNG TRẬN ĐẤU CỜ VUA (MODULAR GAME STATE)
@@ -36,6 +54,7 @@ export interface TimeControlConfig {
 
 export interface GameState {
   roomId: string;
+  friendRoomCode?: string;
   gameStartedAt: number;   // Timestamp Date.now() khi ván đấu được tạo
   version: number;         // Tăng dần 1, 2, 3... chống Race Condition
   status: 'READY' | 'PLAYING' | 'RECONNECTING' | 'FINISHED';
@@ -93,6 +112,7 @@ export class MatchGateway {
   private waitingQueue: QueueEntry[] = [];
   private activeRooms: Map<string, GameState> = new Map();
   private friendRooms: Map<string, FriendRoom> = new Map();
+  private activeFriendMatches: Map<string, string> = new Map(); // roomCode -> roomId (Trận đấu bạn bè đang diễn ra)
   private socketToRoom: Map<string, string> = new Map(); // SocketId -> RoomId
   private userSockets: Map<string, Socket> = new Map();  // UserId -> Socket
   private matchmakerTimer?: NodeJS.Timeout;
@@ -111,10 +131,48 @@ export class MatchGateway {
     this.io.on('connection', (socket: Socket) => {
       console.log(`🔌 [Socket.io] Client kết nối: ${socket.id}`);
 
-      // Đăng ký UserId với Socket để ghép cặp giải đấu và mời thi đấu
-      socket.on('register_user', (data: { userId: string }) => {
-        if (data?.userId) {
-          this.userSockets.set(data.userId, socket);
+      // Đăng ký UserId với Socket (Bảo mật qua JWT Token & Chống đăng nhập 2 nơi cùng lúc)
+      socket.on('register_user', (data: { token?: string; userId?: string }) => {
+        let verifiedUserId: string | null = null;
+        if (data?.token) {
+          verifiedUserId = verifySocketToken(data.token);
+        } else if (data?.userId && data.userId.startsWith('guest_')) {
+          // Cho phép guest tự nhận diện nếu chưa đăng nhập
+          verifiedUserId = data.userId;
+        }
+
+        if (!verifiedUserId) {
+          return socket.emit('register_error', { message: 'Xác thực token thất bại.' });
+        }
+
+        (socket as any).authenticatedUserId = verifiedUserId;
+
+        // SINGLE SESSION ENFORCEMENT: Kiểm tra xem tài khoản này đã có socket khác đang kết nối hay chưa
+        const existingSocket = this.userSockets.get(verifiedUserId);
+        if (existingSocket && existingSocket.id !== socket.id && existingSocket.connected) {
+          console.log(`⚠️ [Single Session Kick] Tài khoản ${verifiedUserId} đăng nhập ở phiên mới (${socket.id}). Ngắt phiên cũ: ${existingSocket.id}`);
+          existingSocket.emit('force_logout', {
+            message: 'Tài khoản của bạn vừa đăng nhập ở một thiết bị hoặc trình duyệt khác. Phiên này đã bị kết thúc.',
+          });
+          // Ngắt kết nối socket cũ
+          existingSocket.disconnect(true);
+        }
+
+        this.userSockets.set(verifiedUserId, socket);
+        console.log(`✅ [Socket.io] Đăng ký phiên thành công cho User: ${verifiedUserId} (socket: ${socket.id})`);
+      });
+
+      // Hủy đăng ký UserId khi người chơi bấm Đăng xuất
+      socket.on('unregister_user', () => {
+        const userId = (socket as any).authenticatedUserId;
+        if (userId) {
+          const currentSocket = this.userSockets.get(userId);
+          // RACE CONDITION GUARD: Chỉ xóa nếu socket hiện tại đúng là socket đã lưu
+          if (currentSocket && currentSocket.id === socket.id) {
+            this.userSockets.delete(userId);
+            console.log(`👋 [Socket.io] Đã hủy đăng ký phiên cho User: ${userId} (socket: ${socket.id})`);
+          }
+          delete (socket as any).authenticatedUserId;
         }
       });
 
@@ -164,6 +222,14 @@ export class MatchGateway {
 
       // 3. TẠO PHÒNG BẠN BÈ (Giao hữu - Không tính Elo)
       socket.on('create_friend_room', (data: { userId: string; username: string; eloRating?: number }) => {
+        // Hủy phòng chờ cũ nếu socket này đã tạo trước đó
+        for (const [code, fRoom] of this.friendRooms.entries()) {
+          if (fRoom.hostPlayer.socketId === socket.id) {
+            this.friendRooms.delete(code);
+            socket.leave(fRoom.roomId);
+          }
+        }
+
         const hostPlayer: PlayerState = {
           socketId: socket.id,
           userId: data.userId || `guest_${socket.id.substring(0, 5)}`,
@@ -175,7 +241,7 @@ export class MatchGateway {
         let roomCode = '';
         do {
           roomCode = Math.floor(100000 + Math.random() * 900000).toString();
-        } while (this.friendRooms.has(roomCode));
+        } while (this.friendRooms.has(roomCode) || this.activeFriendMatches.has(roomCode));
 
         const roomId = `friend_room_${roomCode}_${Date.now()}`;
 
@@ -195,13 +261,50 @@ export class MatchGateway {
         });
       });
 
+      // 3b. HỦY PHÒNG BẠN BÈ (Chỉ chủ phòng mới có quyền hủy)
+      socket.on('cancel_friend_room', (data: { roomCode: string }) => {
+        const roomCode = data?.roomCode?.trim();
+        if (!roomCode) return;
+        const friendRoom = this.friendRooms.get(roomCode);
+        if (!friendRoom) return;
+
+        // Kiểm tra quyền: chỉ socket chủ phòng mới được hủy phòng
+        if (friendRoom.hostPlayer.socketId !== socket.id) {
+          return socket.emit('friend_room_error', { message: 'Chỉ chủ phòng mới có quyền hủy phòng!' });
+        }
+
+        this.friendRooms.delete(roomCode);
+        socket.leave(friendRoom.roomId);
+        console.log(`🏠 [Friend Room] Chủ phòng ${friendRoom.hostPlayer.username} đã hủy phòng ${roomCode}`);
+        socket.emit('friend_room_cancelled', { roomCode, message: 'Đã hủy phòng đấu thành công' });
+      });
+
       // 4. NHẬP MÃ PHÒNG VÀO ĐẤU BẠN BÈ (Đấu Bạn Bè = Unrated / Giao hữu)
       socket.on('join_friend_room', (data: { roomCode: string; userId: string; username: string; eloRating?: number }) => {
         const roomCode = data.roomCode?.trim();
+        if (!roomCode) {
+          return socket.emit('friend_room_error', { message: 'Mã phòng không hợp lệ!' });
+        }
+
+        // 4.1. Kiểm tra nếu mã phòng này đang có trận đấu diễn ra (Bên C nhập mã khi A, B đã vào)
+        const activeMatchRoomId = this.activeFriendMatches.get(roomCode);
+        if (activeMatchRoomId) {
+          const activeRoom = this.activeRooms.get(activeMatchRoomId);
+          if (activeRoom && (activeRoom.status === 'PLAYING' || activeRoom.status === 'RECONNECTING')) {
+            return socket.emit('friend_room_error', { message: 'Phòng đấu đã đầy (trận đấu đang diễn ra)!' });
+          }
+        }
+
+        // 4.2. Kiểm tra phòng chờ
         const friendRoom = this.friendRooms.get(roomCode);
 
         if (!friendRoom) {
-          return socket.emit('friend_room_error', { message: 'Mã phòng không tồn tại!' });
+          return socket.emit('friend_room_error', { message: 'Mã phòng không tồn tại hoặc chủ phòng đã hủy phòng!' });
+        }
+
+        // 4.3. Không cho chủ phòng tự nhập mã tham gia phòng của mình
+        if (friendRoom.hostPlayer.socketId === socket.id) {
+          return socket.emit('friend_room_error', { message: 'Bạn đang là chủ phòng này, vui lòng gửi mã cho bạn bè!' });
         }
 
         if (friendRoom.guestPlayer) {
@@ -229,6 +332,7 @@ export class MatchGateway {
 
         const newRoom: GameState = {
           roomId: friendRoom.roomId,
+          friendRoomCode: roomCode, // Lưu mã phòng để dọn dẹp activeFriendMatches khi ván cờ kết thúc
           gameStartedAt: serverNow,
           version: 1,
           status: 'PLAYING',
@@ -286,7 +390,9 @@ export class MatchGateway {
         if (socketWhite) socketWhite.emit('match_found', { ...matchPayload, yourColor: 'w' });
         if (socketBlack) socketBlack.emit('match_found', { ...matchPayload, yourColor: 'b' });
 
+        // Chuyển từ waiting rooms sang activeFriendMatches
         this.friendRooms.delete(roomCode);
+        this.activeFriendMatches.set(roomCode, friendRoom.roomId);
       });
 
       // 4b. THAM GIA GIẢI ĐẤU
@@ -479,6 +585,9 @@ export class MatchGateway {
           if (isGameOver) {
             this.socketToRoom.delete(room.players.white.socketId);
             this.socketToRoom.delete(room.players.black.socketId);
+            if (room.friendRoomCode) {
+              this.activeFriendMatches.delete(room.friendRoomCode);
+            }
             this.activeRooms.delete(data.roomId);
           }
         } catch (err) {
@@ -552,6 +661,14 @@ export class MatchGateway {
       socket.on('disconnect', () => {
         console.log(`🔌 [Socket.io] Client ngắt kết nối: ${socket.id}`);
         this.waitingQueue = this.waitingQueue.filter((p) => p.socketId !== socket.id);
+
+        // Dọn dẹp phòng bạn bè ở trạng thái WAITING nếu chủ phòng ngắt kết nối
+        for (const [code, fRoom] of this.friendRooms.entries()) {
+          if (fRoom.hostPlayer.socketId === socket.id) {
+            this.friendRooms.delete(code);
+            console.log(`🧹 [Friend Room] Dọn dẹp phòng chờ ${code} do chủ phòng ngắt kết nối`);
+          }
+        }
 
         for (const [uid, sock] of this.userSockets.entries()) {
           if (sock.id === socket.id) {
@@ -654,6 +771,9 @@ export class MatchGateway {
 
     this.socketToRoom.delete(room.players.white.socketId);
     this.socketToRoom.delete(room.players.black.socketId);
+    if (room.friendRoomCode) {
+      this.activeFriendMatches.delete(room.friendRoomCode);
+    }
     this.activeRooms.delete(roomId);
   }
 
@@ -735,6 +855,9 @@ export class MatchGateway {
 
     this.socketToRoom.delete(room.players.white.socketId);
     this.socketToRoom.delete(room.players.black.socketId);
+    if (room.friendRoomCode) {
+      this.activeFriendMatches.delete(room.friendRoomCode);
+    }
     this.activeRooms.delete(roomId);
   }
 
