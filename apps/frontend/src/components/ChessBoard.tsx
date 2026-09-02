@@ -248,6 +248,7 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
           customDarkSquareStyle={{ backgroundColor: '#D87093' }}
           customLightSquareStyle={{ backgroundColor: '#FFF0F5' }}
           arePiecesDraggable={!disabled && !pendingPromotion}
+          animationDuration={250}
         />
       </div>
 

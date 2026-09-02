@@ -15,6 +15,9 @@ export function useChessEngine() {
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const workerRef = useRef<Worker | null>(null);
   const aiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingBotMoveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const aiThinkingStartTimeRef = useRef<number>(0);
+  const generationRef = useRef<number>(0);
 
   // Khởi tạo Web Worker Engine
   useEffect(() => {
@@ -29,17 +32,38 @@ export function useChessEngine() {
       const message = event.data;
       if (typeof message === 'string' && message.startsWith('bestmove')) {
         const bestMove = message.split(' ')[1];
-        if (bestMove && bestMove !== '(none)' && bestMove.length >= 4) {
-          makeAiMove(bestMove);
-        }
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
-        setIsAiThinking(false);
+
+        if (bestMove && bestMove !== '(none)' && bestMove.length >= 4) {
+          const engineElapsedTime = Date.now() - aiThinkingStartTimeRef.current;
+          const MIN_BOT_RESPONSE_MS = 400;
+          const additionalDelay = Math.max(0, MIN_BOT_RESPONSE_MS - engineElapsedTime);
+          const currentGen = generationRef.current;
+
+          if (pendingBotMoveTimerRef.current) clearTimeout(pendingBotMoveTimerRef.current);
+
+          pendingBotMoveTimerRef.current = setTimeout(() => {
+            // Race condition guard: Đảm bảo ván cờ không bị reset hoặc chuyển ván mới
+            if (currentGen !== generationRef.current) return;
+            if (gameRef.current.isGameOver()) {
+              setIsAiThinking(false);
+              return;
+            }
+
+            makeAiMove(bestMove);
+            setIsAiThinking(false);
+          }, additionalDelay);
+        } else {
+          setIsAiThinking(false);
+        }
       }
     };
 
     return () => {
-      workerRef.current?.terminate();
+      generationRef.current++;
+      if (pendingBotMoveTimerRef.current) clearTimeout(pendingBotMoveTimerRef.current);
       if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
+      workerRef.current?.terminate();
     };
   }, []);
 
@@ -69,13 +93,14 @@ export function useChessEngine() {
     (currentFen: string) => {
       if (workerRef.current) {
         setIsAiThinking(true);
+        aiThinkingStartTimeRef.current = Date.now();
         workerRef.current.postMessage(`position fen ${currentFen}`);
         workerRef.current.postMessage('go');
 
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
         aiTimeoutRef.current = setTimeout(() => {
           setIsAiThinking(false);
-        }, 2000);
+        }, 5000);
       }
     },
     []
@@ -102,6 +127,17 @@ export function useChessEngine() {
   // Nạp FEN từ CSDL hoặc WebSocket Realtime
   const setBoardFen = (newFen: string, history?: string[]) => {
     try {
+      generationRef.current++;
+      if (pendingBotMoveTimerRef.current) {
+        clearTimeout(pendingBotMoveTimerRef.current);
+        pendingBotMoveTimerRef.current = null;
+      }
+      if (aiTimeoutRef.current) {
+        clearTimeout(aiTimeoutRef.current);
+        aiTimeoutRef.current = null;
+      }
+      setIsAiThinking(false);
+
       gameRef.current.load(newFen);
       setFen(newFen);
       if (history) setMoveHistory(history);
@@ -129,7 +165,7 @@ export function useChessEngine() {
           !gameRef.current.isGameOver() &&
           gameRef.current.turn() !== playerColor
         ) {
-          setTimeout(() => triggerAiMove(newFen), 150);
+          triggerAiMove(newFen);
         }
         return true;
       }
@@ -141,7 +177,15 @@ export function useChessEngine() {
 
   // Reset Game
   const resetGame = () => {
-    if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
+    generationRef.current++;
+    if (pendingBotMoveTimerRef.current) {
+      clearTimeout(pendingBotMoveTimerRef.current);
+      pendingBotMoveTimerRef.current = null;
+    }
+    if (aiTimeoutRef.current) {
+      clearTimeout(aiTimeoutRef.current);
+      aiTimeoutRef.current = null;
+    }
     gameRef.current.reset();
     setFen(gameRef.current.fen());
     setMoveHistory([]);
@@ -149,13 +193,21 @@ export function useChessEngine() {
     setIsAiThinking(false);
 
     if (playerColor === 'b') {
-      setTimeout(() => triggerAiMove(gameRef.current.fen()), 150);
+      triggerAiMove(gameRef.current.fen());
     }
   };
 
   // Đổi bên (Trắng/Đen)
   const togglePlayerColor = () => {
-    if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
+    generationRef.current++;
+    if (pendingBotMoveTimerRef.current) {
+      clearTimeout(pendingBotMoveTimerRef.current);
+      pendingBotMoveTimerRef.current = null;
+    }
+    if (aiTimeoutRef.current) {
+      clearTimeout(aiTimeoutRef.current);
+      aiTimeoutRef.current = null;
+    }
     const newColor = playerColor === 'w' ? 'b' : 'w';
     setPlayerColor(newColor);
 
@@ -166,7 +218,7 @@ export function useChessEngine() {
     setIsAiThinking(false);
 
     if (newColor === 'b') {
-      setTimeout(() => triggerAiMove(gameRef.current.fen()), 150);
+      triggerAiMove(gameRef.current.fen());
     }
   };
 

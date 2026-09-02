@@ -8,6 +8,7 @@ interface MoveHistoryProps {
   analysisByPly?: Record<number, MoveAnalysis>;
   selectedPly?: number | null;
   onSelectPly?: (ply: number | null) => void;
+  showLiveAnalysis?: boolean;
 }
 
 export const MoveHistory: React.FC<MoveHistoryProps> = ({
@@ -15,6 +16,7 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
   analysisByPly = {},
   selectedPly = null,
   onSelectPly,
+  showLiveAnalysis = false,
 }) => {
   const movePairs = Array.from({ length: Math.ceil(moveHistory.length / 2) });
   const selectedAnalysis = selectedPly ? analysisByPly[selectedPly] : null;
@@ -82,72 +84,74 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
         )}
       </div>
 
-      {/* Bottom Inspection Panel: Chiều cao cố định h-[76px] triệt tiêu giật layout (CLS = 0) */}
-      <div className="h-[76px] shrink-0 border-t border-slate-800/80 pt-2 px-2 flex flex-col justify-center bg-slate-950/40 rounded-xl">
-        {selectedAnalysis ? (
-          <div className="flex flex-col gap-1 text-[11px] font-mono">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-slate-200">
-                  {selectedAnalysis.san}
-                </span>
-                <span
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
-                    selectedAnalysis.classification === 'BEST'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : selectedAnalysis.classification === 'EXCELLENT'
-                      ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
-                      : selectedAnalysis.classification === 'GOOD'
-                      ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                      : selectedAnalysis.classification === 'INACCURACY'
-                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                      : selectedAnalysis.classification === 'MISTAKE'
-                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  }`}
-                >
-                  {selectedAnalysis.classification}
-                </span>
-              </div>
-              <div className="text-[10px] text-slate-400">
-                {selectedAnalysis.cpl !== undefined && (
-                  <span>CPL: <strong className="text-slate-200">{selectedAnalysis.cpl}</strong></span>
-                )}
-                {selectedAnalysis.evalAfter !== undefined && (
-                  <span className="ml-2">
-                    Thế cờ:{' '}
-                    <strong className="text-slate-200">
-                      {Math.abs(selectedAnalysis.evalAfter) >= 9000
-                        ? 'M0'
-                        : `${(selectedAnalysis.evalAfter / 100).toFixed(1)}`}
-                    </strong>
+      {/* Bottom Inspection Panel: Chỉ hiển thị khi Live Analysis được bật (PvAI hoặc Đấu Bạn Bè) */}
+      {showLiveAnalysis && (
+        <div className="h-[76px] shrink-0 border-t border-slate-800/80 pt-2 px-2 flex flex-col justify-center bg-slate-950/40 rounded-xl">
+          {selectedAnalysis ? (
+            <div className="flex flex-col gap-1 text-[11px] font-mono">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-slate-200">
+                    {selectedAnalysis.san}
                   </span>
-                )}
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                      selectedAnalysis.classification === 'BEST'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : selectedAnalysis.classification === 'EXCELLENT'
+                        ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                        : selectedAnalysis.classification === 'GOOD'
+                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                        : selectedAnalysis.classification === 'INACCURACY'
+                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                        : selectedAnalysis.classification === 'MISTAKE'
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    }`}
+                  >
+                    {selectedAnalysis.classification}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {selectedAnalysis.cpl !== undefined && (
+                    <span>CPL: <strong className="text-slate-200">{selectedAnalysis.cpl}</strong></span>
+                  )}
+                  {selectedAnalysis.evalAfter !== undefined && (
+                    <span className="ml-2">
+                      Thế cờ:{' '}
+                      <strong className="text-slate-200">
+                        {Math.abs(selectedAnalysis.evalAfter) >= 9000
+                          ? 'M0'
+                          : `${(selectedAnalysis.evalAfter / 100).toFixed(1)}`}
+                      </strong>
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {selectedAnalysis.bestMoveSan && selectedAnalysis.classification !== 'BEST' ? (
-              <div className="flex items-center gap-1 text-[10px] text-emerald-400/90 truncate">
-                <Sparkles className="w-3 h-3 shrink-0" />
-                <span>Gợi ý tối ưu: <strong className="font-bold">{selectedAnalysis.bestMoveSan}</strong></span>
-              </div>
-            ) : (
-              <div className="text-[10px] text-slate-500 truncate">
-                {selectedAnalysis.status === 'PENDING'
-                  ? 'Đang phân tích nước đi này...'
-                  : selectedAnalysis.status === 'FAILED'
-                  ? 'Không thể phân tích nước đi'
-                  : 'Nước đi chính xác hàng đầu'}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 italic select-none">
-            <Info className="w-3.5 h-3.5 opacity-60" />
-            <span>Chạm vào nước đi để xem phân tích & gợi ý</span>
-          </div>
-        )}
-      </div>
+              {selectedAnalysis.bestMoveSan && selectedAnalysis.classification !== 'BEST' ? (
+                <div className="flex items-center gap-1 text-[10px] text-emerald-400/90 truncate">
+                  <Sparkles className="w-3 h-3 shrink-0" />
+                  <span>Gợi ý tối ưu: <strong className="font-bold">{selectedAnalysis.bestMoveSan}</strong></span>
+                </div>
+              ) : (
+                <div className="text-[10px] text-slate-500 truncate">
+                  {selectedAnalysis.status === 'PENDING'
+                    ? 'Đang phân tích nước đi này...'
+                    : selectedAnalysis.status === 'FAILED'
+                    ? 'Không thể phân tích nước đi'
+                    : 'Nước đi chính xác hàng đầu'}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 italic select-none">
+              <Info className="w-3.5 h-3.5 opacity-60" />
+              <span>Chạm vào nước đi để xem phân tích & gợi ý</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

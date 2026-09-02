@@ -10,6 +10,7 @@ interface MoveHistoryModalProps {
   analysisByPly?: Record<number, MoveAnalysis>;
   selectedPly?: number | null;
   onSelectPly?: (ply: number | null) => void;
+  showLiveAnalysis?: boolean;
 }
 
 export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
@@ -19,6 +20,7 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
   analysisByPly = {},
   selectedPly = null,
   onSelectPly,
+  showLiveAnalysis = false,
 }) => {
   if (!isOpen) return null;
 
@@ -99,8 +101,8 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
           )}
         </div>
 
-        {/* Mobile Inspection Panel: Đặt ngay trên nút Đóng */}
-        {selectedAnalysis && (
+        {/* Mobile Inspection Panel: Chỉ hiển thị khi bật Live Analysis và có nước được chọn */}
+        {showLiveAnalysis && selectedAnalysis && (
           <div className="mt-2 p-2.5 bg-[#1E1C1A] border border-[#3A3733] rounded-2xl flex flex-col gap-1 text-[11px] font-mono animate-in fade-in slide-in-from-bottom-2 duration-150">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
