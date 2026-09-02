@@ -1,5 +1,5 @@
 import {
-  MoveAnalysis,
+  CompletedMoveAnalysis,
   PlayerSummary,
   PhaseStats,
   PlayerFeatureVector,
@@ -11,7 +11,7 @@ export class GameReportService {
    * Tạo báo cáo phân tích toàn diện ván cờ từ danh sách nước đi đã phân tích
    */
   public static generateReport(
-    moves: MoveAnalysis[],
+    moves: CompletedMoveAnalysis[],
     matchId?: string,
     analysisDurationMs: number = 0
   ): GameAnalysisReport {
@@ -43,7 +43,7 @@ export class GameReportService {
   /**
    * Tính toán các chỉ số tóm tắt cho một người chơi (Trắng hoặc Đen)
    */
-  private static calculatePlayerSummary(playerMoves: MoveAnalysis[]): PlayerSummary {
+  private static calculatePlayerSummary(playerMoves: CompletedMoveAnalysis[]): PlayerSummary {
     if (playerMoves.length === 0) {
       return {
         accuracy: 100,
@@ -73,9 +73,9 @@ export class GameReportService {
     let mistakeCount = 0;
     let blunderCount = 0;
 
-    const openingMoves: MoveAnalysis[] = [];
-    const middlegameMoves: MoveAnalysis[] = [];
-    const endgameMoves: MoveAnalysis[] = [];
+    const openingMoves: CompletedMoveAnalysis[] = [];
+    const middlegameMoves: CompletedMoveAnalysis[] = [];
+    const endgameMoves: CompletedMoveAnalysis[] = [];
 
     for (const m of playerMoves) {
       totalAccuracy += m.accuracy;
@@ -113,7 +113,7 @@ export class GameReportService {
     };
   }
 
-  private static calculatePhaseStats(moves: MoveAnalysis[]): PhaseStats {
+  private static calculatePhaseStats(moves: CompletedMoveAnalysis[]): PhaseStats {
     if (moves.length === 0) return this.createEmptyPhaseStats();
 
     let totalCpl = 0;
@@ -155,7 +155,7 @@ export class GameReportService {
    */
   public static extractFeatureVector(
     summary: PlayerSummary,
-    playerMoves: MoveAnalysis[]
+    playerMoves: CompletedMoveAnalysis[]
   ): PlayerFeatureVector {
     // 1. Phân tích lỗi khi bị áp lực thời gian (Time Pressure: timeLeft < 30s)
     const timePressureMoves = playerMoves.filter((m) => m.isTimePressure);

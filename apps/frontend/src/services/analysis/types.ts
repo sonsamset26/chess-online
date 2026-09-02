@@ -37,11 +37,11 @@ export interface MoveAnalysis {
   fenAfter: string;
   bestMoveSan: string;           // Nước tối ưu do Engine gợi ý
   bestMoveUci: string;           // Nước tối ưu dạng uci (ví dụ: g1f3)
-  evalBefore: number;            // Đánh giá thế cờ theo góc nhìn người đi (centipawn)
-  evalAfter: number;             // Đánh giá sau khi đi theo góc nhìn người đi (centipawn)
-  cpl: number;                   // Centipawn Loss (độ hao hụt thế cờ: max(0, evalBefore - evalAfter))
-  classification: MoveClassification;
-  accuracy: number;              // Độ chính xác nước đi (0 - 100%)
+  evalBefore?: number;           // Đánh giá thế cờ theo góc nhìn người đi (centipawn)
+  evalAfter?: number;            // Đánh giá sau khi đi theo góc nhìn người đi (centipawn)
+  cpl?: number;                  // Centipawn Loss (độ hao hụt thế cờ: max(0, evalBefore - evalAfter))
+  classification?: MoveClassification;
+  accuracy?: number;             // Độ chính xác nước đi (0 - 100%)
   phase: GamePhase;              // Giai đoạn: Khai cuộc / Trung cuộc / Tàn cuộc
   status?: MoveAnalysisStatus;   // Trạng thái phân tích trong hàng đợi Live Analysis
   timeSpentMs?: number;          // Thời gian suy nghĩ của nước đi (nếu có)
@@ -101,10 +101,18 @@ export interface PlayerFeatureVector {
   averageThinkingTimeMs: number;
 }
 
+export interface CompletedMoveAnalysis extends MoveAnalysis {
+  evalBefore: number;
+  evalAfter: number;
+  cpl: number;
+  classification: MoveClassification;
+  accuracy: number;
+}
+
 export interface GameAnalysisReport {
   matchId?: string;
   totalPlies: number;
-  moves: MoveAnalysis[];
+  moves: CompletedMoveAnalysis[];
   summary: {
     white: PlayerSummary;
     black: PlayerSummary;
