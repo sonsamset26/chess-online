@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle, TrendingUp, TrendingDown, Eye, X, Swords, Users } from 'lucide-react';
+import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle, TrendingUp, TrendingDown, Eye, X, Swords, Users, Crown } from 'lucide-react';
 import { PlayerColor } from '../hooks/useChessEngine';
 import { EloPlayerResult } from '../hooks/useSocket';
 
@@ -18,6 +18,7 @@ interface GameOverModalProps {
   onOpenAnalysis?: () => void;
   moveHistory?: string[];
   isTournamentMatch?: boolean;
+  isChampion?: boolean;
   onViewBracket?: () => void;
 }
 
@@ -36,6 +37,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onOpenAnalysis,
   moveHistory = [],
   isTournamentMatch = false,
+  isChampion = false,
   onViewBracket,
 }) => {
   if (!isOpen || gameStatus === 'IN_PROGRESS' || gameStatus === 'IDLE') return null;
@@ -90,7 +92,24 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         {/* THÔNG BÁO CHO TỪNG BÊN */}
-        {isPlayerWin && (
+        {isChampion ? (
+          <>
+            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-500/30 to-yellow-400/20 border-2 border-amber-400 flex items-center justify-center text-amber-300 shadow-2xl shadow-amber-500/40 mb-3 animate-bounce">
+              <Crown className="w-10 h-10 text-amber-300" />
+            </div>
+            <div className="mb-2 flex items-center gap-1.5 justify-center">
+              <span className="text-[11px] font-black uppercase tracking-widest px-3.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse shadow-sm">
+                👑 QUÁN QUÂN GIẢI ĐẤU 👑
+              </span>
+            </div>
+            <h2 className="text-2xl font-black text-amber-400 tracking-wide mb-1">
+              BẠN LÀ NHÀ VÔ ĐỊCH!
+            </h2>
+            <p className="text-xs text-[#BAB8B6] mb-4 leading-relaxed font-medium">
+              Chúc mừng bạn đã xuất sắc chiến thắng toàn bộ các vòng đấu và giành chức Vô địch giải đấu Cờ vua!
+            </p>
+          </>
+        ) : isPlayerWin ? (
           <>
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/60 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-500/20 mb-3 animate-bounce">
               <Trophy className="w-8 h-8" />
@@ -102,7 +121,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               {customMessage || 'Chúc mừng bạn đã xuất sắc đánh bại đối thủ!'}
             </p>
           </>
-        )}
+        ) : null}
 
         {isPlayerLose && (
           <>
@@ -156,7 +175,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         )}
 
         {/* THẺ GIAO HỮU NẾU LÀ ĐẤU BẠN BÈ (CUSTOM ROOM UNRATED) */}
-        {!isRated && isOnlineMatch && (
+        {!isRated && isOnlineMatch && !isTournamentMatch && (
           <div className="w-full p-2.5 mb-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-center gap-2 shadow-inner">
             <Users className="w-3.5 h-3.5 text-pink-400" />
             <span className="text-[11px] font-bold text-[#A8A6A4]">
@@ -169,15 +188,28 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         <div className="w-full flex flex-col gap-2">
           {isTournamentMatch ? (
             // LUỒNG GIẢI ĐẤU (TOURNAMENT)
-            isPlayerWin ? (
+            (isChampion || isPlayerWin) ? (
               <>
                 {onViewBracket && (
                   <button
                     onClick={onViewBracket}
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-pink-500 hover:from-rose-500 hover:to-pink-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-rose-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    className={`w-full py-3 px-4 rounded-xl text-white font-extrabold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all ${
+                      isChampion
+                        ? 'bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 hover:from-amber-500 hover:to-yellow-400 shadow-amber-500/30'
+                        : 'bg-gradient-to-r from-rose-600 to-pink-500 hover:from-rose-500 hover:to-pink-400 shadow-rose-500/30'
+                    }`}
                   >
                     <Trophy className="w-4 h-4" />
-                    <span>Xem Nhánh Đấu / Chờ Vòng Sau</span>
+                    <span>{isChampion ? 'Xem Bảng Xếp Hạng Giải Đấu' : 'Xem Nhánh Đấu / Chờ Vòng Sau'}</span>
+                  </button>
+                )}
+                {onOpenAnalysis && moveHistory.length > 0 && isChampion && (
+                  <button
+                    onClick={onOpenAnalysis}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-500 hover:from-indigo-500 hover:to-purple-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <span>📊</span>
+                    <span>Phân Tích Ván Chung Kết</span>
                   </button>
                 )}
                 <button

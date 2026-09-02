@@ -44,6 +44,7 @@ export default function Home() {
 
   // Trạng thái Giải đấu & Phân tích trận đấu
   const [tournamentData, setTournamentData] = useState<TournamentData | null>(null);
+  const [tournamentChampionId, setTournamentChampionId] = useState<string | null>(null);
   const [analysisReport, setAnalysisReport] = useState<GameAnalysisReport | null>(null);
   const [isReviewAnalyzing, setIsReviewAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -405,18 +406,35 @@ export default function Home() {
     }
   }, [isConnected, activeMatch]);
 
+  // Lắng nghe sự kiện Giải đấu kết thúc và công bố Nhà vô địch
+  useEffect(() => {
+    if (!socket) return;
+    const handleTournamentFinished = (data: { tournament: any; championId: string }) => {
+      console.log('🏆 [Tournament Finished Client]:', data);
+      if (data.tournament) setTournamentData(data.tournament);
+      if (data.championId) setTournamentChampionId(data.championId);
+    };
+    socket.on('tournament_finished', handleTournamentFinished);
+    return () => {
+      socket.off('tournament_finished', handleTournamentFinished);
+    };
+  }, [socket]);
+
   // 3. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi bắt đầu phòng mới
   useEffect(() => {
     if (activeMatch && activeMatch.roomId !== currentActiveRoomIdRef.current) {
       currentActiveRoomIdRef.current = activeMatch.roomId;
       setIsFriendModalOpen(false);
-      if (activeMode !== 'tournament') {
+      setIsTournamentModalOpen(false);
+      if (activeMatch.isTournament) {
+        setActiveMode('tournament');
+      } else if (activeMode !== 'tournament') {
         setActiveMode('online');
       }
       setLocalGameOverStatus(null);
       setCustomGameOverMsg(undefined);
       setCurrentMatchEloResult(null);
-      setIsGameOverModalOpen(true);
+      setIsGameOverModalOpen(false);
 
       const myColor = activeMatch.yourColor || 'w';
       setPlayerColor(myColor);
@@ -585,7 +603,11 @@ export default function Home() {
         setIsAuthOpen(true);
         return;
       }
-      setActiveMode('tournament');
+      // Nếu giải đấu trước đó đã kết thúc, xóa trạng thái cũ để mở màn hình Tạo/Tham gia giải mới
+      if (tournamentData?.status === 'FINISHED') {
+        setTournamentData(null);
+        setTournamentChampionId(null);
+      }
       setIsTournamentModalOpen(true);
       return;
     }
@@ -659,6 +681,10 @@ export default function Home() {
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
     setIsGameOverModalOpen(false);
+    if (tournamentData?.status === 'FINISHED') {
+      setTournamentData(null);
+      setTournamentChampionId(null);
+    }
   };
 
   // Xác nhận Đầu hàng
@@ -775,6 +801,17 @@ export default function Home() {
       ? activeMatch.whitePlayer
       : activeMatch.blackPlayer
     : null;
+
+  // Xác định người chơi hiện tại có phải Quán quân Giải đấu (Tournament Champion)
+  const isTournamentChampion =
+    (activeMode === 'tournament' || !!activeMatch?.isTournament) &&
+    (tournamentChampionId !== null || tournamentData?.status === 'FINISHED') &&
+    (tournamentChampionId === user?.id ||
+      tournamentChampionId === user?.username ||
+      tournamentData?.championId === user?.id ||
+      tournamentData?.championId === user?.username ||
+      (!!user?.username &&
+        tournamentData?.players?.find((p) => p.userId === (tournamentChampionId || tournamentData?.championId))?.username === user?.username));
 
   return (
     <div className="h-[100dvh] w-screen overflow-hidden bg-[#161512] text-[#C3C1C0] flex select-none">
@@ -1392,8 +1429,17 @@ export default function Home() {
       {/* POPUP GIẢI ĐẤU (TOURNAMENT MODAL & BRACKET) */}
       <TournamentModal
         isOpen={isTournamentModalOpen}
-        onClose={() => setIsTournamentModalOpen(false)}
-        currentUserId={user?.username}
+        onClose={() => {
+          setIsTournamentModalOpen(false);
+          if (!activeMatch) {
+            setActiveMode(null);
+          }
+          if (tournamentData?.status === 'FINISHED') {
+            setTournamentData(null);
+            setTournamentChampionId(null);
+          }
+        }}
+        currentUserId={user?.id || user?.username}
         currentUsername={user?.username}
         currentUserElo={user?.eloRating}
         socket={socket}
@@ -1424,6 +1470,7 @@ export default function Home() {
         myEloResult={currentMatchEloResult}
         moveHistory={moveHistory}
         isTournamentMatch={activeMode === 'tournament' || !!activeMatch?.isTournament}
+        isChampion={isTournamentChampion}
         onOpenAnalysis={() => handleStartAnalysis(moveHistory)}
         onViewBracket={() => {
           setIsGameOverModalOpen(false);
@@ -1440,6 +1487,10 @@ export default function Home() {
           clearActiveMatch();
           resetGame();
           setIsGameOverModalOpen(false);
+          if (tournamentData?.status === 'FINISHED') {
+            setTournamentData(null);
+            setTournamentChampionId(null);
+          }
         }}
       />
 
