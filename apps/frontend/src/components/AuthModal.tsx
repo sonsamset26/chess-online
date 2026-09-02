@@ -7,7 +7,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccessLogin: (userData: { username: string; eloRating: number; token: string }) => void;
+  onSuccessLogin: (userData: { id?: string; username: string; eloRating: number; token: string }) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -32,7 +32,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include', // Cho phép nhận httpOnly Cookie refreshToken từ Backend
-          body: JSON.stringify({ idToken: tokenResponse.access_token }),
+          body: JSON.stringify({ token: tokenResponse.access_token }),
         });
 
         const data = await res.json();
@@ -42,6 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         const userData = {
+          id: data.data.user._id || data.data.user.id,
           username: data.data.user.name || data.data.user.username,
           eloRating: data.data.user.eloRating || 1200,
           token: data.data.accessToken || data.data.token,
@@ -98,6 +99,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       const userData = {
+        id: data.data.user._id || data.data.user.id,
         username: data.data.user.name || data.data.user.username,
         eloRating: data.data.user.eloRating || 1200,
         token: data.data.accessToken || data.data.token,

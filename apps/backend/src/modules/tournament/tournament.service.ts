@@ -107,7 +107,10 @@ export class TournamentService {
       throw { statusCode: 404, message: 'Không tìm thấy giải đấu' };
     }
 
-    if (tournament.hostUserId !== requestingUserId) {
+    const isHost =
+      tournament.hostUserId === requestingUserId ||
+      tournament.hostUsername === requestingUserId;
+    if (!isHost) {
       throw { statusCode: 403, message: 'Chỉ chủ phòng mới có quyền bắt đầu giải đấu' };
     }
 
@@ -115,12 +118,19 @@ export class TournamentService {
       throw { statusCode: 400, message: 'Giải đấu đã được bắt đầu trước đó' };
     }
 
-    if (tournament.players.length < 2) {
-      throw { statusCode: 400, message: 'Cần tối thiểu 2 người chơi để bắt đầu giải đấu' };
+    if (tournament.players.length !== tournament.size) {
+      throw {
+        statusCode: 400,
+        message: `Cần đủ ${tournament.size} người chơi để bắt đầu giải đấu (Hiện tại: ${tournament.players.length}/${tournament.size})`,
+      };
     }
 
-    // Xáo trộn ngẫu nhiên danh sách người chơi
-    const shuffled = [...tournament.players].sort(() => Math.random() - 0.5);
+    // Xáo trộn ngẫu nhiên danh sách người chơi theo giải thuật Fisher-Yates
+    const shuffled = [...tournament.players];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     const targetMatchesCount = tournament.size === 8 ? 4 : 2;
     const round1Matches: ITournamentMatch[] = [];
 
@@ -148,23 +158,39 @@ export class TournamentService {
       }
     }
 
-    tournament.status = 'IN_PROGRESS';
-    tournament.rounds = [
+    // Atomic Compare-And-Swap (CAS) Transition tại MongoDB
+    const updatedTournament = await Tournament.findOneAndUpdate(
       {
-        roundNumber: 1,
-        matches: round1Matches,
+        _id: tournament._id,
+        status: 'WAITING',
       },
-    ];
+      {
+        $set: {
+          status: 'IN_PROGRESS',
+          roundBreakUntil: new Date(Date.now() + 30000),
+          rounds: [
+            {
+              roundNumber: 1,
+              matches: round1Matches,
+            },
+          ],
+        },
+      },
+      { new: true }
+    );
 
-    await tournament.save();
+    if (!updatedTournament) {
+      throw { statusCode: 409, message: 'Giải đấu đã được bắt đầu hoặc trạng thái không hợp lệ' };
+    }
+
     return {
-      tournament,
+      tournament: updatedTournament,
       round1Matches,
     };
   }
 
   /**
-   * Báo cáo kết quả ván cờ từ MatchGateway
+   * Báo cáo kết quả ván cờ từ MatchGateway (Idempotent State Transition)
    */
   public static async reportMatchResult(
     tournamentContext: { tournamentId: string; roundNumber: number; matchIndex: number },
@@ -189,6 +215,17 @@ export class TournamentService {
     }
 
     const targetMatch = round.matches[matchIndex];
+
+    // IDEMPOTENCY GUARD: Nếu trận đấu đã kết thúc trước đó, không được cập nhật lại hoặc kích hoạt lại chuyển vòng
+    if (targetMatch.status === 'DONE') {
+      return {
+        tournament,
+        isRoundFinished: false,
+        isTournamentFinished: tournament.status === 'FINISHED',
+        championId: tournament.championId,
+      };
+    }
+
     if (isArmageddon) {
       targetMatch.armageddonMatchId = matchId;
     } else if (matchId) {
@@ -208,8 +245,12 @@ export class TournamentService {
       if (round.matches.length === 1) {
         tournament.status = 'FINISHED';
         tournament.championId = winnerId;
+        tournament.roundBreakUntil = null;
         isTournamentFinished = true;
         championId = winnerId;
+      } else {
+        // Lưu mốc thời gian tuyệt đối 30s nghỉ vào DB để chống mất timer khi restart
+        tournament.roundBreakUntil = new Date(Date.now() + 30000);
       }
     }
 
@@ -223,7 +264,7 @@ export class TournamentService {
   }
 
   /**
-   * Tạo vòng đấu kế tiếp sau khi hết 30 giây countdown
+   * Tạo vòng đấu kế tiếp sau khi hết 30 giây countdown (Idempotent Round Advancement)
    */
   public static async advanceNextRound(tournamentId: string): Promise<{
     tournament: ITournament;
@@ -239,6 +280,19 @@ export class TournamentService {
 
     if (!currentRound) {
       return { tournament, nextRound: null };
+    }
+
+    // IDEMPOTENCY GUARD 1: Chỉ tiến vòng khi tất cả các trận vòng hiện tại đã hoàn thành
+    const isRoundDone = currentRound.matches.every((m) => m.status === 'DONE');
+    if (!isRoundDone) {
+      return { tournament, nextRound: null };
+    }
+
+    // IDEMPOTENCY GUARD 2: Nếu vòng tiếp theo đã được tạo (do 2 request gọi song song), không tạo thêm
+    const nextRoundNumber = currentRoundNumber + 1;
+    const existingNextRound = tournament.rounds.find((r) => r.roundNumber === nextRoundNumber);
+    if (existingNextRound) {
+      return { tournament, nextRound: existingNextRound };
     }
 
     // Lấy danh sách người chiến thắng của vòng trước
@@ -266,10 +320,11 @@ export class TournamentService {
     }
 
     const nextRound: ITournamentRound = {
-      roundNumber: currentRoundNumber + 1,
+      roundNumber: nextRoundNumber,
       matches: nextRoundMatches,
     };
 
+    tournament.roundBreakUntil = null;
     tournament.rounds.push(nextRound);
     await tournament.save();
 
