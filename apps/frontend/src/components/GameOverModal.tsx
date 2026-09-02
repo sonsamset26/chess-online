@@ -38,7 +38,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   isTournamentMatch = false,
   onViewBracket,
 }) => {
-  if (!isOpen || gameStatus === 'IN_PROGRESS') return null;
+  if (!isOpen || gameStatus === 'IN_PROGRESS' || gameStatus === 'IDLE') return null;
 
   const isWhiteWin = gameStatus === 'WHITE_WIN';
   const isBlackWin = gameStatus === 'BLACK_WIN';

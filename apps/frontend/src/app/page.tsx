@@ -40,7 +40,7 @@ export default function Home() {
   const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMoveHistoryModalOpen, setIsMoveHistoryModalOpen] = useState(false);
-  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(true);
+  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
 
   // Trạng thái Giải đấu & Phân tích trận đấu
   const [tournamentData, setTournamentData] = useState<TournamentData | null>(null);
@@ -105,6 +105,10 @@ export default function Home() {
     currentClock,
     resignationEvent,
     disconnectedOpponent,
+    forceLogoutMessage,
+    clearForceLogoutMessage,
+    registerUser,
+    unregisterUser,
     joinQueue,
     leaveQueue,
     createFriendRoom,
@@ -133,7 +137,7 @@ export default function Home() {
     togglePlayerColor,
   } = useChessEngine();
 
-  const currentStatus = localGameOverStatus || engineStatus;
+  const currentStatus = !activeMode ? 'IDLE' : (localGameOverStatus || engineStatus);
 
   // Trạng thái Xem lại Ván đấu (Replay Mode)
   const [replayMatch, setReplayMatch] = useState<MatchRecord | null>(null);
@@ -159,12 +163,13 @@ export default function Home() {
 
   // ---------------------------------------------------------------------------
   // LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
-  // Kích hoạt duy nhất ở chế độ PvAI / Practice khi đang ở tab Chơi cờ
+  // Kích hoạt ở chế độ PvAI (Đấu với Bot) và Đấu Bạn Bè (Friend Custom Room, unrated)
+  // TẮT HOÀN TOÀN ở Đấu Xếp Hạng (Ranked PvP), Đấu Giải (Tournament) và Xem lại ván (Replay)
   // ---------------------------------------------------------------------------
   const isLiveAnalysisEnabled =
-    activeMode === 'bots' &&
     activeTab === 'play' &&
-    replayMatch === null;
+    replayMatch === null &&
+    (activeMode === 'bots' || (activeMatch !== null && activeMatch.isRated === false && !activeMatch.isTournament));
 
   const {
     analysisByPly,
@@ -225,7 +230,7 @@ export default function Home() {
   // ---------------------------------------------------------------------------
   // ĐỒNG HỒ THI ĐẤU THỜI GIAN THỰC (REALTIME IN-GAME CHESS CLOCK)
   // ---------------------------------------------------------------------------
-  const isBotGame = (activeMode === 'bots' || (!activeMode && !activeMatch)) && !activeMatch;
+  const isBotGame = activeMode === 'bots';
   const currentTurn = (fen ? fen.split(' ')[1] : 'w') as 'w' | 'b';
 
   const [whiteDisplayTimeMs, setWhiteDisplayTimeMs] = useState<number>(600000);
@@ -280,7 +285,7 @@ export default function Home() {
 
   // C. Reset đồng hồ khi bắt đầu ván mới hoặc đổi chế độ
   useEffect(() => {
-    if (moveHistory.length === 0 && isBotGame) {
+    if (moveHistory.length === 0 && isBotGame && activeTab === 'play') {
       const startTurn = (fen ? fen.split(' ')[1] : 'w') as 'w' | 'b';
       clockBaselineRef.current = {
         whiteBaseMs: 600000,
@@ -292,11 +297,12 @@ export default function Home() {
       setBlackDisplayTimeMs(600000);
       prevTurnRef.current = startTurn;
     }
-  }, [moveHistory.length, isBotGame, fen]);
+  }, [moveHistory.length, isBotGame, fen, activeTab]);
 
   // D. Vòng lặp đếm lùi thời gian thực mỗi 100ms
   useEffect(() => {
     if (currentStatus !== 'IN_PROGRESS') return;
+    if (activeTab !== 'play' || !activeMode) return;
     if (!activeMatch && !isBotGame) return;
 
     const interval = setInterval(() => {
@@ -309,6 +315,7 @@ export default function Home() {
         if (remaining <= 0 && isBotGame) {
           clearInterval(interval);
           setLocalGameOverStatus('BLACK_WIN');
+          setCurrentEndReason('TIMEOUT');
           setCustomGameOverMsg('Hết thời gian! Bên Trắng đã thua do hết giờ thi đấu.');
           setIsGameOverModalOpen(true);
         }
@@ -318,6 +325,7 @@ export default function Home() {
         if (remaining <= 0 && isBotGame) {
           clearInterval(interval);
           setLocalGameOverStatus('WHITE_WIN');
+          setCurrentEndReason('TIMEOUT');
           setCustomGameOverMsg('Hết thời gian! Bên Đen đã thua do hết giờ thi đấu.');
           setIsGameOverModalOpen(true);
         }
@@ -325,7 +333,7 @@ export default function Home() {
     }, 100);
 
     return () => clearInterval(interval);
-  }, [currentStatus, activeMatch, isBotGame]);
+  }, [currentStatus, activeTab, activeMode, activeMatch, isBotGame]);
 
   // 1. Đếm lùi thời gian Grace Period 45s khi đối thủ mất kết nối
   useEffect(() => {
@@ -347,6 +355,37 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [disconnectedOpponent]);
+
+  // 1b. Tự động đăng ký phiên Socket bảo mật bằng JWT khi có User đăng nhập
+  useEffect(() => {
+    if (isConnected && user) {
+      const token = localStorage.getItem('chess_token');
+      if (token) {
+        registerUser(token, user.id);
+      }
+    }
+  }, [isConnected, user]);
+
+  // 1c. Xử lý khi bị ngắt phiên do đăng nhập ở thiết bị/trình duyệt khác (Single Session)
+  useEffect(() => {
+    if (forceLogoutMessage) {
+      // Dọn dẹp toàn bộ dữ liệu xác thực
+      localStorage.removeItem('chess_token');
+      localStorage.removeItem('chess_user');
+      localStorage.removeItem('chess_active_online_match');
+
+      // Dọn dẹp trạng thái ván cờ và đưa về Menu
+      clearActiveMatch();
+      setActiveMode(null);
+      resetGame();
+      setLocalGameOverStatus(null);
+      setCustomGameOverMsg(undefined);
+      setCurrentEndReason(undefined);
+      setCurrentMatchEloResult(null);
+      setIsGameOverModalOpen(false);
+      setUser(null);
+    }
+  }, [forceLogoutMessage]);
 
   // 2. Tự động kiểm tra và kết nối lại ván đấu (Reconnect Grace Period khi F5)
   useEffect(() => {
@@ -456,7 +495,8 @@ export default function Home() {
 
   // 4. Phát âm thanh khi kết thúc ván đấu
   useEffect(() => {
-    if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && !resignationEvent && !replayMatch) {
+    const isEndStatus = currentStatus === 'WHITE_WIN' || currentStatus === 'BLACK_WIN' || currentStatus === 'DRAW';
+    if (prevStatusRef.current === 'IN_PROGRESS' && isEndStatus && !resignationEvent && !replayMatch) {
       localStorage.removeItem('chess_active_online_match');
       setIsGameOverModalOpen(true);
       const isWhiteWin = currentStatus === 'WHITE_WIN';
@@ -518,7 +558,7 @@ export default function Home() {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
-    setIsGameOverModalOpen(true);
+    setIsGameOverModalOpen(false);
 
     // RÀNG BUỘC: Đấu trực tuyến (Rated PvP) bắt buộc phải Đăng nhập tài khoản
     if (mode === 'online') {
@@ -618,7 +658,7 @@ export default function Home() {
     setLocalGameOverStatus(null);
     setCustomGameOverMsg(undefined);
     setCurrentMatchEloResult(null);
-    setIsGameOverModalOpen(true);
+    setIsGameOverModalOpen(false);
   };
 
   // Xác nhận Đầu hàng
@@ -688,9 +728,38 @@ export default function Home() {
   };
 
   const handleLogout = () => {
+    // 1. Nếu đang trong ván đấu trực tuyến (PvP hoặc Tournament) và trận đang diễn ra -> Xử lý đầu hàng
+    if (activeMatch && (activeMode === 'online' || activeMode === 'tournament') && currentStatus === 'IN_PROGRESS') {
+      resignMatch(activeMatch.roomId);
+    }
+
+    // 2. Nếu đang tìm trận xếp hạng -> Rời hàng chờ
+    if (isSearchingQueue) {
+      leaveQueue();
+    }
+
+    // 3. Nếu đang tạo phòng bạn bè chờ khách -> Hủy phòng bạn bè
+    if (createdRoomCode) {
+      cancelFriendRoom();
+    }
+
+    // 4. Báo Server hủy đăng ký socket của user này
+    unregisterUser();
+
+    // 5. Dọn dẹp toàn bộ dữ liệu lưu trữ
     localStorage.removeItem('chess_token');
     localStorage.removeItem('chess_user');
     localStorage.removeItem('chess_active_online_match');
+
+    // 6. Dọn dẹp trạng thái ván cờ và đưa về Menu chính
+    clearActiveMatch();
+    setActiveMode(null);
+    resetGame();
+    setLocalGameOverStatus(null);
+    setCustomGameOverMsg(undefined);
+    setCurrentEndReason(undefined);
+    setCurrentMatchEloResult(null);
+    setIsGameOverModalOpen(false);
     setUser(null);
   };
 
@@ -933,7 +1002,7 @@ export default function Home() {
                   )}
 
                   {/* THANH ĐIỀU HƯỚNG NHANH KHI ĐÓNG MODAL XEM BÀN CỜ */}
-                  {!replayMatch && !isGameOverModalOpen && currentStatus !== 'IN_PROGRESS' && (
+                  {!replayMatch && !isGameOverModalOpen && currentStatus !== 'IN_PROGRESS' && currentStatus !== 'IDLE' && (
                     <div className="w-full max-w-[480px] mt-1.5 p-2 bg-[#262421]/95 border border-[#3A3733] rounded-2xl shadow-xl flex items-center justify-between gap-2 animate-in slide-in-from-bottom-2 duration-200 shrink-0">
                       <span className="text-xs font-bold text-pink-400 pl-2 truncate">
                         🏁 Ván đấu đã kết thúc
@@ -1185,9 +1254,10 @@ export default function Home() {
                     {/* Move History Desktop */}
                     <MoveHistory
                       moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory}
-                      analysisByPly={replayMatch ? undefined : analysisByPly}
-                      selectedPly={replayMatch ? null : selectedPly}
+                      analysisByPly={replayMatch || !isLiveAnalysisEnabled ? undefined : analysisByPly}
+                      selectedPly={replayMatch || !isLiveAnalysisEnabled ? null : selectedPly}
                       onSelectPly={setSelectedPly}
+                      showLiveAnalysis={isLiveAnalysisEnabled}
                     />
                   </div>
                 </div>
@@ -1336,9 +1406,10 @@ export default function Home() {
         isOpen={isMoveHistoryModalOpen}
         onClose={() => setIsMoveHistoryModalOpen(false)}
         moveHistory={moveHistory}
-        analysisByPly={replayMatch ? undefined : analysisByPly}
-        selectedPly={replayMatch ? null : selectedPly}
+        analysisByPly={replayMatch || !isLiveAnalysisEnabled ? undefined : analysisByPly}
+        selectedPly={replayMatch || !isLiveAnalysisEnabled ? null : selectedPly}
         onSelectPly={setSelectedPly}
+        showLiveAnalysis={isLiveAnalysisEnabled}
       />
 
       {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
@@ -1368,7 +1439,7 @@ export default function Home() {
           setActiveMode(null);
           clearActiveMatch();
           resetGame();
-          setIsGameOverModalOpen(true);
+          setIsGameOverModalOpen(false);
         }}
       />
 
@@ -1425,6 +1496,27 @@ export default function Home() {
         onConfirm={handleConfirmResign}
         onCancel={() => setIsResignModalOpen(false)}
       />
+
+      {/* POPUP THÔNG BÁO BỊ ĐĂNG XUẤT DO ĐĂNG NHẬP Ở NƠI KHÁC (SINGLE SESSION) */}
+      {forceLogoutMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 select-none">
+          <div className="w-full max-w-sm bg-[#262421] border border-amber-500/40 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 shadow-lg shadow-amber-500/10">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-extrabold text-white mb-2">Phiên làm việc đã kết thúc</h3>
+            <p className="text-xs text-[#BAB8B6] mb-5 leading-relaxed">
+              {forceLogoutMessage}
+            </p>
+            <button
+              onClick={clearForceLogoutMessage}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

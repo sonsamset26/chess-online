@@ -91,6 +91,9 @@ export function useSocket() {
   // States cho sự kiện Mất kết nối & Kết nối lại (Reconnect 45s Grace Period)
   const [disconnectedOpponent, setDisconnectedOpponent] = useState<DisconnectedOpponentInfo | null>(null);
 
+  // State cho sự kiện Bị đá phiên do đăng nhập ở nơi khác (Single Session Enforcement)
+  const [forceLogoutMessage, setForceLogoutMessage] = useState<string | null>(null);
+
   useEffect(() => {
     const socketInstance = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -177,6 +180,15 @@ export function useSocket() {
       setResignationEvent(data);
     });
 
+    // Lắng nghe sự kiện Bị đá phiên do đăng nhập ở thiết bị khác (Single Session)
+    socketInstance.on('force_logout', (data: { message: string }) => {
+      console.log('🚨 [Socket.io Client] Bị Server đá phiên (Force Logout):', data.message);
+      setForceLogoutMessage(data.message || 'Tài khoản của bạn vừa đăng nhập ở một thiết bị khác.');
+      setActiveMatch(null);
+      setIsSearchingQueue(false);
+      setCreatedRoomCode(null);
+    });
+
     setSocket(socketInstance);
 
     return () => {
@@ -249,6 +261,22 @@ export function useSocket() {
     setDisconnectedOpponent(null);
   };
 
+  const registerUser = (token: string, userId?: string) => {
+    if (socket && isConnected && token) {
+      socket.emit('register_user', { token, userId });
+    }
+  };
+
+  const unregisterUser = () => {
+    if (socket && isConnected) {
+      socket.emit('unregister_user');
+    }
+  };
+
+  const clearForceLogoutMessage = () => {
+    setForceLogoutMessage(null);
+  };
+
   return {
     socket,
     isConnected,
@@ -260,6 +288,10 @@ export function useSocket() {
     currentClock,
     resignationEvent,
     disconnectedOpponent,
+    forceLogoutMessage,
+    clearForceLogoutMessage,
+    registerUser,
+    unregisterUser,
     joinQueue,
     leaveQueue,
     createFriendRoom,
