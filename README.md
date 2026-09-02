@@ -1,6 +1,6 @@
 # ♟️ Chess Online - Nền tảng Đánh Cờ Vua Trực Tuyến
 
-Dự án Đồ án tốt nghiệp / Thực tập tốt nghiệp ngành Công nghệ Thông tin.
+Dự án Thực tập tốt nghiệp ngành Công nghệ Thông tin.
 
 ---
 
