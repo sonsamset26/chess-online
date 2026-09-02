@@ -14,6 +14,9 @@ export interface IMatch extends Document {
   isRated: boolean;
   isArmageddon?: boolean;
   tournamentWinnerId?: string;
+  tournamentId?: string;
+  tournamentRound?: number;
+  tournamentMatchIndex?: number;
   whiteEloDelta?: number;
   blackEloDelta?: number;
   whiteOldElo?: number;
@@ -73,6 +76,16 @@ const MatchSchema = new Schema<IMatch>(
     },
     tournamentWinnerId: {
       type: String,
+    },
+    tournamentId: {
+      type: String,
+      index: true,
+    },
+    tournamentRound: {
+      type: Number,
+    },
+    tournamentMatchIndex: {
+      type: Number,
     },
     aiDifficulty: {
       type: Number,
@@ -150,7 +163,10 @@ const MatchSchema = new Schema<IMatch>(
 // Compound index tối ưu hóa truy vấn lịch sử đấu theo người chơi và thời gian
 MatchSchema.index({ whiteUserId: 1, endedAt: -1 });
 MatchSchema.index({ blackUserId: 1, endedAt: -1 });
+MatchSchema.index({ whiteUsername: 1, endedAt: -1 });
+MatchSchema.index({ blackUsername: 1, endedAt: -1 });
 MatchSchema.index({ whitePlayer: 1, endedAt: -1 });
 MatchSchema.index({ blackPlayer: 1, endedAt: -1 });
+MatchSchema.index({ tournamentId: 1, tournamentRound: 1, tournamentMatchIndex: 1 });
 
 export const Match = model<IMatch>('Match', MatchSchema);

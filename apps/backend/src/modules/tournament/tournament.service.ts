@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { Tournament, ITournament, ITournamentMatch, ITournamentRound } from './tournament.model';
 
 export class TournamentService {
@@ -63,33 +64,46 @@ export class TournamentService {
     code: string,
     user: { userId: string; username: string; eloRating: number }
   ): Promise<ITournament> {
-    const tournament = await Tournament.findOne({ code: code.toUpperCase() });
-    if (!tournament) {
+    // D-02 Fix: Kiểm tra rejoin không cần atomic
+    const existing = await Tournament.findOne({ code: code.toUpperCase() });
+    if (!existing) {
       throw { statusCode: 404, message: 'Không tìm thấy phòng giải đấu với mã này' };
     }
 
-    if (tournament.status !== 'WAITING') {
-      throw { statusCode: 400, message: 'Giải đấu đã bắt đầu hoặc đã kết thúc' };
-    }
-
-    // Kiểm tra xem user đã trong phòng chưa
-    const alreadyJoined = tournament.players.some((p) => p.userId === user.userId);
+    // Nếu user đã có trong giải đấu, luôn cho phép lấy thông tin giải và rejoin
+    const alreadyJoined = existing.players.some((p) => p.userId === user.userId);
     if (alreadyJoined) {
-      return tournament;
+      return existing;
     }
 
-    if (tournament.players.length >= tournament.size) {
-      throw { statusCode: 400, message: 'Phòng giải đấu đã đủ số lượng người tham gia' };
-    }
-
-    tournament.players.push({
+    // D-02 Fix: Atomic findOneAndUpdate đảm bảo không vượt quá size
+    const newPlayer = {
       userId: user.userId,
       username: user.username,
       eloRating: user.eloRating || 1200,
-    });
+    };
 
-    await tournament.save();
-    return tournament;
+    const updated = await Tournament.findOneAndUpdate(
+      {
+        code: code.toUpperCase(),
+        status: 'WAITING',
+        'players.userId': { $ne: user.userId }, // Chưa có trong danh sách
+        $expr: { $lt: [{ $size: '$players' }, '$size'] }, // Chưa đủ người
+      },
+      { $push: { players: newPlayer } },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Có thể do: đã đầy, đã bắt đầu, hoặc đã join từ request song song
+      const current = await Tournament.findOne({ code: code.toUpperCase() });
+      if (!current) throw { statusCode: 404, message: 'Không tìm thấy phòng giải đấu với mã này' };
+      if (current.players.some((p) => p.userId === user.userId)) return current;
+      if (current.status !== 'WAITING') throw { statusCode: 400, message: 'Giải đấu đã bắt đầu hoặc đã kết thúc' };
+      throw { statusCode: 400, message: 'Phòng giải đấu đã đủ số lượng người tham gia' };
+    }
+
+    return updated;
   }
 
   /**
@@ -190,7 +204,32 @@ export class TournamentService {
   }
 
   /**
-   * Báo cáo kết quả ván cờ từ MatchGateway (Idempotent State Transition)
+   * Liên kết matchId của ván chính khi ván đấu hòa trước khi bắt đầu Armageddon
+   */
+  public static async linkMainMatch(
+    tournamentContext: { tournamentId: string; roundNumber: number; matchIndex: number },
+    mainMatchId: string
+  ): Promise<ITournament | null> {
+    const { tournamentId, roundNumber, matchIndex } = tournamentContext;
+    return Tournament.findOneAndUpdate(
+      {
+        tournamentId,
+        'rounds.roundNumber': roundNumber,
+      },
+      {
+        $set: {
+          [`rounds.$[r].matches.${matchIndex}.matchId`]: mainMatchId,
+        },
+      },
+      {
+        arrayFilters: [{ 'r.roundNumber': roundNumber }],
+        new: true,
+      }
+    );
+  }
+
+  /**
+   * Báo cáo kết quả ván cờ từ MatchGateway (Atomic State Transition & Concurrency Guard)
    */
   public static async reportMatchResult(
     tournamentContext: { tournamentId: string; roundNumber: number; matchIndex: number },
@@ -204,95 +243,149 @@ export class TournamentService {
     championId: string | null;
   }> {
     const { tournamentId, roundNumber, matchIndex } = tournamentContext;
-    const tournament = await Tournament.findOne({ tournamentId });
-    if (!tournament) {
-      throw new Error(`Tournament ${tournamentId} không tồn tại`);
+
+    const setFields: Record<string, any> = {
+      [`rounds.$[r].matches.${matchIndex}.winnerId`]: winnerId,
+      [`rounds.$[r].matches.${matchIndex}.status`]: 'DONE',
+    };
+
+    if (isArmageddon) {
+      if (matchId) setFields[`rounds.$[r].matches.${matchIndex}.armageddonMatchId`] = matchId;
+    } else {
+      if (matchId) setFields[`rounds.$[r].matches.${matchIndex}.matchId`] = matchId;
     }
 
-    const round = tournament.rounds.find((r) => r.roundNumber === roundNumber);
-    if (!round || !round.matches[matchIndex]) {
-      throw new Error(`Trận đấu vòng ${roundNumber} index ${matchIndex} không tồn tại`);
-    }
+    // ATOMIC UPDATE: Chỉ cập nhật khi trận đấu CHƯA 'DONE' (Idempotency & Concurrency Guard)
+    // D-01 Fix: $[r] không hợp lệ trong query filter, phải dùng $elemMatch
+    const updatedTournament = await Tournament.findOneAndUpdate(
+      {
+        tournamentId,
+        rounds: {
+          $elemMatch: {
+            roundNumber,
+            [`matches.${matchIndex}.status`]: { $ne: 'DONE' },
+          },
+        },
+      },
+      {
+        $set: setFields,
+      },
+      {
+        arrayFilters: [{ 'r.roundNumber': roundNumber }],
+        new: true,
+      }
+    );
 
-    const targetMatch = round.matches[matchIndex];
-
-    // IDEMPOTENCY GUARD: Nếu trận đấu đã kết thúc trước đó, không được cập nhật lại hoặc kích hoạt lại chuyển vòng
-    if (targetMatch.status === 'DONE') {
+    if (!updatedTournament) {
+      // Đã có request khác cập nhật trước đó
+      const current = await Tournament.findOne({ tournamentId });
+      if (!current) throw new Error(`Tournament ${tournamentId} không tồn tại`);
       return {
-        tournament,
+        tournament: current,
         isRoundFinished: false,
-        isTournamentFinished: tournament.status === 'FINISHED',
-        championId: tournament.championId,
+        isTournamentFinished: current.status === 'FINISHED',
+        championId: current.championId,
       };
     }
 
-    if (isArmageddon) {
-      targetMatch.armageddonMatchId = matchId;
-    } else if (matchId) {
-      targetMatch.matchId = matchId;
+    const currentRound = updatedTournament.rounds.find((r) => r.roundNumber === roundNumber);
+    if (!currentRound) {
+      throw new Error(`Round ${roundNumber} không tồn tại sau khi cập nhật`);
     }
 
-    targetMatch.winnerId = winnerId;
-    targetMatch.status = 'DONE';
+    const isRoundFinished = currentRound.matches.every(
+      (m) => m.status === 'DONE' && m.winnerId !== null
+    );
 
-    // Kiểm tra xem toàn bộ các trận trong vòng hiện tại đã kết thúc chưa
-    const isRoundFinished = round.matches.every((m) => m.status === 'DONE' && m.winnerId !== null);
     let isTournamentFinished = false;
     let championId: string | null = null;
 
     if (isRoundFinished) {
-      // Nếu vòng hiện tại chỉ có 1 trận đấu (Chung kết)
-      if (round.matches.length === 1) {
-        tournament.status = 'FINISHED';
-        tournament.championId = winnerId;
-        tournament.roundBreakUntil = null;
+      if (currentRound.matches.length === 1) {
+        // Vòng chung kết hoàn tất -> Cập nhật giải thành FINISHED
+        const finalFinished = await Tournament.findOneAndUpdate(
+          {
+            tournamentId,
+            status: { $ne: 'FINISHED' },
+          },
+          {
+            $set: {
+              status: 'FINISHED',
+              championId: winnerId,
+              roundBreakUntil: null,
+            },
+          },
+          { new: true }
+        );
         isTournamentFinished = true;
         championId = winnerId;
+        return {
+          tournament: finalFinished || updatedTournament,
+          isRoundFinished: true,
+          isTournamentFinished: true,
+          championId,
+        };
       } else {
-        // Lưu mốc thời gian tuyệt đối 30s nghỉ vào DB để chống mất timer khi restart
-        tournament.roundBreakUntil = new Date(Date.now() + 30000);
+        // Nghỉ giữa các vòng -> Đặt roundBreakUntil 30 giây
+        const withBreak = await Tournament.findOneAndUpdate(
+          {
+            tournamentId,
+          },
+          {
+            $set: {
+              roundBreakUntil: new Date(Date.now() + 30000),
+            },
+          },
+          { new: true }
+        );
+        return {
+          tournament: withBreak || updatedTournament,
+          isRoundFinished: true,
+          isTournamentFinished: false,
+          championId: null,
+        };
       }
     }
 
-    await tournament.save();
     return {
-      tournament,
-      isRoundFinished,
-      isTournamentFinished,
-      championId,
+      tournament: updatedTournament,
+      isRoundFinished: false,
+      isTournamentFinished: false,
+      championId: null,
     };
   }
 
   /**
-   * Tạo vòng đấu kế tiếp sau khi hết 30 giây countdown (Idempotent Round Advancement)
+   * Tạo vòng đấu kế tiếp sau khi hết 30 giây countdown (Atomic CAS Round Advancement)
    */
   public static async advanceNextRound(tournamentId: string): Promise<{
     tournament: ITournament;
     nextRound: ITournamentRound | null;
+    isNewlyCreated?: boolean;
   }> {
     const tournament = await Tournament.findOne({ tournamentId });
     if (!tournament || tournament.status !== 'IN_PROGRESS') {
-      return { tournament: tournament as any, nextRound: null };
+      return { tournament: tournament as any, nextRound: null, isNewlyCreated: false };
     }
 
     const currentRoundNumber = tournament.rounds.length;
     const currentRound = tournament.rounds[currentRoundNumber - 1];
 
     if (!currentRound) {
-      return { tournament, nextRound: null };
+      return { tournament, nextRound: null, isNewlyCreated: false };
     }
 
     // IDEMPOTENCY GUARD 1: Chỉ tiến vòng khi tất cả các trận vòng hiện tại đã hoàn thành
     const isRoundDone = currentRound.matches.every((m) => m.status === 'DONE');
     if (!isRoundDone) {
-      return { tournament, nextRound: null };
+      return { tournament, nextRound: null, isNewlyCreated: false };
     }
 
     // IDEMPOTENCY GUARD 2: Nếu vòng tiếp theo đã được tạo (do 2 request gọi song song), không tạo thêm
     const nextRoundNumber = currentRoundNumber + 1;
     const existingNextRound = tournament.rounds.find((r) => r.roundNumber === nextRoundNumber);
     if (existingNextRound) {
-      return { tournament, nextRound: existingNextRound };
+      return { tournament, nextRound: existingNextRound, isNewlyCreated: false };
     }
 
     // Lấy danh sách người chiến thắng của vòng trước
@@ -301,11 +394,23 @@ export class TournamentService {
     if (winners.length < 2) {
       // Đã có nhà vô địch hoặc không đủ người
       if (winners.length === 1) {
-        tournament.status = 'FINISHED';
-        tournament.championId = winners[0];
-        await tournament.save();
+        const finalFinished = await Tournament.findOneAndUpdate(
+          { tournamentId, status: { $ne: 'FINISHED' } },
+          { $set: { status: 'FINISHED', championId: winners[0] } },
+          { new: true }
+        );
+        return { tournament: finalFinished || tournament, nextRound: null, isNewlyCreated: false };
       }
-      return { tournament, nextRound: null };
+      // D-04 Fix: winners.length === 0 → Double Forfeit toàn vòng → Kết thúc giải không có nhà vô địch
+      if (winners.length === 0) {
+        const finalFinished = await Tournament.findOneAndUpdate(
+          { tournamentId, status: { $ne: 'FINISHED' } },
+          { $set: { status: 'FINISHED', championId: null, roundBreakUntil: null } },
+          { new: true }
+        );
+        return { tournament: finalFinished || tournament, nextRound: null, isNewlyCreated: false };
+      }
+      return { tournament, nextRound: null, isNewlyCreated: false };
     }
 
     const nextRoundMatches: ITournamentMatch[] = [];
@@ -324,13 +429,189 @@ export class TournamentService {
       matches: nextRoundMatches,
     };
 
-    tournament.roundBreakUntil = null;
-    tournament.rounds.push(nextRound);
-    await tournament.save();
+    // ATOMIC CAS PUSH: Chỉ thêm vòng mới nếu số vòng hiện tại vẫn đúng bằng currentRoundNumber
+    const updated = await Tournament.findOneAndUpdate(
+      {
+        tournamentId,
+        status: 'IN_PROGRESS',
+        rounds: { $size: currentRoundNumber },
+      },
+      {
+        $set: { roundBreakUntil: null },
+        $push: { rounds: nextRound },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Đã có request khác đẩy vòng tiếp theo trước
+      const current = await Tournament.findOne({ tournamentId });
+      const createdNextRound = current?.rounds.find((r) => r.roundNumber === nextRoundNumber) || null;
+      return { tournament: current as any, nextRound: createdNextRound, isNewlyCreated: false };
+    }
 
     return {
-      tournament,
+      tournament: updated,
       nextRound,
+      isNewlyCreated: true,
     };
+  }
+
+  /**
+   * Tính toán thành tích cá nhân của một kỳ thủ trong giải đấu
+   */
+  public static computeMyResult(tournament: ITournament, userId: string): {
+    placement: number | null;
+    roundReached: number;
+    roundName: string;
+    isChampion: boolean;
+    wins: number;
+    losses: number;
+  } {
+    const totalRounds = tournament.size === 8 ? 3 : 2;
+    let wins = 0;
+    let losses = 0;
+    let maxRoundReached = 0;
+    let eliminatedRound: number | null = null;
+
+    const userPlayer = tournament.players?.find((p) => p.userId === userId || p.username === userId);
+    const resolvedIds = new Set<string>([userId]);
+    if (userPlayer) {
+      if (userPlayer.userId) resolvedIds.add(userPlayer.userId);
+      if (userPlayer.username) resolvedIds.add(userPlayer.username);
+    }
+
+    for (const round of tournament.rounds || []) {
+      const match = round.matches.find(
+        (m) => (m.player1 && resolvedIds.has(m.player1)) || (m.player2 && resolvedIds.has(m.player2))
+      );
+      if (match) {
+        if (round.roundNumber > maxRoundReached) {
+          maxRoundReached = round.roundNumber;
+        }
+        if (match.status === 'DONE') {
+          // Chỉ tính ván thắng thật khi có đối thủ thực tế và không phải trận Bye
+          if (match.winnerId && resolvedIds.has(match.winnerId) && match.player2 !== null) {
+            wins++;
+          } else if (match.winnerId && !resolvedIds.has(match.winnerId)) {
+            losses++;
+            eliminatedRound = round.roundNumber;
+          }
+        }
+      }
+    }
+
+    const isChampion = tournament.championId ? resolvedIds.has(tournament.championId) : false;
+    let placement: number | null = null;
+
+    if (isChampion) {
+      placement = 1;
+    } else if (eliminatedRound !== null) {
+      // D-05 Fix: Tính placement từ vòng bị loại thực tế
+      placement = eliminatedRound === totalRounds
+        ? 2  // Thua ở Chung kết → Á quân
+        : Math.pow(2, totalRounds - eliminatedRound) + 1; // Tứ/Bán kết → Hạng 5/3
+    }
+    // D-05 Fix: Không fallback placement=2 nếu không có eliminatedRound
+    // (Trường hợp này xảy ra khi Double Forfeit hoặc giải chưa kết thúc → để null)
+
+    const getRoundName = (round: number, size: number) => {
+      if (round === 0) return 'Phòng chờ';
+      if (size === 8) {
+        if (round === 1) return 'Tứ kết';
+        if (round === 2) return 'Bán kết';
+        if (round === 3) return 'Chung kết';
+      } else {
+        if (round === 1) return 'Bán kết';
+        if (round === 2) return 'Chung kết';
+      }
+      return `Vòng ${round}`;
+    };
+
+    return {
+      placement,
+      roundReached: maxRoundReached,
+      roundName: getRoundName(maxRoundReached, tournament.size),
+      isChampion,
+      wins,
+      losses,
+    };
+  }
+
+  /**
+   * Lấy lịch sử các giải đấu của người chơi có phân trang
+   */
+  public static async getUserTournamentHistory(
+    userId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{
+    tournaments: any[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const pageNum = Math.max(1, page);
+    const limitNum = Math.min(50, Math.max(1, limit));
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = {
+      $or: [
+        { 'players.userId': userId },
+        { 'players.username': userId },
+      ],
+      status: { $in: ['IN_PROGRESS', 'FINISHED'] },
+    };
+
+    const [tournaments, total] = await Promise.all([
+      Tournament.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Tournament.countDocuments(query),
+    ]);
+
+    const mapped = tournaments.map((t: any) => {
+      const myResult = TournamentService.computeMyResult(t, userId);
+      const championPlayer = t.players?.find((p: any) => p.userId === t.championId);
+
+      return {
+        tournamentId: t.tournamentId,
+        code: t.code,
+        size: t.size,
+        status: t.status,
+        createdAt: t.createdAt,
+        championId: t.championId,
+        championName: championPlayer?.username || (t.status === 'IN_PROGRESS' ? 'Đang tranh tài' : (t.championId || 'Chưa xác định')),
+        myResult,
+        playersCount: t.players?.length || 0,
+      };
+    });
+
+    return {
+      tournaments: mapped,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum) || 1,
+      },
+    };
+  }
+
+  /**
+   * Tra cứu chi tiết một giải đấu theo mã code phòng hoặc tournamentId / _id
+   */
+  public static async getTournamentByIdOrCode(idOrCode: string): Promise<ITournament | null> {
+    const trimmed = idOrCode.trim();
+    if (/^[A-Za-z0-9]{6}$/.test(trimmed)) {
+      const byCode = await Tournament.findOne({ code: trimmed.toUpperCase() });
+      if (byCode) return byCode;
+    }
+
+    const conditions: any[] = [{ tournamentId: trimmed }];
+    if (mongoose.Types.ObjectId.isValid(trimmed)) {
+      conditions.push({ _id: new mongoose.Types.ObjectId(trimmed) });
+    }
+    return Tournament.findOne({ $or: conditions });
   }
 }

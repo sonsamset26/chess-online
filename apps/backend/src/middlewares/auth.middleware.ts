@@ -27,16 +27,17 @@ export const authenticateJWT = (
   }
 
   const token = authHeader.split(' ')[1];
-  const primarySecret = process.env.JWT_SECRET || 'supersecretchesskey123';
-  const fallbackSecret = 'supersecretchessaccesskey123';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    return ApiResponse.error(res, 'Lỗi cấu hình server: JWT_SECRET chưa được thiết lập.', 500);
+  }
 
   try {
     let decoded: any;
     try {
-      decoded = jwt.verify(token, primarySecret);
+      decoded = jwt.verify(token, secret);
     } catch (ePrimary) {
-      // Fallback cho token cũ sinh ra từ trước khi nạp .env
-      decoded = jwt.verify(token, fallbackSecret);
+      throw ePrimary;
     }
 
     req.user = {
@@ -51,4 +52,36 @@ export const authenticateJWT = (
       401
     );
   }
+};
+
+export const optionalAuthenticateJWT = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return next();
+
+  try {
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch {
+      // Token không hợp lệ -> bỏ qua
+    }
+
+    req.user = {
+      userId: decoded.userId,
+      role: decoded.role,
+    };
+  } catch {
+    // Token không hợp lệ hoặc hết hạn -> coi là khách vãng lai
+  }
+  next();
 };

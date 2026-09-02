@@ -19,6 +19,18 @@ const CLASSIFICATION_COLORS: Record<MoveClassification, { bg: string; text: stri
   BLUNDER: { bg: 'bg-red-950/60', text: 'text-red-400', dot: '#f87171' },
 };
 
+function formatEvalScore(evalAfter: number, color: 'w' | 'b'): string {
+  const scoreWhite = color === 'w' ? evalAfter : -evalAfter;
+  if (Math.abs(scoreWhite) >= 9000) {
+    const movesToMate = Math.round((10000 - Math.abs(scoreWhite)) / 10);
+    if (movesToMate === 0) return '#';
+    const sign = scoreWhite > 0 ? '+M' : '-M';
+    return `${sign}${movesToMate}`;
+  }
+  const cp = (scoreWhite / 100).toFixed(1);
+  return scoreWhite > 0 ? `+${cp}` : `${cp}`;
+}
+
 export const GameReportView: React.FC<GameReportViewProps> = ({
   report,
   onClose,
@@ -210,9 +222,7 @@ export const GameReportView: React.FC<GameReportViewProps> = ({
                 <div className="text-xs text-neutral-300">
                   Nước {hoveredMove.moveNumber}{hoveredMove.color === 'w' ? '.' : '...'}{hoveredMove.san}:{' '}
                   <span className="font-bold text-amber-300">
-                    {Math.abs(hoveredMove.evalAfter) >= 9000
-                      ? `M${Math.round((10000 - Math.abs(hoveredMove.evalAfter)) / 10)}`
-                      : `${(hoveredMove.evalAfter / 100).toFixed(1)} cp`}
+                    {formatEvalScore(hoveredMove.evalAfter, hoveredMove.color)}
                   </span>{' '}
                   • CPL: {hoveredMove.cpl} cp ({hoveredMove.classification})
                 </div>
@@ -347,9 +357,7 @@ export const GameReportView: React.FC<GameReportViewProps> = ({
                         )}
                         <span>CPL: {m.cpl}</span>
                         <span className="font-semibold text-neutral-300">
-                          {Math.abs(m.evalAfter) >= 9000
-                            ? `M${Math.round((10000 - Math.abs(m.evalAfter)) / 10)}`
-                            : `${(m.evalAfter / 100).toFixed(1)}`}
+                          {formatEvalScore(m.evalAfter, m.color)}
                         </span>
                       </div>
                     </div>
