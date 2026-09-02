@@ -27,6 +27,9 @@ export interface ActiveMatch {
   fen: string;
   history?: string[];
   isRated?: boolean;
+  isArmageddon?: boolean;
+  drawOdds?: 'w' | 'b';
+  isTournament?: boolean;
   clock?: ClockPayload;
 }
 

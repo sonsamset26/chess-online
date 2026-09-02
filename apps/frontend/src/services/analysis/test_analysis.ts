@@ -20,60 +20,66 @@ const sampleTelemetries = [
   { timeSpentMs: 900, timeLeftMs: 592000 },
 ];
 
-console.log('🏁 --- BẮT ĐẦU CHẠY KIỂM THỬ MODULE PHÂN TÍCH VÁN ĐẤU (CỘT TRỤ 2) ---');
+async function runTests() {
+  console.log('🏁 --- BẮT ĐẦU CHẠY KIỂM THỬ MODULE PHÂN TÍCH VÁN ĐẤU (ASYNC & SYNC) ---');
 
-const report = AnalysisEngine.analyzeGame(
-  sampleGameScholar,
-  sampleTelemetries,
-  'match_test_001',
-  2 // Depth 2
-);
+  const report = await AnalysisEngine.analyzeGame(sampleGameScholar, {
+    telemetries: sampleTelemetries,
+    matchId: 'match_test_001',
+    depth: 2,
+    onProgress: (percent, status) => {
+      console.log(`[Progress ${percent}%] ${status}`);
+    }
+  });
 
-console.log('\n📊 1. KẾT QUẢ PHÂN TÍCH TỪNG NƯỚC ĐI:');
-report.moves.forEach((m) => {
-  const badge = m.classification === 'BEST' ? '🟢 BEST'
-    : m.classification === 'EXCELLENT' ? '🟢 EXCELLENT'
-    : m.classification === 'GOOD' ? '🔵 GOOD'
-    : m.classification === 'INACCURACY' ? '🟡 INACCURACY'
-    : m.classification === 'MISTAKE' ? '🟠 MISTAKE'
-    : '🔴 BLUNDER';
+  console.log('\n📊 1. KẾT QUẢ PHÂN TÍCH TỪNG NƯỚC ĐI:');
+  report.moves.forEach((m) => {
+    const badge = m.classification === 'BEST' ? '🟢 BEST'
+      : m.classification === 'EXCELLENT' ? '🟢 EXCELLENT'
+      : m.classification === 'GOOD' ? '🔵 GOOD'
+      : m.classification === 'INACCURACY' ? '🟡 INACCURACY'
+      : m.classification === 'MISTAKE' ? '🟠 MISTAKE'
+      : '🔴 BLUNDER';
 
-  console.log(
-    `Nước ${m.moveNumber}${m.color === 'w' ? '.' : '...'}${m.san.padEnd(6)} | ` +
-    `Eval: ${m.evalAfter.toString().padStart(6)} cp | ` +
-    `CPL: ${m.cpl.toString().padStart(4)} cp | ` +
-    `Accuracy: ${m.accuracy.toFixed(1).padStart(5)}% | ` +
-    `Giai đoạn: ${m.phase} | ` +
-    `${badge} (Nước tối ưu: ${m.bestMoveSan})`
-  );
-});
+    console.log(
+      `Nước ${m.moveNumber}${m.color === 'w' ? '.' : '...'}${m.san.padEnd(6)} | ` +
+      `Eval: ${m.evalAfter.toString().padStart(6)} cp | ` +
+      `CPL: ${m.cpl.toString().padStart(4)} cp | ` +
+      `Accuracy: ${m.accuracy.toFixed(1).padStart(5)}% | ` +
+      `Giai đoạn: ${m.phase} | ` +
+      `${badge} (Nước tối ưu: ${m.bestMoveSan})`
+    );
+  });
 
-console.log('\n📈 2. TỔNG HỢP VÁN ĐẤU (SUMMARY):');
-console.log('Trắng (White):', {
-  accuracy: `${report.summary.white.accuracy}%`,
-  avgCpl: `${report.summary.white.avgCpl} cp`,
-  best: report.summary.white.bestCount,
-  excellent: report.summary.white.excellentCount,
-  good: report.summary.white.goodCount,
-  inaccuracies: report.summary.white.inaccuracyCount,
-  mistakes: report.summary.white.mistakeCount,
-  blunders: report.summary.white.blunderCount,
-});
+  console.log('\n📈 2. TỔNG HỢP VÁN ĐẤU (SUMMARY):');
+  console.log('Trắng (White):', {
+    accuracy: `${report.summary.white.accuracy}%`,
+    avgCpl: `${report.summary.white.avgCpl} cp`,
+    best: report.summary.white.bestCount,
+    excellent: report.summary.white.excellentCount,
+    good: report.summary.white.goodCount,
+    inaccuracies: report.summary.white.inaccuracyCount,
+    mistakes: report.summary.white.mistakeCount,
+    blunders: report.summary.white.blunderCount,
+  });
 
-console.log('Đen (Black):', {
-  accuracy: `${report.summary.black.accuracy}%`,
-  avgCpl: `${report.summary.black.avgCpl} cp`,
-  best: report.summary.black.bestCount,
-  excellent: report.summary.black.excellentCount,
-  good: report.summary.black.goodCount,
-  inaccuracies: report.summary.black.inaccuracyCount,
-  mistakes: report.summary.black.mistakeCount,
-  blunders: report.summary.black.blunderCount,
-});
+  console.log('Đen (Black):', {
+    accuracy: `${report.summary.black.accuracy}%`,
+    avgCpl: `${report.summary.black.avgCpl} cp`,
+    best: report.summary.black.bestCount,
+    excellent: report.summary.black.excellentCount,
+    good: report.summary.black.goodCount,
+    inaccuracies: report.summary.black.inaccuracyCount,
+    mistakes: report.summary.black.mistakeCount,
+    blunders: report.summary.black.blunderCount,
+  });
 
-console.log('\n🧠 3. VECTOR ĐẶC TRƯNG HỒ SƠ KỲ THỦ (FEATURE VECTOR CHO K-MEANS Ở CỘT TRỤ 3):');
-console.log('White Feature Vector:', report.features.white);
-console.log('Black Feature Vector:', report.features.black);
+  console.log('\n🧠 3. VECTOR ĐẶC TRƯNG HỒ SƠ KỲ THỦ (FEATURE VECTOR CHO K-MEANS):');
+  console.log('White Feature Vector:', report.features.white);
+  console.log('Black Feature Vector:', report.features.black);
 
-console.log(`\n⏱️ Thời gian phân tích toàn bộ ván: ${report.analysisDurationMs} ms`);
-console.log('✅ KIỂM THỬ THÀNH CÔNG RỰC RỠ 100%!');
+  console.log(`\n⏱️ Thời gian phân tích toàn bộ ván: ${report.analysisDurationMs} ms`);
+  console.log('✅ KIỂM THỬ HOÀN THÀNH THÀNH CÔNG!');
+}
+
+runTests().catch(console.error);

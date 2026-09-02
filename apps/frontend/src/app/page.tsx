@@ -14,6 +14,10 @@ import { PromotionPiece } from '../components/PromotionModal';
 import { PuzzleView } from '../components/PuzzleView';
 import { LearnView } from '../components/LearnView';
 import { HistoryView, MatchRecord } from '../components/HistoryView';
+import { TournamentModal, TournamentData } from '../components/TournamentModal';
+import { GameReportView } from '../components/GameReportView';
+import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
+import { GameAnalysisReport } from '../services/analysis/types';
 import { ChessBoardComponent } from '../components/ChessBoard';
 import { PlayerCard } from '../components/PlayerCard';
 import { DifficultySelector } from '../components/DifficultySelector';
@@ -32,9 +36,18 @@ export default function Home() {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isResignModalOpen, setIsResignModalOpen] = useState(false);
   const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
+  const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMoveHistoryModalOpen, setIsMoveHistoryModalOpen] = useState(false);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(true);
+
+  // Trạng thái Giải đấu & Phân tích trận đấu
+  const [tournamentData, setTournamentData] = useState<TournamentData | null>(null);
+  const [analysisReport, setAnalysisReport] = useState<GameAnalysisReport | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisStatusText, setAnalysisStatusText] = useState('');
+  const analysisAbortControllerRef = useRef<AbortController | null>(null);
 
   const [user, setUser] = useState<{ id?: string; username: string; eloRating: number; token: string } | null>(null);
   const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
@@ -81,6 +94,7 @@ export default function Home() {
 
   // Hook WebSocket Socket.io Realtime
   const {
+    socket,
     isConnected,
     isSearchingQueue,
     createdRoomCode,
@@ -291,7 +305,9 @@ export default function Home() {
     if (activeMatch && activeMatch.roomId !== currentActiveRoomIdRef.current) {
       currentActiveRoomIdRef.current = activeMatch.roomId;
       setIsFriendModalOpen(false);
-      setActiveMode('online');
+      if (activeMode !== 'tournament') {
+        setActiveMode('online');
+      }
       setLocalGameOverStatus(null);
       setCustomGameOverMsg(undefined);
       setCurrentMatchEloResult(null);
@@ -395,7 +411,7 @@ export default function Home() {
 
   // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật kết thúc trận (Checkmate / Draw)
   useEffect(() => {
-    if (latestMove && activeMode === 'online') {
+    if (latestMove && (activeMode === 'online' || activeMode === 'tournament')) {
       setBoardFen(latestMove.fen, latestMove.history);
 
       if (latestMove.isGameOver) {
@@ -458,11 +474,51 @@ export default function Home() {
       return;
     }
 
+    if (mode === 'tournament') {
+      if (!user) {
+        setIsAuthOpen(true);
+        return;
+      }
+      setActiveMode('tournament');
+      setIsTournamentModalOpen(true);
+      return;
+    }
+
     clearActiveMatch();
     localStorage.removeItem('chess_active_online_match');
     setActiveMode(mode);
     resetGame();
     sounds.playGameStart();
+  };
+
+  // Khởi chạy phân tích ván đấu với Stockfish AI Engine (Async + Progress)
+  const handleStartAnalysis = async (moves: string[]) => {
+    if (!moves || moves.length === 0) return;
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(0);
+      setAnalysisStatusText('Đang nạp AI Engine Stockfish...');
+      const controller = new AbortController();
+      analysisAbortControllerRef.current = controller;
+
+      const report = await AnalysisEngine.analyzeGame(moves, {
+        abortSignal: controller.signal,
+        onProgress: (percent, statusText) => {
+          setAnalysisProgress(percent);
+          if (statusText) setAnalysisStatusText(statusText);
+        },
+      });
+
+      setAnalysisReport(report);
+      setIsGameOverModalOpen(false);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('Lỗi phân tích ván đấu:', err);
+      }
+    } finally {
+      setIsAnalyzing(false);
+      analysisAbortControllerRef.current = null;
+    }
   };
 
   // Tạo phòng bạn bè
@@ -544,7 +600,7 @@ export default function Home() {
 
   // Xử lý thả quân cờ
   const handlePieceDrop = (from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
-    if (activeMode === 'online' && activeMatch) {
+    if ((activeMode === 'online' || activeMode === 'tournament') && activeMatch) {
       const isMyTurn = game.turn() === playerColor;
       if (!isMyTurn || game.isGameOver() || currentStatus !== 'IN_PROGRESS') return false;
 
@@ -724,7 +780,7 @@ export default function Home() {
                     fen={fen}
                     playerColor={replayMatch ? 'w' : playerColor}
                     onPieceDrop={handlePieceDrop}
-                    disabled={replayMatch !== null || (activeMode === 'online' ? game.turn() !== playerColor || currentStatus !== 'IN_PROGRESS' : isAiThinking)}
+                    disabled={replayMatch !== null || ((activeMode === 'online' || activeMode === 'tournament') ? game.turn() !== playerColor || currentStatus !== 'IN_PROGRESS' : isAiThinking)}
                   />
 
                   {/* Card BẢN THÂN / QUÂN TRẮNG */}
@@ -1154,6 +1210,7 @@ export default function Home() {
               );
               setIsGameOverModalOpen(false);
             }}
+            onOpenAnalysis={(matchRecord: MatchRecord) => handleStartAnalysis(matchRecord.moves)}
           />
         )}
 
@@ -1191,6 +1248,18 @@ export default function Home() {
         onCancelRoom={cancelFriendRoom}
       />
 
+      {/* POPUP GIẢI ĐẤU (TOURNAMENT MODAL & BRACKET) */}
+      <TournamentModal
+        isOpen={isTournamentModalOpen}
+        onClose={() => setIsTournamentModalOpen(false)}
+        currentUserId={user?.username}
+        currentUsername={user?.username}
+        currentUserElo={user?.eloRating}
+        socket={socket}
+        tournamentData={tournamentData}
+        onTournamentUpdated={(t) => setTournamentData(t)}
+      />
+
       {/* POPUP LỊCH SỬ NƯỚC ĐI TRÊN MOBILE */}
       <MoveHistoryModal
         isOpen={isMoveHistoryModalOpen}
@@ -1208,6 +1277,13 @@ export default function Home() {
         endReason={currentEndReason}
         customMessage={customGameOverMsg}
         myEloResult={currentMatchEloResult}
+        moveHistory={moveHistory}
+        isTournamentMatch={activeMode === 'tournament' || !!activeMatch?.isTournament}
+        onOpenAnalysis={() => handleStartAnalysis(moveHistory)}
+        onViewBracket={() => {
+          setIsGameOverModalOpen(false);
+          setIsTournamentModalOpen(true);
+        }}
         onPlayAgain={handlePlayAgain}
         onCloseToReview={() => setIsGameOverModalOpen(false)}
         onBackToMenu={() => {
@@ -1221,6 +1297,46 @@ export default function Home() {
           setIsGameOverModalOpen(true);
         }}
       />
+
+      {/* GIAO DIỆN BÁO CÁO PHÂN TÍCH VÁN CỜ (REPORT VIEW) */}
+      {analysisReport && (
+        <GameReportView
+          report={analysisReport}
+          onClose={() => setAnalysisReport(null)}
+          isTournament={activeMode === 'tournament'}
+          onViewBracket={() => {
+            setAnalysisReport(null);
+            setIsTournamentModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* OVERLAY TIẾN TRÌNH PHÂN TÍCH STOCKFISH */}
+      {isAnalyzing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in select-none">
+          <div className="w-full max-w-sm bg-[#262421] border border-[#3A3733] rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin mb-4" />
+            <h3 className="text-base font-black text-white mb-1">Đang Phân Tích Ván Đấu</h3>
+            <p className="text-xs text-[#A8A6A4] mb-4">{analysisStatusText || 'Đang đánh giá các nước đi...'}</p>
+            <div className="w-full bg-[#1C1A17] rounded-full h-2.5 overflow-hidden border border-[#3A3733] mb-3">
+              <div
+                className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 transition-all duration-300"
+                style={{ width: `${analysisProgress}%` }}
+              />
+            </div>
+            <span className="text-xs font-mono font-bold text-indigo-400 mb-4">{analysisProgress}%</span>
+            <button
+              onClick={() => {
+                analysisAbortControllerRef.current?.abort();
+                setIsAnalyzing(false);
+              }}
+              className="py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-xs font-bold text-[#BAB8B6] transition-colors"
+            >
+              Hủy phân tích
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* POPUP XÁC NHẬN RỜI PHÒNG ĐẤU */}
       <LeaveRoomModal

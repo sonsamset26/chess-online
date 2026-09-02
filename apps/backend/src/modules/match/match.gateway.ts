@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { calculateElo, EloCalculationResult } from '../../utils/elo';
 import { User } from '../user/user.model';
 import { MatchService } from './match.service';
+import { TournamentService } from '../tournament/tournament.service';
 
 // -----------------------------------------------------------------------------
 // DOMAIN MODELS & TYPINGS CHO HỆ THỐNG TRẬN ĐẤU CỜ VUA (MODULAR GAME STATE)
@@ -29,6 +30,8 @@ export interface ClockState {
 export interface TimeControlConfig {
   initialTimeMs: number;   // Mặc định: 600,000 ms (10 phút)
   incrementMs: number;     // Mặc định: 0 ms (+0s)
+  whiteInitialTimeMs?: number; // Dành riêng cho Armageddon (5 phút)
+  blackInitialTimeMs?: number; // Dành riêng cho Armageddon (4 phút)
 }
 
 export interface GameState {
@@ -48,6 +51,12 @@ export interface GameState {
   endReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
   timeoutTimer?: NodeJS.Timeout;
   reconnectTimer?: NodeJS.Timeout;
+  tournamentContext?: {
+    tournamentId: string;
+    roundNumber: number;
+    matchIndex: number;
+  };
+  isArmageddon?: boolean;
 }
 
 // Cấu hình các bước mở rộng khung Elo theo thời gian chờ (Heuristic Policy)
@@ -85,6 +94,7 @@ export class MatchGateway {
   private activeRooms: Map<string, GameState> = new Map();
   private friendRooms: Map<string, FriendRoom> = new Map();
   private socketToRoom: Map<string, string> = new Map(); // SocketId -> RoomId
+  private userSockets: Map<string, Socket> = new Map();  // UserId -> Socket
   private matchmakerTimer?: NodeJS.Timeout;
 
   constructor(io: Server) {
@@ -100,6 +110,13 @@ export class MatchGateway {
   private initializeSockets() {
     this.io.on('connection', (socket: Socket) => {
       console.log(`🔌 [Socket.io] Client kết nối: ${socket.id}`);
+
+      // Đăng ký UserId với Socket để ghép cặp giải đấu và mời thi đấu
+      socket.on('register_user', (data: { userId: string }) => {
+        if (data?.userId) {
+          this.userSockets.set(data.userId, socket);
+        }
+      });
 
       // 1. Gia nhập hàng chờ ghép trận theo Elo Window (ĐẤU XẾP HẠNG ONLINE)
       socket.on('join_queue', (data: {
@@ -272,6 +289,48 @@ export class MatchGateway {
         this.friendRooms.delete(roomCode);
       });
 
+      // 4b. THAM GIA GIẢI ĐẤU
+      socket.on('join_tournament', async (data: { code: string; userId: string; username: string; eloRating?: number }) => {
+        try {
+          if (!data?.code || !data?.userId) return;
+          this.userSockets.set(data.userId, socket);
+
+          const tournament = await TournamentService.joinTournament(data.code, {
+            userId: data.userId,
+            username: data.username,
+            eloRating: data.eloRating || 1200,
+          });
+
+          socket.join(`tournament_${tournament.tournamentId}`);
+          this.io.to(`tournament_${tournament.tournamentId}`).emit('tournament_updated', { tournament });
+        } catch (err: any) {
+          socket.emit('tournament_error', { message: err?.message || 'Không thể tham gia giải đấu' });
+        }
+      });
+
+      // 4c. BẮT ĐẦU GIẢI ĐẤU
+      socket.on('start_tournament', async (data: { code: string; userId: string }) => {
+        try {
+          this.userSockets.set(data.userId, socket);
+          const { tournament, round1Matches } = await TournamentService.startTournament(data.code, data.userId);
+
+          this.io.to(`tournament_${tournament.tournamentId}`).emit('tournament_started', {
+            tournament,
+            round1Matches,
+          });
+
+          // Tạo phòng thi đấu cho các cặp đấu vòng 1
+          for (let mIdx = 0; mIdx < round1Matches.length; mIdx++) {
+            const m = round1Matches[mIdx];
+            if (m.player1 && m.player2 && m.status === 'PENDING') {
+              this.startTournamentMatch(tournament, 1, mIdx, m.player1, m.player2);
+            }
+          }
+        } catch (err: any) {
+          socket.emit('tournament_error', { message: err?.message || 'Không thể bắt đầu giải đấu' });
+        }
+      });
+
       // 5. ĐẦU HÀNG HOẶC RỜI PHÒNG KHI ĐANG THI ĐẤU
       socket.on('resign_match', (data: { roomId: string }) => {
         this.handlePlayerResignation(socket.id, data.roomId, 'RESIGNATION');
@@ -365,8 +424,15 @@ export class MatchGateway {
                 await this.updateUserElo(room.players.black.userId, eloResult.black.delta, winnerColor === 'b' ? 'win' : 'lose');
               }
             } else if (isDraw) {
-              room.winnerColor = 'draw';
-              room.endReason = 'DRAW';
+              if (room.isArmageddon) {
+                // Ván Armageddon: Đen hòa là Thắng
+                winnerColor = 'b';
+                room.winnerColor = 'b';
+                room.endReason = 'DRAW';
+              } else {
+                room.winnerColor = 'draw';
+                room.endReason = 'DRAW';
+              }
 
               if (room.isRated) {
                 eloResult = calculateElo(room.players.white.eloRating, room.players.black.eloRating, 'd');
@@ -376,7 +442,12 @@ export class MatchGateway {
             }
 
             // Lưu lịch sử ván cờ vào MongoDB Atlas
-            await this.persistMatchRecord(room, room.winnerColor || 'draw', room.endReason || 'CHECKMATE', eloResult);
+            const savedMatchId = await this.persistMatchRecord(room, room.winnerColor || 'draw', room.endReason || 'CHECKMATE', eloResult);
+
+            // Báo cáo kết quả giải đấu nếu có tournamentContext
+            if (room.tournamentContext) {
+              await this.handleTournamentMatchEnd(room, room.winnerColor || 'draw', savedMatchId);
+            }
           }
 
           // 6.9. Broadcast gói tin Event-driven kèm mốc thời gian chuẩn
@@ -482,6 +553,13 @@ export class MatchGateway {
         console.log(`🔌 [Socket.io] Client ngắt kết nối: ${socket.id}`);
         this.waitingQueue = this.waitingQueue.filter((p) => p.socketId !== socket.id);
 
+        for (const [uid, sock] of this.userSockets.entries()) {
+          if (sock.id === socket.id) {
+            this.userSockets.delete(uid);
+            break;
+          }
+        }
+
         const roomId = this.socketToRoom.get(socket.id);
         if (roomId) {
           const room = this.activeRooms.get(roomId);
@@ -568,7 +646,11 @@ export class MatchGateway {
       eloResult: room.isRated ? eloResult : null,
     });
 
-    await this.persistMatchRecord(room, winnerColor, 'TIMEOUT', eloResult);
+    const savedMatchId = await this.persistMatchRecord(room, winnerColor, 'TIMEOUT', eloResult);
+
+    if (room.tournamentContext) {
+      await this.handleTournamentMatchEnd(room, winnerColor, savedMatchId);
+    }
 
     this.socketToRoom.delete(room.players.white.socketId);
     this.socketToRoom.delete(room.players.black.socketId);
@@ -645,7 +727,11 @@ export class MatchGateway {
     });
 
     const endReason = reason === 'DISCONNECT' ? 'ABANDONED' : 'RESIGNED';
-    await this.persistMatchRecord(room, winnerColor, endReason, eloResult);
+    const savedMatchId = await this.persistMatchRecord(room, winnerColor, endReason, eloResult);
+
+    if (room.tournamentContext) {
+      await this.handleTournamentMatchEnd(room, winnerColor, savedMatchId);
+    }
 
     this.socketToRoom.delete(room.players.white.socketId);
     this.socketToRoom.delete(room.players.black.socketId);
@@ -658,17 +744,19 @@ export class MatchGateway {
     winnerColor: 'w' | 'b' | 'draw',
     endReason: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW',
     eloResult: EloCalculationResult | null
-  ) {
+  ): Promise<string | undefined> {
     try {
-      await MatchService.saveMatch({
+      const match = await MatchService.saveMatch({
         whiteUserId: room.players.white.userId,
         blackUserId: room.players.black.userId,
         whiteUsername: room.players.white.username,
         blackUsername: room.players.black.username,
-        gameMode: room.isRated ? 'PVP_RATED' : 'PVP_CUSTOM',
+        gameMode: room.tournamentContext ? 'TOURNAMENT' : (room.isRated ? 'PVP_RATED' : 'PVP_CUSTOM'),
         winnerColor,
         endReason,
         isRated: room.isRated,
+        isArmageddon: room.isArmageddon || false,
+        tournamentWinnerId: room.isArmageddon && winnerColor === 'b' && endReason === 'DRAW' ? room.players.black.userId : undefined,
         whiteEloDelta: eloResult?.white.delta || 0,
         blackEloDelta: eloResult?.black.delta || 0,
         whiteOldElo: eloResult?.white.oldElo || room.players.white.eloRating,
@@ -684,9 +772,261 @@ export class MatchGateway {
         startedAt: new Date(room.gameStartedAt || room.clock.turnStartedAt),
         endedAt: new Date(),
       });
+      return match?._id ? match._id.toString() : undefined;
     } catch (err) {
       console.error('❌ [MatchGateway] Lỗi ghi nhận ván đấu vào CSDL:', err);
+      return undefined;
     }
+  }
+
+  // Báo cáo kết quả giải đấu và kích hoạt vòng mới hoặc Armageddon
+  private async handleTournamentMatchEnd(
+    room: GameState,
+    winnerColor: 'w' | 'b' | 'draw',
+    savedMatchId?: string
+  ) {
+    if (!room.tournamentContext) return;
+
+    // Nếu ván chính hòa và không phải Armageddon -> tổ chức ván Armageddon phân định
+    if (winnerColor === 'draw' && !room.isArmageddon) {
+      console.log(`⚔️ [Tournament] Trận đấu ${room.roomId} kết thúc HÒA. Bắt đầu ván phụ Armageddon!`);
+      this.startArmageddonMatch(room);
+      return;
+    }
+
+    const winnerId = (room.isArmageddon && winnerColor === 'draw')
+      ? room.players.black.userId
+      : (winnerColor === 'w' ? room.players.white.userId : room.players.black.userId);
+
+    try {
+      const result = await TournamentService.reportMatchResult(
+        room.tournamentContext,
+        winnerId,
+        savedMatchId,
+        room.isArmageddon || false
+      );
+
+      const tournamentId = room.tournamentContext.tournamentId;
+      this.io.to(`tournament_${tournamentId}`).emit('tournament_updated', {
+        tournament: result.tournament,
+      });
+
+      if (result.isRoundFinished) {
+        if (result.isTournamentFinished) {
+          console.log(`🏆 [Tournament] Giải đấu ${tournamentId} kết thúc! Vô địch: ${result.championId}`);
+          this.io.to(`tournament_${tournamentId}`).emit('tournament_finished', {
+            tournament: result.tournament,
+            championId: result.championId,
+          });
+        } else {
+          // Bắt đầu đếm ngược 30 giây nghỉ giữa 2 vòng
+          const countdownSeconds = 30;
+          console.log(`⏳ [Tournament] Vòng hoàn thành. Đếm ngược ${countdownSeconds}s trước vòng tiếp theo...`);
+          this.io.to(`tournament_${tournamentId}`).emit('round_countdown', {
+            nextRound: result.tournament.rounds.length + 1,
+            countdownSeconds,
+          });
+
+          setTimeout(async () => {
+            try {
+              const adv = await TournamentService.advanceNextRound(tournamentId);
+              if (adv.nextRound) {
+                this.io.to(`tournament_${tournamentId}`).emit('tournament_updated', {
+                  tournament: adv.tournament,
+                });
+
+                // Khởi tạo các ván đấu của vòng mới
+                for (let mIdx = 0; mIdx < adv.nextRound.matches.length; mIdx++) {
+                  const m = adv.nextRound.matches[mIdx];
+                  if (m.player1 && m.player2 && m.status === 'PENDING') {
+                    this.startTournamentMatch(adv.tournament, adv.nextRound.roundNumber, mIdx, m.player1, m.player2);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('❌ [Tournament] Lỗi tạo vòng mới sau đếm ngược:', err);
+            }
+          }, countdownSeconds * 1000);
+        }
+      }
+    } catch (err) {
+      console.error('❌ [Tournament] Lỗi báo cáo kết quả trận đấu:', err);
+    }
+  }
+
+  // Khởi tạo ván cờ Armageddon phân định khi hòa
+  private startArmageddonMatch(prevRoom: GameState) {
+    if (!prevRoom.tournamentContext) return;
+
+    // Đảo màu quân: người cầm Trắng ván trước cầm Đen ván này
+    const whitePlayerState: PlayerState = {
+      ...prevRoom.players.black,
+      isConnected: true,
+    };
+    const blackPlayerState: PlayerState = {
+      ...prevRoom.players.white,
+      isConnected: true,
+    };
+
+    const roomId = `room_armageddon_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const game = new Chess();
+    const serverNow = Date.now();
+
+    // Trắng 5 phút (300,000ms), Đen 4 phút (240,000ms), increment 0
+    const timeControl: TimeControlConfig = {
+      initialTimeMs: 300000,
+      incrementMs: 0,
+      whiteInitialTimeMs: 300000,
+      blackInitialTimeMs: 240000,
+    };
+
+    const room: GameState = {
+      roomId,
+      gameStartedAt: serverNow,
+      version: 1,
+      status: 'PLAYING',
+      isRated: false,
+      game,
+      players: {
+        white: whitePlayerState,
+        black: blackPlayerState,
+      },
+      clock: {
+        whiteTimeMs: 300000,
+        blackTimeMs: 240000,
+        activeColor: 'w',
+        turnStartedAt: serverNow,
+        incrementMs: 0,
+      },
+      timeControl,
+      tournamentContext: prevRoom.tournamentContext,
+      isArmageddon: true,
+    };
+
+    this.activeRooms.set(roomId, room);
+    this.socketToRoom.set(whitePlayerState.socketId, roomId);
+    this.socketToRoom.set(blackPlayerState.socketId, roomId);
+
+    const socketWhite = this.io.sockets.sockets.get(whitePlayerState.socketId);
+    const socketBlack = this.io.sockets.sockets.get(blackPlayerState.socketId);
+
+    if (socketWhite) socketWhite.join(roomId);
+    if (socketBlack) socketBlack.join(roomId);
+
+    const matchPayload = {
+      roomId,
+      whitePlayer: { userId: whitePlayerState.userId, username: whitePlayerState.username, eloRating: whitePlayerState.eloRating },
+      blackPlayer: { userId: blackPlayerState.userId, username: blackPlayerState.username, eloRating: blackPlayerState.eloRating },
+      fen: game.fen(),
+      isRated: false,
+      isArmageddon: true,
+      drawOdds: 'b',
+      clock: {
+        whiteTimeMs: 300000,
+        blackTimeMs: 240000,
+        activeColor: 'w',
+        turnStartedAt: serverNow,
+        incrementMs: 0,
+        serverTimestamp: serverNow,
+      },
+    };
+
+    if (socketWhite) socketWhite.emit('match_found', { ...matchPayload, yourColor: 'w' });
+    if (socketBlack) socketBlack.emit('match_found', { ...matchPayload, yourColor: 'b' });
+
+    this.scheduleTimeout(room);
+  }
+
+  // Khởi tạo phòng thi đấu cho 1 cặp đấu trong giải đấu
+  private startTournamentMatch(
+    tournament: any,
+    roundNumber: number,
+    matchIndex: number,
+    player1Id: string,
+    player2Id: string
+  ) {
+    const socket1 = this.userSockets.get(player1Id);
+    const socket2 = this.userSockets.get(player2Id);
+
+    const p1Info = tournament.players.find((p: any) => p.userId === player1Id) || { userId: player1Id, username: 'Player 1', eloRating: 1200 };
+    const p2Info = tournament.players.find((p: any) => p.userId === player2Id) || { userId: player2Id, username: 'Player 2', eloRating: 1200 };
+
+    const roomId = `room_tour_${tournament.tournamentId}_r${roundNumber}_m${matchIndex}`;
+    const game = new Chess();
+    const serverNow = Date.now();
+    const initialTimeMs = 600000; // 10 phút
+
+    const room: GameState = {
+      roomId,
+      gameStartedAt: serverNow,
+      version: 1,
+      status: 'PLAYING',
+      isRated: false,
+      game,
+      players: {
+        white: {
+          socketId: socket1?.id || '',
+          userId: p1Info.userId,
+          username: p1Info.username,
+          eloRating: p1Info.eloRating,
+          isConnected: !!socket1?.connected,
+        },
+        black: {
+          socketId: socket2?.id || '',
+          userId: p2Info.userId,
+          username: p2Info.username,
+          eloRating: p2Info.eloRating,
+          isConnected: !!socket2?.connected,
+        },
+      },
+      clock: {
+        whiteTimeMs: initialTimeMs,
+        blackTimeMs: initialTimeMs,
+        activeColor: 'w',
+        turnStartedAt: serverNow,
+        incrementMs: 0,
+      },
+      timeControl: {
+        initialTimeMs,
+        incrementMs: 0,
+      },
+      tournamentContext: {
+        tournamentId: tournament.tournamentId,
+        roundNumber,
+        matchIndex,
+      },
+    };
+
+    this.activeRooms.set(roomId, room);
+    if (socket1) {
+      this.socketToRoom.set(socket1.id, roomId);
+      socket1.join(roomId);
+    }
+    if (socket2) {
+      this.socketToRoom.set(socket2.id, roomId);
+      socket2.join(roomId);
+    }
+
+    const matchPayload = {
+      roomId,
+      whitePlayer: { userId: p1Info.userId, username: p1Info.username, eloRating: p1Info.eloRating },
+      blackPlayer: { userId: p2Info.userId, username: p2Info.username, eloRating: p2Info.eloRating },
+      fen: game.fen(),
+      isRated: false,
+      clock: {
+        whiteTimeMs: initialTimeMs,
+        blackTimeMs: initialTimeMs,
+        activeColor: 'w',
+        turnStartedAt: serverNow,
+        incrementMs: 0,
+        serverTimestamp: serverNow,
+      },
+    };
+
+    if (socket1) socket1.emit('match_found', { ...matchPayload, yourColor: 'w' });
+    if (socket2) socket2.emit('match_found', { ...matchPayload, yourColor: 'b' });
+
+    this.scheduleTimeout(room);
   }
 
   // Lấy độ lệch Elo cho phép theo thời gian chờ (Heuristic Policy)

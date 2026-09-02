@@ -11,6 +11,7 @@ interface ChessBoardComponentProps {
   playerColor: PlayerColor;
   onPieceDrop: (sourceSquare: Square, targetSquare: Square, promotion?: PromotionPiece) => boolean;
   disabled: boolean;
+  muted?: boolean;
 }
 
 export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
@@ -19,6 +20,7 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
   playerColor,
   onPieceDrop,
   disabled,
+  muted = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState<number>(340);
@@ -39,18 +41,20 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
       const last = history[history.length - 1];
       setLastMove({ from: last.from, to: last.to });
 
-      // Phát Âm thanh tương ứng nước đi
-      if (game.inCheck()) {
-        sounds.playCheck();
-      } else if (last.captured) {
-        sounds.playCapture();
-      } else {
-        sounds.playMove();
+      // Phát Âm thanh tương ứng nước đi nếu không bị tắt tiếng
+      if (!muted) {
+        if (game.inCheck()) {
+          sounds.playCheck();
+        } else if (last.captured) {
+          sounds.playCapture();
+        } else {
+          sounds.playMove();
+        }
       }
     } else {
       setLastMove(null);
     }
-  }, [fen, game]);
+  }, [fen, game, muted]);
 
   // Cập nhật các ô Highlight
   useEffect(() => {

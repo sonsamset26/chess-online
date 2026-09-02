@@ -47,3 +47,4 @@ logs/
 # Deployment & Shell scripts with secrets
 deploy.sh
 *.sh
+*.tsbuildinfo
