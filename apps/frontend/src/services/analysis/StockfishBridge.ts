@@ -7,10 +7,18 @@ export interface StockfishEvalResult {
   evalBest: number; // Centipawn (hoặc mapped mate score) theo góc nhìn bên đang đi
 }
 
+export interface EvaluateFenOptions {
+  depth?: number;
+  movetimeMs?: number;
+  timeoutMs?: number;
+  abortSignal?: AbortSignal;
+}
+
 export class StockfishBridge {
   private worker: Worker | null = null;
   private isReady: boolean = false;
   private readyPromise: Promise<void> | null = null;
+  private activeQueue: Promise<any> = Promise.resolve();
 
   constructor() {
     if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
@@ -59,12 +67,33 @@ export class StockfishBridge {
   }
 
   /**
-   * Đánh giá 1 thế cờ FEN ở độ sâu depth bằng Stockfish
+   * Đánh giá 1 thế cờ FEN bằng Stockfish với hàng đợi tuần tự (Mutex Queue)
+   * Tương thích cả cú pháp cũ (fen, depth, abortSignal) và cú pháp mới (fen, options)
    */
   public async evaluateFen(
     fen: string,
-    depth: number = 10,
-    abortSignal?: AbortSignal
+    optionsOrDepth: number | EvaluateFenOptions = 10,
+    legacyAbortSignal?: AbortSignal
+  ): Promise<StockfishEvalResult> {
+    const opts: EvaluateFenOptions =
+      typeof optionsOrDepth === 'number'
+        ? { depth: optionsOrDepth, abortSignal: legacyAbortSignal }
+        : optionsOrDepth;
+
+    return new Promise<StockfishEvalResult>((resolve, reject) => {
+      this.activeQueue = this.activeQueue
+        .catch(() => {})
+        .then(() => this.executeEvaluateFen(fen, opts))
+        .then(resolve, reject);
+    });
+  }
+
+  /**
+   * Thực thi đánh giá đơn lẻ bên trong hàng đợi tuần tự
+   */
+  private async executeEvaluateFen(
+    fen: string,
+    opts: EvaluateFenOptions
   ): Promise<StockfishEvalResult> {
     if (!this.worker) {
       throw new Error('Stockfish Worker không khả dụng');
@@ -73,6 +102,8 @@ export class StockfishBridge {
     if (this.readyPromise) {
       await this.readyPromise;
     }
+
+    const { depth = 10, movetimeMs, timeoutMs = 5000, abortSignal } = opts;
 
     if (abortSignal?.aborted) {
       throw new Error('Analysis aborted');
@@ -84,10 +115,35 @@ export class StockfishBridge {
       let currentCp = 0;
       let currentMate: number | null = null;
       let bestMoveUci = '';
+      let isCompleted = false;
+
+      const cleanup = () => {
+        if (isCompleted) return;
+        isCompleted = true;
+        clearTimeout(safetyTimer);
+        worker.removeEventListener('message', messageHandler);
+        if (abortSignal) {
+          abortSignal.removeEventListener('abort', onAbort);
+        }
+      };
+
+      const safetyTimer = setTimeout(() => {
+        cleanup();
+        try {
+          worker.postMessage('stop');
+        } catch (e) {
+          // ignore
+        }
+        reject(new Error('Evaluation timeout'));
+      }, timeoutMs);
 
       const onAbort = () => {
         cleanup();
-        worker.postMessage('stop');
+        try {
+          worker.postMessage('stop');
+        } catch (e) {
+          // ignore
+        }
         reject(new Error('Analysis aborted'));
       };
 
@@ -99,20 +155,34 @@ export class StockfishBridge {
         if (mateMatch) {
           currentMate = parseInt(mateMatch[1], 10);
         } else {
-          // Bắt điểm centipawn: info ... score cp (-?\d+)
+          // Bắt điểm centipawn chính xác (bỏ qua upperbound / lowerbound tạm thời)
           const cpMatch = line.match(/score cp (-?\d+)/);
-          if (cpMatch) {
+          if (cpMatch && !line.includes('upperbound') && !line.includes('lowerbound')) {
             currentCp = parseInt(cpMatch[1], 10);
             currentMate = null;
           }
         }
 
-        // Bắt bestmove: bestmove <move>
-        const bestMoveMatch = line.match(/^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+        // Bắt bestmove: hỗ trợ cả bestmove thường và bestmove (none) / 0000 khi hết ván
+        const bestMoveMatch = line.match(/^bestmove\s+(\(none\)|0000|[a-h][1-8][a-h][1-8][qrbn]?)/m);
         if (bestMoveMatch) {
-          bestMoveUci = bestMoveMatch[1];
+          const rawMove = bestMoveMatch[1];
           cleanup();
 
+          if (rawMove === '(none)' || rawMove === '0000') {
+            bestMoveUci = '(none)';
+            let evalBest = currentCp;
+            if (currentMate !== null) {
+              evalBest = Math.sign(currentMate) * (10000 - Math.min(Math.abs(currentMate), 50) * 10);
+            }
+            resolve({
+              bestMoveUci,
+              evalBest,
+            });
+            return;
+          }
+
+          bestMoveUci = rawMove;
           let evalBest = currentCp;
           if (currentMate !== null) {
             evalBest = Math.sign(currentMate) * (10000 - Math.min(Math.abs(currentMate), 50) * 10);
@@ -125,20 +195,17 @@ export class StockfishBridge {
         }
       };
 
-      const cleanup = () => {
-        worker.removeEventListener('message', messageHandler);
-        if (abortSignal) {
-          abortSignal.removeEventListener('abort', onAbort);
-        }
-      };
-
       if (abortSignal) {
         abortSignal.addEventListener('abort', onAbort);
       }
 
       worker.addEventListener('message', messageHandler);
       worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go depth ${depth}`);
+      if (movetimeMs && movetimeMs > 0) {
+        worker.postMessage(`go depth ${depth} movetime ${movetimeMs}`);
+      } else {
+        worker.postMessage(`go depth ${depth}`);
+      }
     });
   }
 

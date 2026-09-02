@@ -25,6 +25,7 @@ import { GameControls } from '../components/GameControls';
 import { MoveHistory } from '../components/MoveHistory';
 import { useChessEngine } from '../hooks/useChessEngine';
 import { useSocket, EloPlayerResult } from '../hooks/useSocket';
+import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
 import { sounds } from '../utils/soundEffects';
 import { Chess, Square } from 'chess.js';
 import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText, RotateCcw, AlertTriangle, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -155,6 +156,72 @@ export default function Home() {
   };
 
   const currentActiveRoomIdRef = useRef<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
+  // Kích hoạt duy nhất ở chế độ PvAI / Practice khi đang ở tab Chơi cờ
+  // ---------------------------------------------------------------------------
+  const isLiveAnalysisEnabled =
+    activeMode === 'bots' &&
+    activeTab === 'play' &&
+    replayMatch === null &&
+    !isAnalyzing;
+
+  const {
+    analysisByPly,
+    selectedPly,
+    setSelectedPly,
+    enqueueMove,
+    resetAnalysis,
+  } = useLiveAnalysis({
+    enabled: isLiveAnalysisEnabled,
+  });
+
+  const processedPlyRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isLiveAnalysisEnabled) {
+      processedPlyRef.current = 0;
+      return;
+    }
+
+    const currentPlies = moveHistory.length;
+
+    // Ván cờ bị reset hoặc undo
+    if (currentPlies < processedPlyRef.current) {
+      processedPlyRef.current = currentPlies;
+      resetAnalysis();
+      return;
+    }
+
+    // Khi có đúng 1 nước mới được thêm vào
+    if (currentPlies === processedPlyRef.current + 1) {
+      const ply = currentPlies;
+      const san = moveHistory[currentPlies - 1];
+      const moveColor: 'w' | 'b' = ply % 2 === 1 ? 'w' : 'b';
+
+      const fenAfter = game.fen();
+      const clone = new Chess();
+      for (let i = 0; i < currentPlies - 1; i++) {
+        try {
+          clone.move(moveHistory[i]);
+        } catch {
+          break;
+        }
+      }
+      const fenBefore = clone.fen();
+
+      enqueueMove({
+        ply,
+        fenBefore,
+        fenAfter,
+        moveSan: san,
+        playerColor: moveColor,
+      });
+
+      processedPlyRef.current = currentPlies;
+    }
+  }, [moveHistory, isLiveAnalysisEnabled, game, enqueueMove, resetAnalysis]);
 
   // ---------------------------------------------------------------------------
   // ĐỒNG HỒ THI ĐẤU THỜI GIAN THỰC (REALTIME IN-GAME CHESS CLOCK)
@@ -1117,7 +1184,12 @@ export default function Home() {
                     </div>
 
                     {/* Move History Desktop */}
-                    <MoveHistory moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory} />
+                    <MoveHistory
+                      moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory}
+                      analysisByPly={replayMatch ? undefined : analysisByPly}
+                      selectedPly={replayMatch ? null : selectedPly}
+                      onSelectPly={setSelectedPly}
+                    />
                   </div>
                 </div>
               </div>
@@ -1265,6 +1337,9 @@ export default function Home() {
         isOpen={isMoveHistoryModalOpen}
         onClose={() => setIsMoveHistoryModalOpen(false)}
         moveHistory={moveHistory}
+        analysisByPly={replayMatch ? undefined : analysisByPly}
+        selectedPly={replayMatch ? null : selectedPly}
+        onSelectPly={setSelectedPly}
       />
 
       {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
