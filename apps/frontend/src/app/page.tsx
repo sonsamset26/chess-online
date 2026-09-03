@@ -1,68 +1,129 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Sidebar, ActiveTab } from '../components/Sidebar';
-import { PlayMenu, GameModeSelection } from '../components/PlayMenu';
+import { GameModeSelection } from '../components/PlayMenu';
 import { AuthModal } from '../components/AuthModal';
 import { MatchmakingModal } from '../components/MatchmakingModal';
 import { FriendRoomModal } from '../components/FriendRoomModal';
 import { GameOverModal } from '../components/GameOverModal';
 import { LeaveRoomModal } from '../components/LeaveRoomModal';
 import { ResignModal } from '../components/ResignModal';
+import { LogoutModal } from '../components/LogoutModal';
 import { MoveHistoryModal } from '../components/MoveHistoryModal';
-import { PromotionPiece } from '../components/PromotionModal';
-import { PuzzleView } from '../components/PuzzleView';
-import { LearnView } from '../components/LearnView';
-import { HistoryView, MatchRecord } from '../components/HistoryView';
 import { TournamentModal, TournamentData } from '../components/TournamentModal';
 import { TournamentDetailModal } from '../components/TournamentDetailModal';
 import { GameReportView } from '../components/GameReportView';
-import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
-import { GameAnalysisReport } from '../services/analysis/types';
-import { ChessBoardComponent } from '../components/ChessBoard';
-import { PlayerCard } from '../components/PlayerCard';
-import { DifficultySelector } from '../components/DifficultySelector';
-import { GameControls } from '../components/GameControls';
-import { MoveHistory } from '../components/MoveHistory';
+import { PromotionPiece } from '../components/PromotionModal';
+import { MatchRecord } from '../components/HistoryView';
+
+// Các Tab Components đã được tách theo kiến trúc module hóa
+import { PlayTab } from '../components/tabs/PlayTab';
+import { LearnTab } from '../components/tabs/LearnTab';
+import { LeaderboardTab } from '../components/tabs/LeaderboardTab';
+import { PuzzleTab } from '../components/tabs/PuzzleTab';
+import { HistoryTab } from '../components/tabs/HistoryTab';
+
+// Custom Hooks quản lý trạng thái
+import { useModalState } from '../hooks/useModalState';
+import { useGameOverFlow } from '../hooks/useGameOverFlow';
 import { useChessEngine } from '../hooks/useChessEngine';
-import { useSocket, EloPlayerResult } from '../hooks/useSocket';
+import { useSocket } from '../hooks/useSocket';
 import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
+
 import { sounds } from '../utils/soundEffects';
+import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
 import { Chess, Square } from 'chess.js';
-import { Cpu, ArrowLeft, Flag, Trophy, Menu, Crown, ScrollText, RotateCcw, AlertTriangle, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Menu, Crown, ScrollText, Flag, ArrowLeft, AlertTriangle, Volume2, VolumeX } from 'lucide-react';
+import { calculateMaterialDetails } from '../utils/chessMaterial';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
   const [activeMode, setActiveMode] = useState<GameModeSelection | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
-  const [isResignModalOpen, setIsResignModalOpen] = useState(false);
-  const [isFriendModalOpen, setIsFriendModalOpen] = useState(false);
-  const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isMoveHistoryModalOpen, setIsMoveHistoryModalOpen] = useState(false);
-  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
+  const [user, setUser] = useState<{ id?: string; username: string; eloRating: number; avatarUrl?: string; token: string } | null>(null);
 
-  // Trạng thái Giải đấu & Phân tích trận đấu
+  // Hook quản lý Modal tập trung (Modal State Machine)
+  const {
+    isAuthOpen,
+    isLeaveModalOpen,
+    isResignModalOpen,
+    isFriendModalOpen,
+    isTournamentModalOpen,
+    isLogoutModalOpen,
+    isGameOverModalOpen,
+    isMoveHistoryModalOpen,
+    setIsAuthOpen,
+    setIsLeaveModalOpen,
+    setIsResignModalOpen,
+    setIsFriendModalOpen,
+    setIsTournamentModalOpen,
+    setIsLogoutModalOpen,
+    setIsGameOverModalOpen,
+    setIsMoveHistoryModalOpen,
+  } = useModalState();
+
+  // Hook quản lý Kết thúc ván & Phân tích Stockfish
+  const {
+    tournamentChampionId,
+    setTournamentChampionId,
+    analysisReport,
+    setAnalysisReport,
+    isReviewAnalyzing,
+    setIsReviewAnalyzing,
+    analysisProgress,
+    analysisStatusText,
+    customGameOverMsg,
+    setCustomGameOverMsg,
+    currentEndReason,
+    setCurrentEndReason,
+    localGameOverStatus,
+    setLocalGameOverStatus,
+    currentMatchEloResult,
+    setCurrentMatchEloResult,
+    analysisOriginTournamentId,
+    setAnalysisOriginTournamentId,
+    handleStartAnalysis,
+    handleAbortAnalysis,
+    triggerAutoAnalysis,
+    resetGameOverState,
+  } = useGameOverFlow(() => setIsGameOverModalOpen(false));
+
+  // Trạng thái Giải đấu
   const [tournamentData, setTournamentData] = useState<TournamentData | null>(null);
-  const [tournamentChampionId, setTournamentChampionId] = useState<string | null>(null);
-  const [analysisReport, setAnalysisReport] = useState<GameAnalysisReport | null>(null);
-  const [isReviewAnalyzing, setIsReviewAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [analysisStatusText, setAnalysisStatusText] = useState('');
-  const analysisAbortControllerRef = useRef<AbortController | null>(null);
+  const [selectedTournamentDetailId, setSelectedTournamentDetailId] = useState<string | null>(null);
+  const [historySubTab, setHistorySubTab] = useState<'matches' | 'tournaments'>('matches');
 
-  const [user, setUser] = useState<{ id?: string; username: string; eloRating: number; token: string } | null>(null);
-  const [customGameOverMsg, setCustomGameOverMsg] = useState<string | undefined>(undefined);
-  const [currentEndReason, setCurrentEndReason] = useState<string | undefined>(undefined);
-  const [localGameOverStatus, setLocalGameOverStatus] = useState<string | null>(null);
-  const [currentMatchEloResult, setCurrentMatchEloResult] = useState<EloPlayerResult | null>(null);
+  // Trạng thái Replay
+  const [replayMatch, setReplayMatch] = useState<MatchRecord | null>(null);
+  const [replayMoveIndex, setReplayMoveIndex] = useState<number>(0);
+  const [replayOrigin, setReplayOrigin] = useState<{
+    source: 'history' | 'tournament_detail';
+    tournamentIdOrCode?: string;
+  } | null>(null);
+
+  // Đếm ngược Reconnect
   const [reconnectCountdown, setReconnectCountdown] = useState<number>(45);
+
+  // Ref ghi nhớ sự kiện kết thúc ván đã hiển thị, tránh mở lại liên tục khi người dùng bấm X hoặc Xem lại bàn cờ
+  const processedGameOverRef = useRef<string | null>(null);
+
+  // Trạng thái Âm thanh
+  const [isMuted, setIsMuted] = useState(false);
+
+  useEffect(() => {
+    setIsMuted(sounds.getMuted());
+  }, []);
+
+  const toggleMute = () => {
+    const next = !isMuted;
+    sounds.setMuted(next);
+    setIsMuted(next);
+  };
 
   // Bảng xếp hạng thật từ MongoDB
   const [realLeaderboard, setRealLeaderboard] = useState<any[]>([]);
   const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
-
   const prevStatusRef = useRef<string>('IN_PROGRESS');
 
   // Tải Bảng xếp hạng thật từ Backend MongoDB Atlas
@@ -88,7 +149,31 @@ export default function Home() {
       const savedUser = localStorage.getItem('chess_user');
       const token = localStorage.getItem('chess_token');
       if (savedUser && token) {
-        setUser({ ...JSON.parse(savedUser), token });
+        const parsed = JSON.parse(savedUser);
+        setUser({ ...parsed, token });
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        fetch(`${apiUrl}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res) => res.json())
+          .then((resData) => {
+            if (resData.success && resData.data?.user) {
+              const u = resData.data.user;
+              setUser((prev) => {
+                if (!prev) return null;
+                const updated = {
+                  ...prev,
+                  username: u.username || prev.username,
+                  avatarUrl: u.avatarUrl,
+                  eloRating: u.eloRating ?? prev.eloRating,
+                };
+                localStorage.setItem('chess_user', JSON.stringify(updated));
+                return updated;
+              });
+            }
+          })
+          .catch((err) => console.error('Lỗi đồng bộ profile:', err));
       }
     } catch (err) {
       console.error('Error reading saved user from localStorage:', err);
@@ -139,11 +224,12 @@ export default function Home() {
     togglePlayerColor,
   } = useChessEngine();
 
-  const currentStatus = !activeMode ? 'IDLE' : (localGameOverStatus || engineStatus);
+  // Tính toán Quân cờ bị ăn và Chênh lệch điểm số (Material Advantage)
+  const materialDetails = useMemo(() => {
+    return calculateMaterialDetails(fen || game.fen());
+  }, [fen, game]);
 
-  // Trạng thái Xem lại Ván đấu (Replay Mode)
-  const [replayMatch, setReplayMatch] = useState<MatchRecord | null>(null);
-  const [replayMoveIndex, setReplayMoveIndex] = useState<number>(0);
+  const currentStatus = !activeMode ? 'IDLE' : (localGameOverStatus || engineStatus);
 
   const goToReplayMove = (targetIndex: number) => {
     if (!replayMatch) return;
@@ -161,36 +247,32 @@ export default function Home() {
     setBoardFen(tempGame.fen(), replayMatch.moves.slice(0, clampedIndex));
   };
 
-  const [selectedTournamentDetailId, setSelectedTournamentDetailId] = useState<string | null>(null);
-  const [historySubTab, setHistorySubTab] = useState<'matches' | 'tournaments'>('matches');
-  const [analysisOriginTournamentId, setAnalysisOriginTournamentId] = useState<string | null>(null);
-  const [replayOrigin, setReplayOrigin] = useState<{
-    source: 'history' | 'tournament_detail';
-    tournamentIdOrCode?: string;
-  } | null>(null);
-
   const handleExitReplay = () => {
-    const origin = replayOrigin;
     setReplayMatch(null);
-    setReplayOrigin(null);
-    setActiveTab('history');
-    if (origin?.source === 'tournament_detail') {
+    setReplayMoveIndex(0);
+    resetGameOverState();
+    setIsGameOverModalOpen(false);
+
+    if (replayOrigin?.source === 'tournament_detail' && replayOrigin.tournamentIdOrCode) {
+      setSelectedTournamentDetailId(replayOrigin.tournamentIdOrCode);
       setHistorySubTab('tournaments');
-      if (origin.tournamentIdOrCode) {
-        setSelectedTournamentDetailId(origin.tournamentIdOrCode);
-      }
+      setActiveTab('history');
     } else {
+      setActiveTab('history');
       setHistorySubTab('matches');
     }
+    setReplayOrigin(null);
   };
 
-  const currentActiveRoomIdRef = useRef<string | null>(null);
+  // Bản đồ phân loại nước đi khi xem lại ván cờ (Tự động nạp từ Cache hoặc MongoDB)
+  const replayAnalysisByPly = useMemo(() => {
+    if (!replayMatch) return undefined;
+    const reportOrSummary = replayMatch.analysis || AnalysisCacheService.getCache(replayMatch._id, replayMatch.moves);
+    if (!reportOrSummary) return undefined;
+    return AnalysisCacheService.convertToAnalysisByPly(reportOrSummary);
+  }, [replayMatch]);
 
-  // ---------------------------------------------------------------------------
-  // LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
-  // Kích hoạt ở chế độ PvAI (Đấu với Bot) và Đấu Bạn Bè (Friend Custom Room, unrated)
-  // TẮT HOÀN TOÀN ở Đấu Xếp Hạng (Ranked PvP), Đấu Giải (Tournament) và Xem lại ván (Replay)
-  // ---------------------------------------------------------------------------
+  // TÍCH HỢP LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
   const isLiveAnalysisEnabled =
     activeTab === 'play' &&
     replayMatch === null &&
@@ -208,6 +290,7 @@ export default function Home() {
 
   const processedPlyRef = useRef<number>(0);
 
+  // Trigger phân tích Realtime sau mỗi nước cờ hợp lệ
   useEffect(() => {
     if (!isLiveAnalysisEnabled) {
       processedPlyRef.current = 0;
@@ -327,142 +410,130 @@ export default function Home() {
   // D. Vòng lặp đếm lùi thời gian thực mỗi 100ms
   useEffect(() => {
     if (currentStatus !== 'IN_PROGRESS') return;
-    if (activeTab !== 'play' || !activeMode) return;
-    if (!activeMatch && !isBotGame) return;
-
     const interval = setInterval(() => {
-      const { whiteBaseMs, blackBaseMs, activeColor, turnStartedAt } = clockBaselineRef.current;
-      const elapsed = Math.max(0, Date.now() - turnStartedAt);
+      const now = Date.now();
+      const baseline = clockBaselineRef.current;
+      const elapsed = Math.max(0, now - baseline.turnStartedAt);
 
-      if (activeColor === 'w') {
-        const remaining = Math.max(0, whiteBaseMs - elapsed);
+      if (baseline.activeColor === 'w') {
+        const remaining = Math.max(0, baseline.whiteBaseMs - elapsed);
         setWhiteDisplayTimeMs(remaining);
-        if (remaining <= 0 && isBotGame) {
-          clearInterval(interval);
+        if (isBotGame && remaining <= 0) {
           setLocalGameOverStatus('BLACK_WIN');
           setCurrentEndReason('TIMEOUT');
-          setCustomGameOverMsg('Hết thời gian! Bên Trắng đã thua do hết giờ thi đấu.');
+          setCustomGameOverMsg('Hết thời gian! Bên Trắng đã thua do hết giờ.');
           setIsGameOverModalOpen(true);
         }
       } else {
-        const remaining = Math.max(0, blackBaseMs - elapsed);
+        const remaining = Math.max(0, baseline.blackBaseMs - elapsed);
         setBlackDisplayTimeMs(remaining);
-        if (remaining <= 0 && isBotGame) {
-          clearInterval(interval);
+        if (isBotGame && remaining <= 0) {
           setLocalGameOverStatus('WHITE_WIN');
           setCurrentEndReason('TIMEOUT');
-          setCustomGameOverMsg('Hết thời gian! Bên Đen đã thua do hết giờ thi đấu.');
+          setCustomGameOverMsg('Hết thời gian! Bên Đen đã thua do hết giờ.');
           setIsGameOverModalOpen(true);
         }
       }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [currentStatus, activeTab, activeMode, activeMatch, isBotGame]);
+  }, [currentStatus, isBotGame, setIsGameOverModalOpen, setCurrentEndReason, setCustomGameOverMsg, setLocalGameOverStatus]);
 
-  // 1. Đếm lùi thời gian Grace Period 45s khi đối thủ mất kết nối
+  // Đăng ký định danh Socket khi Đăng nhập hoặc Kết nối lại
   useEffect(() => {
-    if (!disconnectedOpponent) {
-      setReconnectCountdown(45);
-      return;
+    if (isConnected && user && user.token) {
+      registerUser(user.token, user.id || user.username);
     }
+  }, [isConnected, user, registerUser]);
 
-    setReconnectCountdown(disconnectedOpponent.gracePeriodSeconds || 45);
-    const interval = setInterval(() => {
-      setReconnectCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [disconnectedOpponent]);
-
-  // 1b. Tự động đăng ký phiên Socket bảo mật bằng JWT khi có User đăng nhập
+  // Hủy đăng ký khi Đăng xuất
   useEffect(() => {
-    if (isConnected && user) {
-      const token = localStorage.getItem('chess_token');
-      if (token) {
-        registerUser(token, user.id);
-      }
+    if (!user) {
+      unregisterUser();
     }
-  }, [isConnected, user]);
+  }, [user, unregisterUser]);
 
-  // 1c. Xử lý khi bị ngắt phiên do đăng nhập ở thiết bị/trình duyệt khác (Single Session)
+  // Cố gắng khôi phục ván đấu dở dang (F5 Reconnect)
+  const isInitialReconnectAttempted = useRef(false);
   useEffect(() => {
-    if (forceLogoutMessage) {
-      // Dọn dẹp toàn bộ dữ liệu xác thực
-      localStorage.removeItem('chess_token');
-      localStorage.removeItem('chess_user');
-      localStorage.removeItem('chess_active_online_match');
-
-      // Dọn dẹp trạng thái ván cờ và đưa về Menu
-      clearActiveMatch();
-      setActiveMode(null);
-      resetGame();
-      setLocalGameOverStatus(null);
-      setCustomGameOverMsg(undefined);
-      setCurrentEndReason(undefined);
-      setCurrentMatchEloResult(null);
-      setIsGameOverModalOpen(false);
-      setUser(null);
-    }
-  }, [forceLogoutMessage]);
-
-  // 2. Tự động kiểm tra và kết nối lại ván đấu (Reconnect Grace Period khi F5)
-  useEffect(() => {
-    if (isConnected && !activeMatch) {
+    if (isConnected && user && !activeMatch && !isInitialReconnectAttempted.current) {
+      isInitialReconnectAttempted.current = true;
       try {
-        const savedMatchStr = localStorage.getItem('chess_active_online_match');
-        if (savedMatchStr) {
-          const saved = JSON.parse(savedMatchStr);
-          if (saved?.roomId && saved?.userId) {
-            console.log('🔄 [Auto Reconnect] Đang gửi yêu cầu kết nối lại:', saved);
-            reconnectMatch(saved.roomId, saved.userId);
+        const savedMatch = localStorage.getItem('chess_active_online_match');
+        if (savedMatch) {
+          const { roomId, userId } = JSON.parse(savedMatch);
+          if (roomId && (userId === user.id || userId === user.username)) {
+            reconnectMatch(roomId, user.token);
           }
         }
       } catch (err) {
-        console.error('Error attempting match reconnect:', err);
+        console.error('Error recovering active match:', err);
       }
     }
-  }, [isConnected, activeMatch]);
+  }, [isConnected, user, activeMatch, reconnectMatch]);
 
-  // Lắng nghe sự kiện Giải đấu kết thúc và công bố Nhà vô địch
+  // 1. LẮNG NGHE SỰ KIỆN GIẢI ĐẤU TỪ SOCKET.IO
   useEffect(() => {
     if (!socket) return;
-    const handleTournamentFinished = (data: { tournament: any; championId: string }) => {
-      console.log('🏆 [Tournament Finished Client]:', data);
-      if (data.tournament) setTournamentData(data.tournament);
-      if (data.championId) setTournamentChampionId(data.championId);
+
+    const handleTournamentJoined = (data: { tournament: TournamentData }) => {
+      setTournamentData(data.tournament);
+      setIsTournamentModalOpen(true);
     };
-    const handleRoundCountdown = (_data: any) => {
-      // Khi server báo đếm ngược vòng mới trong giải đấu, tự động mở bảng giải đấu để xem cặp đấu
-      if (activeMode === 'tournament' || tournamentData) {
+
+    const handleTournamentCancelled = (data: { tournamentId: string; message: string }) => {
+      alert(data.message || 'Giải đấu đã bị hủy bởi chủ phòng.');
+      setTournamentData(null);
+      setIsTournamentModalOpen(false);
+    };
+
+    const handleTournamentMatchStarted = (data: {
+      tournamentId: string;
+      roundNumber: number;
+      matchIndex: number;
+      whitePlayer: any;
+      blackPlayer: any;
+      yourColor: 'w' | 'b';
+      timeControl: any;
+      isArmageddon?: boolean;
+    }) => {
+      setReplayMatch(null);
+      setReplayOrigin(null);
+      setIsTournamentModalOpen(false);
+      setIsFriendModalOpen(false);
+      setActiveMode('tournament');
+      resetGameOverState();
+      setIsGameOverModalOpen(false);
+    };
+
+    const handleTournamentFinished = (data: { tournament: TournamentData; championId: string }) => {
+      setTournamentData(data.tournament);
+      setTournamentChampionId(data.championId);
+      if (activeMode === 'tournament') {
         setIsGameOverModalOpen(false);
         setIsTournamentModalOpen(true);
       }
     };
-    const handleTournamentUpdated = (data: { tournament: any }) => {
-      if (data?.tournament) {
-        setTournamentData(data.tournament);
-      }
-    };
-    socket.on('tournament_finished', handleTournamentFinished);
-    socket.on('round_countdown', handleRoundCountdown);
-    socket.on('tournament_updated', handleTournamentUpdated);
-    return () => {
-      socket.off('tournament_finished', handleTournamentFinished);
-      socket.off('round_countdown', handleRoundCountdown);
-      socket.off('tournament_updated', handleTournamentUpdated);
-    };
-  }, [socket, activeMode, tournamentData]);
 
-  // 3. Tự động chuyển mode và gán màu cờ theo chỉ định của Server khi bắt đầu phòng mới
+    socket.on('tournament_joined', handleTournamentJoined);
+    socket.on('tournament_cancelled', handleTournamentCancelled);
+    socket.on('tournament_match_started', handleTournamentMatchStarted);
+    socket.on('tournament_finished', handleTournamentFinished);
+
+    return () => {
+      socket.off('tournament_joined', handleTournamentJoined);
+      socket.off('tournament_cancelled', handleTournamentCancelled);
+      socket.off('tournament_match_started', handleTournamentMatchStarted);
+      socket.off('tournament_finished', handleTournamentFinished);
+    };
+  }, [socket, activeMode, setIsTournamentModalOpen, setIsFriendModalOpen, setIsGameOverModalOpen, resetGameOverState, setTournamentChampionId]);
+
+  // 2. LẮNG NGHE VÀO PHÒNG TRẬN ĐẤU MỚI (MATCH_FOUND)
+  const currentActiveRoomIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (activeMatch && activeMatch.roomId !== currentActiveRoomIdRef.current) {
+    if (activeMatch) {
+      if (currentActiveRoomIdRef.current === activeMatch.roomId) return;
       currentActiveRoomIdRef.current = activeMatch.roomId;
       setReplayMatch(null);
       setReplayOrigin(null);
@@ -470,12 +541,13 @@ export default function Home() {
       setIsTournamentModalOpen(false);
       if (activeMatch.isTournament) {
         setActiveMode('tournament');
-      } else if (activeMode !== 'tournament') {
+      } else if (activeMatch.isRated === false) {
+        setActiveMode('friend');
+      } else {
         setActiveMode('online');
       }
-      setLocalGameOverStatus(null);
-      setCustomGameOverMsg(undefined);
-      setCurrentMatchEloResult(null);
+      processedGameOverRef.current = null;
+      resetGameOverState();
       setIsGameOverModalOpen(false);
 
       const myColor = activeMatch.yourColor || 'w';
@@ -483,7 +555,6 @@ export default function Home() {
       setBoardFen(activeMatch.fen, activeMatch.history || []);
       sounds.playGameStart();
 
-      // Lưu thông tin trận đấu vào LocalStorage để hỗ trợ F5 Reconnect
       try {
         const myUserId = (myColor === 'w' ? activeMatch.whitePlayer.userId : activeMatch.blackPlayer.userId);
         localStorage.setItem(
@@ -499,92 +570,115 @@ export default function Home() {
     } else if (!activeMatch) {
       currentActiveRoomIdRef.current = null;
     }
-  }, [activeMatch]);
+  }, [activeMatch, activeMode, setIsFriendModalOpen, setIsTournamentModalOpen, setIsGameOverModalOpen, resetGameOverState, setPlayerColor, setBoardFen]);
 
   // 3. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
   useEffect(() => {
     if (resignationEvent) {
+      const eventKey = `${resignationEvent.roomId}_${resignationEvent.reason}_${resignationEvent.winnerColor}`;
+      if (processedGameOverRef.current === eventKey) return;
+      processedGameOverRef.current = eventKey;
+
       localStorage.removeItem('chess_active_online_match');
-      const winningStatus = resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
-      setLocalGameOverStatus(winningStatus);
-      const mappedReason = resignationEvent.reason === 'TIMEOUT' ? 'TIMEOUT' : resignationEvent.reason === 'DISCONNECT' ? 'ABANDONED' : 'RESIGNED';
-      setCurrentEndReason(mappedReason);
       setIsResignModalOpen(false);
+      setIsLeaveModalOpen(false);
+      setIsLogoutModalOpen(false);
       setIsGameOverModalOpen(true);
 
       const isMeWin = resignationEvent.winnerColor === playerColor;
-      let msg = resignationEvent.message;
-
       if (resignationEvent.reason === 'TIMEOUT') {
-        msg = isMeWin
-          ? `Đối thủ (${resignationEvent.loserName}) đã hết thời gian thi đấu. Bạn đã Chiến Thắng!`
-          : `Bạn (${resignationEvent.loserName}) đã hết thời gian thi đấu (Lost on Time)!`;
-      } else if (resignationEvent.reason === 'DISCONNECT') {
-        msg = isMeWin
-          ? `Đối thủ (${resignationEvent.loserName}) đã rời trận (quá 45s không kết nối lại). Bạn Thắng!`
-          : `Bạn đã bị mất kết nối khỏi ván đấu.`;
-      } else if (resignationEvent.reason === 'RESIGNATION') {
-        msg = isMeWin
-          ? `Đối thủ (${resignationEvent.loserName}) đã đầu hàng. Bạn đã Chiến Thắng!`
-          : `Bạn đã đầu hàng ván đấu.`;
+        setCurrentEndReason('TIMEOUT');
+        setLocalGameOverStatus(resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN');
+        setCustomGameOverMsg(
+          resignationEvent.message || (isMeWin ? 'Đối thủ đã hết thời gian thi đấu. Bạn thắng!' : 'Bạn đã hết thời gian thi đấu. Bạn thua!')
+        );
+      } else {
+        setCurrentEndReason(resignationEvent.reason === 'DISCONNECT' ? 'ABANDONED' : 'RESIGNED');
+        setLocalGameOverStatus(resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN');
+        setCustomGameOverMsg(
+          resignationEvent.message || (isMeWin ? 'Đối thủ đã rời trận hoặc đầu hàng. Bạn thắng!' : 'Bạn đã đầu hàng.')
+        );
       }
-      setCustomGameOverMsg(msg);
 
-      // Cập nhật kết quả Elo
       if (resignationEvent.eloResult) {
         const myElo = playerColor === 'w' ? resignationEvent.eloResult.white : resignationEvent.eloResult.black;
         setCurrentMatchEloResult(myElo);
-
-        // Cập nhật State User và LocalStorage để tự động nhảy số Elo
         setUser((prev) => {
           if (!prev) return null;
           const updated = { ...prev, eloRating: myElo.newElo };
           localStorage.setItem('chess_user', JSON.stringify(updated));
           return updated;
         });
-      } else {
-        setCurrentMatchEloResult(null);
       }
 
-      if (resignationEvent.winnerColor === playerColor) {
-        sounds.playGameEndWin();
-      } else {
-        sounds.playGameEndLose();
+      // Tự động phân tích ván đấu ở chế độ nền
+      if (moveHistory.length >= 2) {
+        triggerAutoAnalysis(resignationEvent.roomId, moveHistory, user?.token);
       }
     }
-  }, [resignationEvent, playerColor]);
+  }, [resignationEvent, playerColor, moveHistory, user?.token, triggerAutoAnalysis, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
 
-  // 4. Phát âm thanh khi kết thúc ván đấu
+  // 4. LẮNG NGHE ĐỐI THỦ MẤT KẾT NỐI (GRACE PERIOD 45S)
   useEffect(() => {
-    const isEndStatus = currentStatus === 'WHITE_WIN' || currentStatus === 'BLACK_WIN' || currentStatus === 'DRAW';
-    if (prevStatusRef.current === 'IN_PROGRESS' && isEndStatus && !resignationEvent && !replayMatch) {
-      localStorage.removeItem('chess_active_online_match');
-      setIsResignModalOpen(false);
-      setIsGameOverModalOpen(true);
-      const isWhiteWin = currentStatus === 'WHITE_WIN';
-      const isBlackWin = currentStatus === 'BLACK_WIN';
-      const isPlayerWin = (isWhiteWin && playerColor === 'w') || (isBlackWin && playerColor === 'b');
-      const isPlayerLose = (isWhiteWin && playerColor === 'b') || (isBlackWin && playerColor === 'w');
+    if (!disconnectedOpponent) {
+      setReconnectCountdown(45);
+      return;
+    }
 
-      if (isPlayerWin) {
-        sounds.playGameEndWin();
-      } else if (isPlayerLose) {
-        sounds.playGameEndLose();
-      } else {
+    setReconnectCountdown(disconnectedOpponent.gracePeriodSeconds || 45);
+    const timer = setInterval(() => {
+      setReconnectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [disconnectedOpponent]);
+
+  // Âm thanh Kết thúc trận đấu
+  useEffect(() => {
+    if (replayMatch) return;
+    if (prevStatusRef.current === 'IN_PROGRESS' && currentStatus !== 'IN_PROGRESS' && currentStatus !== 'IDLE') {
+      if (currentStatus === 'DRAW') {
         sounds.playGameEndDraw();
+      } else {
+        const isMeWin = (currentStatus === 'WHITE_WIN' && playerColor === 'w') ||
+                        (currentStatus === 'BLACK_WIN' && playerColor === 'b');
+        if (isMeWin) {
+          sounds.playGameEndWin();
+        } else {
+          sounds.playGameEndLose();
+        }
+      }
+
+      // Tự động phân tích ván đấu với Bot
+      if (activeMode === 'bots' && moveHistory.length >= 2) {
+        triggerAutoAnalysis('local_bot_' + Date.now(), moveHistory);
       }
     }
     prevStatusRef.current = currentStatus;
-  }, [currentStatus, playerColor, resignationEvent, replayMatch]);
+  }, [currentStatus, playerColor, replayMatch, activeMode, moveHistory, triggerAutoAnalysis]);
 
   // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật kết thúc trận (Checkmate / Draw)
   useEffect(() => {
-    if (latestMove && (activeMode === 'online' || activeMode === 'tournament')) {
-      setBoardFen(latestMove.fen, latestMove.history);
+    if (latestMove && (activeMode === 'online' || activeMode === 'tournament' || activeMode === 'friend' || Boolean(activeMatch))) {
+      if (latestMove.fen !== fen || latestMove.history?.length !== moveHistory.length) {
+        setBoardFen(latestMove.fen, latestMove.history);
+      }
 
       if (latestMove.isGameOver) {
+        const moveEndKey = `${activeMatch?.roomId || 'game'}_${latestMove.fen}_${latestMove.winnerColor || 'draw'}`;
+        if (processedGameOverRef.current === moveEndKey) return;
+        processedGameOverRef.current = moveEndKey;
+
         localStorage.removeItem('chess_active_online_match');
         setIsResignModalOpen(false);
+        setIsLeaveModalOpen(false);
+        setIsLogoutModalOpen(false);
         setIsGameOverModalOpen(true);
         if (latestMove.isCheckmate) {
           setCurrentEndReason('CHECKMATE');
@@ -593,8 +687,8 @@ export default function Home() {
           const isMeWin = latestMove.winnerColor === playerColor;
           setCustomGameOverMsg(
             isMeWin
-              ? 'Chiến thắng vang dội! Bạn đã xuất sắc chiếu hết Vua của đối thủ.'
-              : 'Bạn đã bị đối thủ chiếu hết (Checkmate)! Bấm nút "Xem lại bàn cờ" để quan sát thế trận.'
+              ? 'Bạn đã chiếu hết Vua của đối thủ. Bạn thắng!'
+              : 'Bạn đã bị đối thủ chiếu hết. Bạn thua!'
           );
         } else if (latestMove.isDraw) {
           setCurrentEndReason('DRAW');
@@ -603,12 +697,12 @@ export default function Home() {
             const isMeBlack = playerColor === 'b';
             setCustomGameOverMsg(
               isMeBlack
-                ? '🏆 Chúc mừng! Bạn đã giành chiến thắng chung cuộc nhờ lợi thế hòa cờ của bên Đen (Armageddon Draw Odds).'
-                : 'Ván cờ kết thúc hòa. Theo luật Armageddon, bên Đen được tính là người chiến thắng chung cuộc.'
+                ? 'Ván cờ kết thúc hòa. Bên Đen giành chiến thắng theo điều lệ ván phụ.'
+                : 'Ván cờ kết thúc hòa. Bên Đen giành chiến thắng theo điều lệ ván phụ.'
             );
           } else {
             setLocalGameOverStatus('DRAW');
-            setCustomGameOverMsg('Ván cờ kết thúc với tỷ số Hòa (Hết nước đi hợp lệ - Stalemate hoặc Không đủ quân).');
+            setCustomGameOverMsg('Ván cờ kết thúc với kết quả hòa.');
           }
         }
 
@@ -622,26 +716,33 @@ export default function Home() {
             return updated;
           });
         }
+
+        // Tự động phân tích ván đấu ở chế độ nền
+        const fullHistory = latestMove.history || moveHistory;
+        if (fullHistory && fullHistory.length >= 2) {
+          triggerAutoAnalysis(activeMatch?.roomId || 'game_' + Date.now(), fullHistory, user?.token);
+        }
       }
     }
-  }, [latestMove, activeMode, playerColor]);
+  }, [latestMove, activeMode, activeMatch?.roomId, playerColor, fen, moveHistory, user?.token, triggerAutoAnalysis, setBoardFen, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
 
   // Xử lý chọn Chế độ chơi từ PlayMenu (RÀNG BUỘC ĐĂNG NHẬP CHO ĐẤU TRỰC TUYẾN)
   const handleSelectMode = (mode: GameModeSelection) => {
-    setLocalGameOverStatus(null);
-    setCustomGameOverMsg(undefined);
-    setCurrentMatchEloResult(null);
+    resetGameOverState();
     setIsGameOverModalOpen(false);
 
-    // RÀNG BUỘC: Đấu trực tuyến (Rated PvP) bắt buộc phải Đăng nhập tài khoản
     if (mode === 'online') {
       if (!user) {
         setIsAuthOpen(true);
         return;
       }
 
+      if (user.token) {
+        registerUser(user.token, user.id || user.username);
+      }
+
       joinQueue({
-        userId: user.username,
+        userId: user.id || user.username,
         username: user.username,
         eloRating: user.eloRating || 1200,
       });
@@ -658,7 +759,6 @@ export default function Home() {
         setIsAuthOpen(true);
         return;
       }
-      // Nếu giải đấu trước đó đã kết thúc, xóa trạng thái cũ để mở màn hình Tạo/Tham gia giải mới
       if (tournamentData?.status === 'FINISHED') {
         setTournamentData(null);
         setTournamentChampionId(null);
@@ -674,41 +774,11 @@ export default function Home() {
     sounds.playGameStart();
   };
 
-  // Khởi chạy phân tích ván đấu với Stockfish AI Engine (Async + Progress)
-  const handleStartAnalysis = async (moves: string[]) => {
-    if (!moves || moves.length === 0) return;
-    try {
-      setIsReviewAnalyzing(true);
-      setAnalysisProgress(0);
-      setAnalysisStatusText('Đang nạp AI Engine Stockfish...');
-      const controller = new AbortController();
-      analysisAbortControllerRef.current = controller;
-
-      const report = await AnalysisEngine.analyzeGame(moves, {
-        abortSignal: controller.signal,
-        onProgress: (percent, statusText) => {
-          setAnalysisProgress(percent);
-          if (statusText) setAnalysisStatusText(statusText);
-        },
-      });
-
-      setAnalysisReport(report);
-      setIsGameOverModalOpen(false);
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') {
-        console.error('Lỗi phân tích ván đấu:', err);
-      }
-    } finally {
-      setIsReviewAnalyzing(false);
-      analysisAbortControllerRef.current = null;
-    }
-  };
-
   // Tạo phòng bạn bè
   const handleCreateFriendRoom = () => {
     createFriendRoom({
       userId: user ? user.username : `guest_host_${Math.floor(Math.random() * 1000)}`,
-      username: user ? user.username : 'Chủ phòng (Guest)',
+      username: user ? user.username : 'Chủ phòng',
       eloRating: user ? user.eloRating : 1200,
     });
   };
@@ -717,77 +787,14 @@ export default function Home() {
   const handleJoinFriendRoom = (code: string) => {
     joinFriendRoom(code, {
       userId: user ? user.username : `guest_join_${Math.floor(Math.random() * 1000)}`,
-      username: user ? user.username : 'Khách (Guest)',
+      username: user ? user.username : 'Khách',
       eloRating: user ? user.eloRating : 1200,
     });
   };
 
-  // Xác nhận Rời phòng đấu
-  const handleConfirmLeaveRoom = () => {
-    if (activeMatch) {
-      resignMatch(activeMatch.roomId);
-    }
-    localStorage.removeItem('chess_active_online_match');
-    setIsLeaveModalOpen(false);
-    setActiveMode(null);
-    clearActiveMatch();
-    resetGame();
-    setLocalGameOverStatus(null);
-    setCustomGameOverMsg(undefined);
-    setCurrentMatchEloResult(null);
-    setIsGameOverModalOpen(false);
-    if (tournamentData?.status === 'FINISHED') {
-      setTournamentData(null);
-      setTournamentChampionId(null);
-    }
-  };
-
-  // Xác nhận Đầu hàng
-  const handleConfirmResign = () => {
-    setIsResignModalOpen(false);
-    localStorage.removeItem('chess_active_online_match');
-
-    if (activeMatch) {
-      resignMatch(activeMatch.roomId);
-    } else {
-      const losingStatus = playerColor === 'w' ? 'BLACK_WIN' : 'WHITE_WIN';
-      setLocalGameOverStatus(losingStatus);
-      setCurrentEndReason('RESIGNED');
-      setCustomGameOverMsg('Bạn đã đầu hàng. Trận thắng thuộc về Stockfish Engine!');
-      setIsGameOverModalOpen(true);
-      sounds.playGameEndLose();
-    }
-  };
-
-  // Xử lý nút Chơi Ván Mới / Tạo Phòng Mới
-  const handlePlayAgain = () => {
-    setLocalGameOverStatus(null);
-    setCustomGameOverMsg(undefined);
-    setCurrentMatchEloResult(null);
-    setIsGameOverModalOpen(true);
-
-    const wasRated = activeMatch?.isRated;
-    localStorage.removeItem('chess_active_online_match');
-    clearActiveMatch();
-    resetGame();
-
-    if (wasRated) {
-      if (user) {
-        joinQueue({
-          userId: user.username,
-          username: user.username,
-          eloRating: user.eloRating || 1200,
-        });
-      }
-    } else {
-      setActiveMode(null);
-      setIsFriendModalOpen(true);
-    }
-  };
-
   // Xử lý thả quân cờ
   const handlePieceDrop = (from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
-    if ((activeMode === 'online' || activeMode === 'tournament') && activeMatch) {
+    if (activeMatch) {
       if (!isConnected) return false;
       const isMyTurn = game.turn() === playerColor;
       if (!isMyTurn || game.isGameOver() || currentStatus !== 'IN_PROGRESS') return false;
@@ -806,91 +813,162 @@ export default function Home() {
       return false;
     }
 
+    if (activeMode === 'friend' && !activeMatch) {
+      return false;
+    }
+
     return makePlayerMove(from, to, promotion);
   };
 
   const handleLogout = () => {
-    // 1. Nếu đang trong ván đấu trực tuyến (PvP hoặc Tournament) và trận đang diễn ra -> Xử lý đầu hàng
-    if (activeMatch && (activeMode === 'online' || activeMode === 'tournament') && currentStatus === 'IN_PROGRESS') {
+    if (activeMatch && currentStatus === 'IN_PROGRESS') {
       resignMatch(activeMatch.roomId);
     }
 
-    // 2. Nếu đang tìm trận xếp hạng -> Rời hàng chờ
     if (isSearchingQueue) {
       leaveQueue();
     }
 
-    // 3. Nếu đang tạo phòng bạn bè chờ khách -> Hủy phòng bạn bè
     if (createdRoomCode) {
       cancelFriendRoom();
     }
 
-    // 4. Báo Server hủy đăng ký socket của user này
-    unregisterUser();
-
-    // 5. Dọn dẹp toàn bộ dữ liệu lưu trữ
     localStorage.removeItem('chess_token');
     localStorage.removeItem('chess_user');
     localStorage.removeItem('chess_active_online_match');
+    setUser(null);
+    setActiveMode(null);
+    clearActiveMatch();
+    resetGame();
+    resetGameOverState();
+    setIsGameOverModalOpen(false);
+  };
 
-    // 6. Dọn dẹp trạng thái ván cờ và đưa về Menu chính
+  const handleConfirmLogout = () => {
+    handleLogout();
+    setIsLogoutModalOpen(false);
+  };
+
+  const handleConfirmLeaveRoom = () => {
+    if (activeMatch && currentStatus === 'IN_PROGRESS') {
+      resignMatch(activeMatch.roomId);
+    }
+    if (isSearchingQueue) {
+      leaveQueue();
+    }
+    if (createdRoomCode) {
+      cancelFriendRoom();
+    }
     clearActiveMatch();
     setActiveMode(null);
     resetGame();
-    setLocalGameOverStatus(null);
-    setCustomGameOverMsg(undefined);
-    setCurrentEndReason(undefined);
-    setCurrentMatchEloResult(null);
+    setIsLeaveModalOpen(false);
+    resetGameOverState();
     setIsGameOverModalOpen(false);
-    setUser(null);
   };
 
-  // Xác định Thông tin Đối thủ & Người chơi
-  const isUserWhite = activeMatch ? activeMatch.yourColor === 'w' : playerColor === 'w';
+  const handleConfirmResign = () => {
+    if (activeMatch && currentStatus === 'IN_PROGRESS') {
+      resignMatch(activeMatch.roomId);
+    }
+    setIsResignModalOpen(false);
+    if (activeMode === 'bots') {
+      setLocalGameOverStatus(playerColor === 'w' ? 'BLACK_WIN' : 'WHITE_WIN');
+      setCurrentEndReason('RESIGNED');
+      setCustomGameOverMsg('Bạn đã chấp nhận đầu hàng trước máy tính.');
+      setIsGameOverModalOpen(true);
+    }
+  };
+
+  const handlePlayAgain = () => {
+    resetGameOverState();
+    setIsGameOverModalOpen(false);
+    processedGameOverRef.current = null;
+
+    if (activeMode === 'bots') {
+      resetGame({ autoTriggerAi: true });
+    } else if (activeMode === 'friend' || (activeMatch && !activeMatch.isRated && !activeMatch.isTournament)) {
+      clearActiveMatch();
+      setActiveMode('friend');
+      setIsFriendModalOpen(true);
+      resetGame();
+    } else if (activeMode === 'online') {
+      clearActiveMatch();
+      if (user) {
+        if (user.token) {
+          registerUser(user.token, user.id || user.username);
+        }
+        joinQueue({
+          userId: user.id || user.username,
+          username: user.username,
+          eloRating: user.eloRating || 1200,
+        });
+      }
+    }
+  };
+
+  const handleBackToMenu = () => {
+    resetGameOverState();
+    setActiveMode(null);
+    clearActiveMatch();
+    resetGame();
+    setIsGameOverModalOpen(false);
+    processedGameOverRef.current = null;
+    if (tournamentData?.status === 'FINISHED') {
+      setTournamentData(null);
+      setTournamentChampionId(null);
+    }
+  };
+
   const opponentInfo = activeMatch
-    ? isUserWhite
+    ? playerColor === 'w'
       ? activeMatch.blackPlayer
       : activeMatch.whitePlayer
     : null;
+
   const myInfo = activeMatch
-    ? isUserWhite
+    ? playerColor === 'w'
       ? activeMatch.whitePlayer
       : activeMatch.blackPlayer
     : null;
 
-  // Xác định người chơi hiện tại có phải Quán quân Giải đấu (Tournament Champion)
   const isTournamentChampion =
-    (activeMode === 'tournament' || !!activeMatch?.isTournament) &&
+    (activeMode === 'tournament' || Boolean(activeMatch?.isTournament)) &&
     (tournamentChampionId !== null || tournamentData?.status === 'FINISHED') &&
     (tournamentChampionId === user?.id ||
       tournamentChampionId === user?.username ||
       tournamentData?.championId === user?.id ||
       tournamentData?.championId === user?.username ||
-      (!!user?.username &&
+      (Boolean(user?.username) &&
         tournamentData?.players?.find((p) => p.userId === (tournamentChampionId || tournamentData?.championId))?.username === user?.username));
 
   return (
-    <div className="h-[100dvh] w-screen overflow-hidden bg-[#161512] text-[#C3C1C0] flex select-none">
-      {/* Sidebar (Desktop cố định bên trái, Mobile trượt Drawer khi mở nút 3 gạch) */}
+    <div className="h-[100dvh] w-screen overflow-hidden bg-[#0B0F19] text-[#E2E8F0] flex select-none">
+      {/* Sidebar Điều Hướng */}
       <Sidebar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab: ActiveTab) => {
+          if (activeMatch && currentStatus === 'IN_PROGRESS') {
+            setIsLeaveModalOpen(true);
+            return;
+          }
+          setActiveTab(tab);
+        }}
         user={user}
         onOpenAuthModal={() => setIsAuthOpen(true)}
-        onLogout={handleLogout}
+        onLogout={() => setIsLogoutModalOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main View Area */}
-      <main className="flex-1 h-full overflow-y-auto md:overflow-hidden flex flex-col p-1.5 sm:p-2 md:p-4 bg-radial-glow">
-        
+      <main className={`flex-1 h-full flex flex-col p-1.5 sm:p-2 md:p-4 bg-radial-glow ${replayMatch ? 'overflow-y-auto' : 'overflow-y-auto md:overflow-hidden'}`}>
         {/* TOP HEADER BAR CHO MOBILE (< md) */}
-        <header className="md:hidden flex items-center justify-between p-2 sm:p-2.5 bg-[#262421] rounded-2xl border border-[#312E2B] mb-1.5 shadow-lg shrink-0">
+        <header className="md:hidden flex items-center justify-between p-2 sm:p-2.5 bg-[#16202E] rounded-2xl border border-[#2A374A] mb-1.5 shadow-lg shrink-0">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="p-2 rounded-xl bg-[#2F2D2A] text-white hover:bg-[#383531] border border-[#3A3733] transition-colors active:scale-95"
+              className="p-2 rounded-xl bg-[#1E293B] text-white hover:bg-[#2A374A] border border-[#334155] transition-colors active:scale-95"
               title="Menu Điều Hướng"
             >
               <Menu className="w-5 h-5 text-pink-400" />
@@ -913,18 +991,24 @@ export default function Home() {
               </button>
             </div>
           ) : (activeMode || activeMatch) && activeTab === 'play' ? (
-            <div className="flex items-center gap-1.5">
-              {/* Nút xem Lịch sử nước đi */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleMute}
+                className="p-1.5 px-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                title={isMuted ? "Bật âm thanh" : "Tắt âm thanh"}
+              >
+                {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+              </button>
+
               <button
                 onClick={() => setIsMoveHistoryModalOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 text-xs font-bold transition-all active:scale-95"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 text-xs font-bold transition-all active:scale-95"
                 title="Xem Lịch sử nước đi"
               >
                 <ScrollText className="w-3.5 h-3.5" />
                 <span className="font-mono text-[11px]">({moveHistory.length})</span>
               </button>
 
-              {/* Nút Đầu hàng */}
               <button
                 onClick={() => setIsResignModalOpen(true)}
                 className="p-1.5 px-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-all active:scale-95"
@@ -933,7 +1017,6 @@ export default function Home() {
                 <Flag className="w-3.5 h-3.5" />
               </button>
 
-              {/* Nút Rời phòng */}
               <button
                 onClick={() => setIsLeaveModalOpen(true)}
                 className="p-1.5 px-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all active:scale-95"
@@ -943,531 +1026,97 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <div className="text-[11px] text-pink-400 font-bold bg-pink-500/10 px-2.5 py-1 rounded-full border border-pink-500/20">
-              v1.2 Mobile
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={toggleMute}
+                className="p-1.5 px-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition-all active:scale-95"
+                title={isMuted ? "Bật âm thanh" : "Tắt âm thanh"}
+              >
+                {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+              </button>
             </div>
           )}
         </header>
 
-        {/* TAB CHƠI CỜ (PLAY) */}
+        {/* 1. TAB CHƠI CỜ (PLAY) */}
         {activeTab === 'play' && (
-          <div className="w-full max-w-7xl mx-auto flex-1 min-h-0 flex items-center justify-center">
-            
-            {/* MÀN HÌNH CHỌN CHẾ ĐỘ CHƠI BAN ĐẦU */}
-            {!activeMode && !activeMatch && !replayMatch ? (
-              <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center p-2 md:p-4">
-                <PlayMenu onSelectMode={handleSelectMode} />
-              </div>
-            ) : (
-              /* MÀN HÌNH BÀN CỜ THI ĐẤU & XEM LẠI */
-              <div className="w-full h-full grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center justify-center">
-                
-                {/* Left Column (Desktop 7-8/12 Cols, Mobile 100%): Bàn cờ & Player Cards */}
-                <div className="md:col-span-7 lg:col-span-8 flex flex-col items-center justify-between h-full py-0.5 md:py-1">
-                  
-                  {/* BANNER THÔNG BÁO ĐỐI THỦ MẤT KẾT NỐI (RECONNECT GRACE PERIOD) */}
-                  {disconnectedOpponent && (
-                    <div className="w-full max-w-[480px] mb-1 p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-2xl flex items-center justify-between text-amber-300 text-xs font-bold shadow-lg animate-pulse shrink-0">
-                      <span className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Đối thủ ({disconnectedOpponent.disconnectedPlayer}) tạm mất kết nối. Đang chờ:</span>
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-xl bg-amber-500/30 text-amber-200 font-mono font-black text-xs border border-amber-500/50 shadow-inner">
-                        {reconnectCountdown}s
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Card ĐỐI THỦ / QUÂN ĐEN */}
-                  <PlayerCard
-                    isAi={!replayMatch && (activeMode === 'bots' || (!activeMode && !activeMatch))}
-                    name={
-                      replayMatch
-                        ? replayMatch.blackUsername
-                        : activeMatch
-                        ? opponentInfo?.username || 'Đối thủ Online'
-                        : activeMode === 'friend'
-                        ? 'Bạn bè (Player 2)'
-                        : 'Stockfish Engine'
-                    }
-                    subText={
-                      replayMatch
-                        ? `${replayMatch.blackOldElo ? `Elo: ${replayMatch.blackOldElo} • ` : ''}Quân Đen`
-                        : activeMatch
-                        ? activeMatch.isRated
-                          ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
-                          : `Phòng Bạn Bè • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
-                        : activeMode === 'bots'
-                        ? difficulty === 1
-                          ? 'Dễ (~800 Elo)'
-                          : difficulty === 2
-                          ? 'Trung bình (~1300 Elo)'
-                          : 'Khó (~2000 Elo)'
-                        : 'Phòng thi đấu'
-                    }
-                    color={replayMatch ? 'b' : (playerColor === 'w' ? 'b' : 'w')}
-                    isThinking={false}
-                    gameStatus={replayMatch ? 'GAME_OVER' : currentStatus}
-                    timeLeftMs={playerColor === 'w' ? blackDisplayTimeMs : whiteDisplayTimeMs}
-                    isClockActive={!replayMatch && currentStatus === 'IN_PROGRESS' && currentTurn === (playerColor === 'w' ? 'b' : 'w')}
-                  />
-
-                  {/* Bàn cờ Cờ vua */}
-                  <ChessBoardComponent
-                    game={game}
-                    fen={fen}
-                    playerColor={replayMatch ? 'w' : playerColor}
-                    onPieceDrop={handlePieceDrop}
-                    disabled={replayMatch !== null || ((activeMode === 'online' || activeMode === 'tournament') ? game.turn() !== playerColor || currentStatus !== 'IN_PROGRESS' : isAiThinking)}
-                  />
-
-                  {/* Card BẢN THÂN / QUÂN TRẮNG */}
-                  <PlayerCard
-                    isAi={false}
-                    name={
-                      replayMatch
-                        ? replayMatch.whiteUsername
-                        : activeMatch
-                        ? myInfo?.username || 'Bạn'
-                        : user
-                        ? user.username
-                        : 'Người chơi (Guest)'
-                    }
-                    subText={
-                      replayMatch
-                        ? `${replayMatch.whiteOldElo ? `Elo: ${replayMatch.whiteOldElo} • ` : ''}Quân Trắng`
-                        : activeMatch
-                        ? activeMatch.isRated
-                          ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
-                          : `Phòng Bạn Bè • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
-                        : playerColor === 'w'
-                        ? 'Cầm quân Trắng'
-                        : 'Cầm quân Đen'
-                    }
-                    color={replayMatch ? 'w' : playerColor}
-                    gameStatus={replayMatch ? 'GAME_OVER' : currentStatus}
-                    timeLeftMs={playerColor === 'w' ? whiteDisplayTimeMs : blackDisplayTimeMs}
-                    isClockActive={!replayMatch && currentStatus === 'IN_PROGRESS' && currentTurn === playerColor}
-                  />
-
-                  {/* THANH ĐIỀU KHIỂN XEM LẠI NƯỚC ĐI (REPLAY CONTROLS) */}
-                  {replayMatch && (
-                    <div className="w-full max-w-[480px] mt-2 p-2.5 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-2 shadow-xl">
-                      {/* Hàng trên: Thông tin xem lại & Nút thoát (Mobile + Desktop) */}
-                      <div className="flex items-center justify-between pb-1.5 border-b border-[#312E2B]">
-                        <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                          <span>📜</span>
-                          <span>{replayMatch.whiteUsername} vs {replayMatch.blackUsername}</span>
-                        </span>
-                        <button
-                          onClick={handleExitReplay}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-[11px] font-bold transition-all shadow active:scale-95 shrink-0"
-                        >
-                          <ArrowLeft className="w-3.5 h-3.5" />
-                          <span>{replayOrigin?.source === 'tournament_detail' ? 'Về Sơ đồ' : 'Thoát xem'}</span>
-                        </button>
-                      </div>
-
-                      {/* Hàng dưới: Các nút tua nước đi */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => goToReplayMove(0)}
-                            disabled={replayMoveIndex === 0}
-                            className="p-2 rounded-xl bg-[#2F2D2A] hover:bg-[#3A3733] disabled:opacity-40 disabled:hover:bg-[#2F2D2A] text-white transition-all"
-                            title="Về đầu ván"
-                          >
-                            <ChevronFirst className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => goToReplayMove(replayMoveIndex - 1)}
-                            disabled={replayMoveIndex === 0}
-                            className="p-2 rounded-xl bg-[#2F2D2A] hover:bg-[#3A3733] disabled:opacity-40 disabled:hover:bg-[#2F2D2A] text-white transition-all"
-                            title="Nước trước"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="text-center">
-                          <span className="font-mono font-bold text-xs text-pink-400">
-                            Nước: {replayMoveIndex} / {replayMatch.moves.length}
-                          </span>
-                          <p className="text-[10px] text-[#8B8987]">
-                            {replayMoveIndex === 0
-                              ? 'Thế cờ bắt đầu'
-                              : `Nước vừa đi: ${replayMatch.moves[replayMoveIndex - 1]}`}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => goToReplayMove(replayMoveIndex + 1)}
-                            disabled={replayMoveIndex >= replayMatch.moves.length}
-                            className="p-2 rounded-xl bg-[#2F2D2A] hover:bg-[#3A3733] disabled:opacity-40 disabled:hover:bg-[#2F2D2A] text-white transition-all"
-                            title="Nước tiếp"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => goToReplayMove(replayMatch.moves.length)}
-                            disabled={replayMoveIndex >= replayMatch.moves.length}
-                            className="p-2 rounded-xl bg-[#2F2D2A] hover:bg-[#3A3733] disabled:opacity-40 disabled:hover:bg-[#2F2D2A] text-white transition-all"
-                            title="Đến cuối ván"
-                          >
-                            <ChevronLast className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* THANH ĐIỀU HƯỚNG NHANH KHI ĐÓNG MODAL XEM BÀN CỜ */}
-                  {!replayMatch && !isGameOverModalOpen && currentStatus !== 'IN_PROGRESS' && currentStatus !== 'IDLE' && (
-                    <div className="w-full max-w-[480px] mt-1.5 p-2 bg-[#262421]/95 border border-[#3A3733] rounded-2xl shadow-xl flex items-center justify-between gap-2 animate-in slide-in-from-bottom-2 duration-200 shrink-0">
-                      <span className="text-xs font-bold text-pink-400 pl-2 truncate">
-                        🏁 Ván đấu đã kết thúc
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {activeMode === 'tournament' ? (
-                          <button
-                            onClick={() => setIsTournamentModalOpen(true)}
-                            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1 shadow transition-all active:scale-95"
-                          >
-                            <Trophy className="w-3.5 h-3.5" />
-                            <span>Xem Bảng Đấu</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={handlePlayAgain}
-                            className="px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center gap-1 shadow transition-all active:scale-95"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Ván Mới</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setLocalGameOverStatus(null);
-                            setCustomGameOverMsg(undefined);
-                            setCurrentMatchEloResult(null);
-                            setActiveMode(null);
-                            clearActiveMatch();
-                            resetGame();
-                            setIsGameOverModalOpen(false);
-                          }}
-                          className="px-2.5 py-1.5 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center gap-1 transition-colors"
-                        >
-                          <ArrowLeft className="w-3.5 h-3.5" />
-                          <span>Menu</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* BẢNG CẤU HÌNH NHỎ GỌN TRÊN MOBILE (< md) */}
-                  {!replayMatch && (
-                    <div className="md:hidden w-full max-w-[500px] mt-1.5 p-2 bg-[#262421] rounded-2xl border border-[#312E2B] shadow-xl flex flex-col gap-1.5 shrink-0">
-                    {activeMode === 'bots' && (
-                      <div className="flex flex-col gap-1.5">
-                        <DifficultySelector
-                          difficulty={difficulty}
-                          onSelect={setDifficulty}
-                          disabled={isAiThinking}
-                        />
-                        {!activeMatch && (
-                          <GameControls
-                            onReset={() => {
-                              setLocalGameOverStatus(null);
-                              setCustomGameOverMsg(undefined);
-                              setCurrentMatchEloResult(null);
-                              setIsGameOverModalOpen(true);
-                              resetGame();
-                            }}
-                            onToggleColor={() => {
-                              setLocalGameOverStatus(null);
-                              setCustomGameOverMsg(undefined);
-                              setCurrentMatchEloResult(null);
-                              setIsGameOverModalOpen(true);
-                              togglePlayerColor();
-                            }}
-                            playerColor={playerColor}
-                            disabled={isAiThinking}
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {activeMatch && (
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-[#1C1A17] rounded-xl text-xs">
-                        <span className="text-pink-400 font-bold">
-                          {activeMatch.isRated ? '⚔️ Đấu Xếp Hạng Online' : '👥 Đấu Bạn Bè (Custom Room)'}
-                        </span>
-                        <span className="text-amber-400 font-mono font-bold">
-                          {activeMatch.isRated ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200}` : 'Giao hữu'}
-                        </span>
-                      </div>
-                    )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Right Column (Desktop 4-5/12 Cols, Ẩn trên Mobile) */}
-                <div className="hidden md:flex md:col-span-5 lg:col-span-4 flex-col gap-3 h-full max-h-[calc(100vh-40px)] justify-between">
-                  <div className="flex flex-col gap-3 h-full justify-between">
-                    
-                    {/* Top Bar: Nút Rời Phòng / Thoát Xem lại */}
-                    <div className="p-3 bg-[#262421] rounded-2xl border border-[#312E2B] flex items-center justify-between shadow-lg shrink-0 gap-2">
-                      {replayMatch ? (
-                        <button
-                          onClick={handleExitReplay}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold transition-all shadow"
-                        >
-                          <ArrowLeft className="w-4 h-4" />
-                          <span>{replayOrigin?.source === 'tournament_detail' ? 'Quay lại Sơ đồ Giải' : 'Quay lại Lịch sử'}</span>
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setIsLeaveModalOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all"
-                          >
-                            <ArrowLeft className="w-4 h-4" />
-                            <span>Rời phòng</span>
-                          </button>
-
-                          <button
-                            onClick={() => setIsResignModalOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold transition-all"
-                          >
-                            <Flag className="w-4 h-4" />
-                            <span>Đầu hàng</span>
-                          </button>
-                        </div>
-                      )}
-
-                      <span className="text-[11px] font-black text-pink-400 uppercase tracking-wider hidden sm:inline">
-                        {replayMatch
-                          ? `📜 XEM LẠI: ${replayMatch.whiteUsername} vs ${replayMatch.blackUsername}`
-                          : activeMatch
-                          ? activeMatch.isRated
-                            ? '⚔️ ĐẤU XẾP HẠNG ONLINE (RATED)'
-                            : '👥 ĐẤU BẠN BÈ (CUSTOM ROOM)'
-                          : activeMode === 'bots'
-                          ? '🤖 ĐÁNH VỚI MÁY'
-                          : '👥 ĐẤU BẠN BÈ'}
-                      </span>
-                    </div>
-
-                    {/* Controls / Info Box Desktop */}
-                    <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-3.5 shadow-xl shrink-0">
-                      <div className="flex items-center justify-between border-b border-[#312E2B] pb-2">
-                        <h2 className="font-bold text-xs text-white flex items-center gap-1.5">
-                          <Cpu className="w-4 h-4 text-pink-400" />
-                          {replayMatch ? 'Thông tin Ván đấu' : 'Cấu hình Trận đấu'}
-                        </h2>
-                        <span className="text-[10px] text-pink-400 font-semibold bg-pink-500/10 px-2 py-0.5 rounded-full border border-pink-500/20">
-                          {replayMatch
-                            ? replayMatch.gameMode === 'TOURNAMENT'
-                              ? '🏆 Ván Đấu Giải Đấu'
-                              : replayMatch.isRated
-                              ? '⚔️ Đấu Xếp Hạng (Rated)'
-                              : '👥 Đấu Bạn Bè (Unrated)'
-                            : activeMatch
-                            ? activeMatch.isRated
-                              ? 'Ghép trận Xếp hạng'
-                              : 'Phòng Giao Hữu (Unrated)'
-                            : 'Đấu với Máy (PvAI)'}
-                        </span>
-                      </div>
-
-                      {replayMatch ? (
-                        <div className="flex flex-col gap-2 text-xs">
-                          {/* Bên Thắng & Bên Thua */}
-                          <div className="flex items-center justify-between p-2 rounded-xl bg-[#1C1A17] border border-[#312E2B]">
-                            <span className="text-[#8B8987]">Bên Thắng cuộc:</span>
-                            <span className="font-bold text-emerald-400">
-                              {replayMatch.winnerColor === 'w'
-                                ? `⚪ ${replayMatch.whiteUsername}`
-                                : replayMatch.winnerColor === 'b'
-                                ? `⚫ ${replayMatch.blackUsername}`
-                                : '🤝 Hòa cờ'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between p-2 rounded-xl bg-[#1C1A17] border border-[#312E2B]">
-                            <span className="text-[#8B8987]">Bên Thất bại:</span>
-                            <span className="font-bold text-rose-400">
-                              {replayMatch.winnerColor === 'w'
-                                ? `⚫ ${replayMatch.blackUsername}`
-                                : replayMatch.winnerColor === 'b'
-                                ? `⚪ ${replayMatch.whiteUsername}`
-                                : 'Không có'}
-                            </span>
-                          </div>
-
-                          {/* Chi tiết lý do Thắng / Thua */}
-                          <div className="flex items-center justify-between p-2 rounded-xl bg-[#1C1A17] border border-[#312E2B]">
-                            <span className="text-[#8B8987]">Lý do thắng/thua:</span>
-                            <span className="font-bold text-amber-400">
-                              {replayMatch.winnerColor === 'draw'
-                                ? 'Hòa cờ (Stalemate / Insufficient)'
-                                : replayMatch.endReason === 'CHECKMATE'
-                                ? 'Chiếu hết Vua (Checkmate)'
-                                : replayMatch.endReason === 'RESIGNED'
-                                ? `${replayMatch.winnerColor === 'w' ? replayMatch.blackUsername : replayMatch.whiteUsername} Đầu hàng`
-                                : replayMatch.endReason === 'TIMEOUT'
-                                ? `${replayMatch.winnerColor === 'w' ? replayMatch.blackUsername : replayMatch.whiteUsername} Hết thời gian`
-                                : replayMatch.endReason === 'ABANDONED'
-                                ? `${replayMatch.winnerColor === 'w' ? replayMatch.blackUsername : replayMatch.whiteUsername} Rời trận (>45s)`
-                                : 'Kết thúc ván cờ'}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="p-2 rounded-xl bg-[#1C1A17] border border-[#312E2B] text-center">
-                              <p className="text-[10px] text-[#8B8987]">Nước đi</p>
-                              <p className="font-mono font-bold text-white mt-0.5">{replayMatch.movesCount}</p>
-                            </div>
-                            <div className="p-2 rounded-xl bg-[#1C1A17] border border-[#312E2B] text-center">
-                              <p className="text-[10px] text-[#8B8987]">Thời gian</p>
-                              <p className="font-mono font-bold text-amber-400 mt-0.5">
-                                {replayMatch.timeControl
-                                  ? `${Math.round(replayMatch.timeControl.initialSeconds / 60)}+${replayMatch.timeControl.incrementSeconds}`
-                                  : '10+0'}
-                              </p>
-                            </div>
-                            <div className="p-2 rounded-xl bg-[#1C1A17] border border-[#312E2B] text-center">
-                              <p className="text-[10px] text-[#8B8987]">Biến động Elo</p>
-                              <p className="font-mono font-bold text-emerald-400 mt-0.5">
-                                {replayMatch.gameMode === 'TOURNAMENT'
-                                  ? 'Giải đấu'
-                                  : replayMatch.isRated && replayMatch.whiteEloDelta !== undefined
-                                  ? `±${Math.abs(replayMatch.whiteEloDelta)}`
-                                  : 'Giao hữu'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {activeMode === 'bots' && (
-                            <DifficultySelector
-                              difficulty={difficulty}
-                              onSelect={setDifficulty}
-                              disabled={isAiThinking}
-                            />
-                          )}
-
-                          {!activeMatch && (
-                            <GameControls
-                              onReset={() => {
-                                setLocalGameOverStatus(null);
-                                setCustomGameOverMsg(undefined);
-                                setCurrentMatchEloResult(null);
-                                setIsGameOverModalOpen(false);
-                                resetGame({ autoTriggerAi: activeMode === 'bots' });
-                              }}
-                              onToggleColor={() => {
-                                setLocalGameOverStatus(null);
-                                setCustomGameOverMsg(undefined);
-                                setCurrentMatchEloResult(null);
-                                setIsGameOverModalOpen(false);
-                                togglePlayerColor();
-                              }}
-                              playerColor={playerColor}
-                              disabled={isAiThinking}
-                            />
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Move History Desktop */}
-                    <MoveHistory
-                      moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory}
-                      analysisByPly={replayMatch || !isLiveAnalysisEnabled ? undefined : analysisByPly}
-                      selectedPly={replayMatch || !isLiveAnalysisEnabled ? null : selectedPly}
-                      onSelectPly={setSelectedPly}
-                      showLiveAnalysis={isLiveAnalysisEnabled}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <PlayTab
+            activeMode={activeMode}
+            activeMatch={activeMatch}
+            replayMatch={replayMatch}
+            replayMoveIndex={replayMoveIndex}
+            replayOrigin={replayOrigin}
+            disconnectedOpponent={disconnectedOpponent}
+            reconnectCountdown={reconnectCountdown}
+            opponentInfo={opponentInfo}
+            myInfo={myInfo}
+            user={user}
+            game={game}
+            fen={fen}
+            playerColor={playerColor}
+            materialDetails={materialDetails}
+            currentStatus={currentStatus}
+            currentTurn={currentTurn}
+            whiteDisplayTimeMs={whiteDisplayTimeMs}
+            blackDisplayTimeMs={blackDisplayTimeMs}
+            difficulty={difficulty}
+            isAiThinking={isAiThinking}
+            isMuted={isMuted}
+            moveHistory={moveHistory}
+            analysisByPly={replayMatch || !isLiveAnalysisEnabled ? undefined : analysisByPly}
+            selectedPly={replayMatch || !isLiveAnalysisEnabled ? null : selectedPly}
+            isLiveAnalysisEnabled={isLiveAnalysisEnabled}
+            isGameOverModalOpen={isGameOverModalOpen}
+            onSelectMode={handleSelectMode}
+            handlePieceDrop={handlePieceDrop}
+            handleExitReplay={handleExitReplay}
+            goToReplayMove={goToReplayMove}
+            handlePlayAgain={handlePlayAgain}
+            handleBackToMenu={handleBackToMenu}
+            setDifficulty={setDifficulty}
+            resetGame={resetGame}
+            togglePlayerColor={togglePlayerColor}
+            toggleMute={toggleMute}
+            setIsGameOverModalOpen={setIsGameOverModalOpen}
+            setIsTournamentModalOpen={setIsTournamentModalOpen}
+            setIsFriendModalOpen={setIsFriendModalOpen}
+            setIsLeaveModalOpen={setIsLeaveModalOpen}
+            setIsResignModalOpen={setIsResignModalOpen}
+            setSelectedPly={setSelectedPly}
+            replayAnalysisByPly={replayAnalysisByPly}
+            analysisReport={replayMatch ? (AnalysisCacheService.getCache(replayMatch._id, replayMatch.moves) || analysisReport) : analysisReport}
+            onOpenAnalysisReport={() => {
+              if (!replayMatch) return;
+              const cached = AnalysisCacheService.getCache(replayMatch._id, replayMatch.moves);
+              if (cached) {
+                setAnalysisReport(cached);
+              } else {
+                handleStartAnalysis(replayMatch.moves, replayMatch._id, user?.token);
+              }
+            }}
+          />
         )}
 
-        {/* TAB LEADERBOARD (BẢNG XẾP HẠNG THỰC TẾ TỪ MONGODB) */}
+        {/* 2. TAB BẢNG XẾP HẠNG (LEADERBOARD) */}
         {activeTab === 'leaderboard' && (
-          <div className="w-full max-w-4xl mx-auto h-full overflow-hidden flex flex-col p-2 md:p-4">
-            <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-4 md:p-6 flex flex-col h-full shadow-2xl">
-              <div className="flex items-center gap-3 border-b border-[#312E2B] pb-3 md:pb-4 mb-3 md:mb-4">
-                <Trophy className="w-6 h-6 md:w-7 md:h-7 text-amber-400" />
-                <div>
-                  <h2 className="text-base md:text-lg font-black text-white">Bảng Xếp Hạng Elo Quốc Tế</h2>
-                  <p className="text-[11px] md:text-xs text-[#8B8987]">
-                    Top cao thủ có điểm Elo cao nhất hệ thống Chess Online
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 md:pr-2">
-                {isLeaderboardLoading ? (
-                  <div className="flex items-center justify-center h-48 text-[#8B8987] text-xs">
-                    Đang tải bảng xếp hạng từ máy chủ...
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {(realLeaderboard.length > 0
-                      ? realLeaderboard.map((player, idx) => ({
-                          rank: idx + 1,
-                          name: player.username,
-                          elo: player.eloRating || 1200,
-                          wins: player.wins || 0,
-                          avatar: player.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${player.username}`,
-                        }))
-                      : [
-                          { rank: 1, name: 'Magnus Carlsen', elo: 2882, wins: 450, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=magnus' },
-                          { rank: 2, name: 'Hikaru Nakamura', elo: 2875, wins: 412, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=hikaru' },
-                          { rank: 3, name: user?.username || 'Phan Hồng Sơn', elo: user?.eloRating || 1200, wins: 12, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=sonsamset' },
-                        ]
-                    ).map((player) => (
-                      <div key={player.rank} className="flex items-center justify-between p-3 rounded-xl bg-[#2F2D2A] border border-[#3A3733]">
-                        <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
-                          <span className={`w-6 h-6 md:w-7 md:h-7 rounded-lg flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 ${
-                            player.rank === 1 ? 'bg-amber-500 text-slate-950' : player.rank === 2 ? 'bg-slate-300 text-slate-950' : 'bg-pink-600 text-white'
-                          }`}>
-                            #{player.rank}
-                          </span>
-                          <img src={player.avatar} alt="Avatar" className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-[#363431] shrink-0" />
-                          <div className="min-w-0">
-                            <p className="font-bold text-xs md:text-sm text-[#FFFFFF] truncate">{player.name}</p>
-                            <p className="text-[10px] md:text-[11px] text-[#8B8987]">Thắng: {player.wins} trận</p>
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <p className="font-black text-sm md:text-base text-amber-400 font-mono">🏆 {player.elo}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <LeaderboardTab
+            user={user}
+            realLeaderboard={realLeaderboard}
+            isLoading={isLeaderboardLoading}
+          />
         )}
 
-        {/* TAB LỊCH SỬ ĐẤU (MATCH HISTORY TỪ MONGODB) */}
+        {/* 3. TAB LỊCH SỬ ĐẤU (MATCH HISTORY) */}
         {activeTab === 'history' && (
-          <HistoryView
+          <HistoryTab
             currentUser={user}
             initialSubTab={historySubTab}
             onSelectReplay={(matchRecord: MatchRecord) => {
+              const cachedAnalysis = matchRecord.analysis || AnalysisCacheService.getCache(matchRecord._id, matchRecord.moves);
+              const matchToReplay = cachedAnalysis ? { ...matchRecord, analysis: cachedAnalysis as any } : matchRecord;
               setReplayOrigin({ source: 'history' });
               setHistorySubTab('matches');
-              setReplayMatch(matchRecord);
+              setReplayMatch(matchToReplay);
               setActiveTab('play');
               setActiveMode(null);
               clearActiveMatch();
@@ -1486,29 +1135,27 @@ export default function Home() {
               );
               setIsGameOverModalOpen(false);
             }}
-            onOpenAnalysis={(matchRecord: MatchRecord) => handleStartAnalysis(matchRecord.moves)}
+            onOpenAnalysis={(matchRecord: MatchRecord) => handleStartAnalysis(matchRecord.moves, matchRecord._id, user?.token)}
             onOpenTournamentDetail={(idOrCode: string) => setSelectedTournamentDetailId(idOrCode)}
             onOpenTournamentModal={() => setIsTournamentModalOpen(true)}
           />
         )}
 
-        {/* TAB GIẢI THẾ CỜ (CHESS PUZZLES) */}
-        {activeTab === 'puzzles' && (
-          <PuzzleView />
-        )}
+        {/* 4. TAB GIẢI THẾ CỜ (CHESS PUZZLES) */}
+        {activeTab === 'puzzles' && <PuzzleTab />}
 
-        {/* TAB HỌC CỜ (CHESS LESSONS) */}
-        {activeTab === 'learn' && (
-          <LearnView />
-        )}
+        {/* 5. TAB HỌC CỜ (CHESS LESSONS) */}
+        {activeTab === 'learn' && <LearnTab />}
       </main>
 
+      {/* POPUP ĐĂNG NHẬP / ĐĂNG KÝ */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onSuccessLogin={(userData) => setUser(userData)}
       />
 
+      {/* MODAL HÀNG CHỜ TÌM TRẬN ĐẤU XẾP HẠNG */}
       <MatchmakingModal
         isOpen={isSearchingQueue}
         onCancel={leaveQueue}
@@ -1516,6 +1163,7 @@ export default function Home() {
         timeControlLabel="10+0 Rapid"
       />
 
+      {/* MODAL PHÒNG THI ĐẤU BẠN BÈ */}
       <FriendRoomModal
         isOpen={isFriendModalOpen}
         onClose={() => setIsFriendModalOpen(false)}
@@ -1547,7 +1195,7 @@ export default function Home() {
         onTournamentUpdated={(t) => setTournamentData(t)}
       />
 
-      {/* POPUP CHI TIẾT GIẢI ĐẤU (XEM LẠI TỪ LỊCH SỬ) */}
+      {/* MODAL CHI TIẾT GIẢI ĐẤU */}
       <TournamentDetailModal
         isOpen={Boolean(selectedTournamentDetailId)}
         onClose={() => setSelectedTournamentDetailId(null)}
@@ -1590,10 +1238,10 @@ export default function Home() {
       <MoveHistoryModal
         isOpen={isMoveHistoryModalOpen}
         onClose={() => setIsMoveHistoryModalOpen(false)}
-        moveHistory={moveHistory}
-        analysisByPly={replayMatch || !isLiveAnalysisEnabled ? undefined : analysisByPly}
-        selectedPly={replayMatch || !isLiveAnalysisEnabled ? null : selectedPly}
-        onSelectPly={setSelectedPly}
+        moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory}
+        analysisByPly={replayMatch ? replayAnalysisByPly : (isLiveAnalysisEnabled ? analysisByPly : undefined)}
+        selectedPly={replayMatch ? replayMoveIndex : selectedPly}
+        onSelectPly={replayMatch ? (ply) => { if (ply !== null) goToReplayMove(ply); } : setSelectedPly}
         showLiveAnalysis={isLiveAnalysisEnabled}
       />
 
@@ -1602,39 +1250,59 @@ export default function Home() {
         isOpen={isGameOverModalOpen && !replayMatch}
         gameStatus={currentStatus}
         playerColor={playerColor}
-        isOnlineMatch={!!activeMatch}
+        isOnlineMatch={Boolean(activeMatch)}
         isRated={activeMatch?.isRated ?? false}
         endReason={currentEndReason}
         customMessage={customGameOverMsg}
         myEloResult={currentMatchEloResult}
         moveHistory={moveHistory}
-        isTournamentMatch={activeMode === 'tournament' || !!activeMatch?.isTournament}
+        isTournamentMatch={activeMode === 'tournament' || Boolean(activeMatch?.isTournament)}
         isChampion={isTournamentChampion}
-        onOpenAnalysis={() => handleStartAnalysis(moveHistory)}
+        onOpenAnalysis={() => handleStartAnalysis(moveHistory, activeMatch?.roomId || 'local_' + Date.now(), user?.token)}
         onViewBracket={() => {
           setIsGameOverModalOpen(false);
           setIsTournamentModalOpen(true);
         }}
         onPlayAgain={handlePlayAgain}
-        onCloseToReview={() => setIsGameOverModalOpen(false)}
-        onBackToMenu={() => {
-          setLocalGameOverStatus(null);
-          setCustomGameOverMsg(undefined);
-          setCurrentEndReason(undefined);
-          setCurrentMatchEloResult(null);
-          setActiveMode(null);
-          clearActiveMatch();
-          resetGame();
+        onCloseToReview={() => {
           setIsGameOverModalOpen(false);
-          if (tournamentData?.status === 'FINISHED') {
-            setTournamentData(null);
-            setTournamentChampionId(null);
+          if (moveHistory && moveHistory.length > 0) {
+            const matchId = activeMatch?.roomId || 'local_' + Date.now();
+            const cachedAnalysis = AnalysisCacheService.getCache(matchId, moveHistory);
+            const isWhite = playerColor === 'w';
+            const record: MatchRecord = {
+              _id: matchId,
+              whiteUserId: isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
+              blackUserId: !isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
+              whiteUsername: isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
+              blackUsername: !isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
+              gameMode: activeMode === 'tournament' ? 'TOURNAMENT' : activeMatch?.isRated ? 'PVP_RATED' : activeMode === 'friend' ? 'PVP_CUSTOM' : 'PV_AI',
+              winnerColor: currentStatus === 'WHITE_WIN' ? 'w' : currentStatus === 'BLACK_WIN' ? 'b' : 'draw',
+              endReason: (currentEndReason as any) || 'CHECKMATE',
+              isRated: Boolean(activeMatch?.isRated),
+              moves: [...moveHistory],
+              pgn: '',
+              finalFen: fen,
+              movesCount: moveHistory.length,
+              timeControl: {
+                initialSeconds: 600,
+                incrementSeconds: 0,
+              },
+              analysis: cachedAnalysis || undefined,
+              startedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+            };
+            setReplayOrigin({ source: 'history' });
+            setReplayMatch(record);
+            setReplayMoveIndex(moveHistory.length);
+            setBoardFen(fen, moveHistory);
           }
         }}
+        onBackToMenu={handleBackToMenu}
       />
 
       {/* GIAO DIỆN BÁO CÁO PHÂN TÍCH VÁN CỜ (REPORT VIEW) */}
-      {analysisReport && (
+      {analysisReport && !replayMatch && (
         <GameReportView
           report={analysisReport}
           onClose={() => {
@@ -1662,11 +1330,11 @@ export default function Home() {
       {/* OVERLAY TIẾN TRÌNH PHÂN TÍCH STOCKFISH */}
       {isReviewAnalyzing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in select-none">
-          <div className="w-full max-w-sm bg-[#262421] border border-[#3A3733] rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center">
+          <div className="w-full max-w-sm bg-[#16202E] border border-[#334155] rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center">
             <div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin mb-4" />
             <h3 className="text-base font-black text-white mb-1">Đang Phân Tích Ván Đấu</h3>
-            <p className="text-xs text-[#A8A6A4] mb-4">{analysisStatusText || 'Đang đánh giá các nước đi...'}</p>
-            <div className="w-full bg-[#1C1A17] rounded-full h-2.5 overflow-hidden border border-[#3A3733] mb-3">
+            <p className="text-xs text-[#94A3B8] mb-4">{analysisStatusText || 'Đang đánh giá các nước đi...'}</p>
+            <div className="w-full bg-[#0F172A] rounded-full h-2.5 overflow-hidden border border-[#334155] mb-3">
               <div
                 className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 transition-all duration-300"
                 style={{ width: `${analysisProgress}%` }}
@@ -1674,11 +1342,8 @@ export default function Home() {
             </div>
             <span className="text-xs font-mono font-bold text-indigo-400 mb-4">{analysisProgress}%</span>
             <button
-              onClick={() => {
-                analysisAbortControllerRef.current?.abort();
-                setIsReviewAnalyzing(false);
-              }}
-              className="py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-xs font-bold text-[#BAB8B6] transition-colors"
+              onClick={handleAbortAnalysis}
+              className="py-2 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-xs font-bold text-[#CBD5E1] transition-colors"
             >
               Hủy phân tích
             </button>
@@ -1700,15 +1365,23 @@ export default function Home() {
         onCancel={() => setIsResignModalOpen(false)}
       />
 
-      {/* POPUP THÔNG BÁO BỊ ĐĂNG XUẤT DO ĐĂNG NHẬP Ở NƠI KHÁC (SINGLE SESSION) */}
+      {/* POPUP XÁC NHẬN ĐĂNG XUẤT */}
+      <LogoutModal
+        isOpen={isLogoutModalOpen}
+        isInGame={Boolean(activeMatch && currentStatus === 'IN_PROGRESS')}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setIsLogoutModalOpen(false)}
+      />
+
+      {/* POPUP THÔNG BÁO BỊ ĐĂNG XUẤT DO ĐĂNG NHẬP Ở NƠI KHÁC */}
       {forceLogoutMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 select-none">
-          <div className="w-full max-w-sm bg-[#262421] border border-amber-500/40 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center">
+          <div className="w-full max-w-sm bg-[#16202E] border border-amber-500/40 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 shadow-lg shadow-amber-500/10">
               <AlertTriangle className="w-6 h-6" />
             </div>
             <h3 className="text-base font-extrabold text-white mb-2">Phiên làm việc đã kết thúc</h3>
-            <p className="text-xs text-[#BAB8B6] mb-5 leading-relaxed">
+            <p className="text-xs text-[#CBD5E1] mb-5 leading-relaxed">
               {forceLogoutMessage}
             </p>
             <button

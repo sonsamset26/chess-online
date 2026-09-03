@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { History, Swords, Calendar, Eye, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Trophy, Crown, BarChart2 } from 'lucide-react';
+import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
 
 export interface MatchRecord {
   _id: string;
@@ -23,6 +24,7 @@ export interface MatchRecord {
     initialSeconds: number;
     incrementSeconds: number;
   };
+  analysis?: any;
   startedAt: string;
   endedAt?: string;
   createdAt: string;
@@ -103,7 +105,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       // 2. Nếu accessToken hết hạn (401), tự động thực hiện Silent Refresh Token
       if (res.status === 401) {
         try {
-          const refreshRes = await fetch(`${apiUrl}/api/v1/auth/refresh-token`, {
+          const refreshRes = await fetch(`${apiUrl}/api/v1/auth/refresh`, {
             method: 'POST',
             credentials: 'include', // Gửi httpOnly cookie refreshToken
           });
@@ -224,10 +226,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   if (!currentUser) {
     return (
       <div className="w-full max-w-4xl mx-auto h-full flex items-center justify-center p-4">
-        <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-8 text-center max-w-md shadow-2xl">
-          <History className="w-12 h-12 text-[#8B8987] mx-auto mb-3" />
+        <div className="bg-[#16202E] rounded-2xl border border-[#2A374A] p-8 text-center max-w-md shadow-2xl">
+          <History className="w-12 h-12 text-[#94A3B8] mx-auto mb-3" />
           <h3 className="text-lg font-bold text-white mb-2">Vui lòng đăng nhập</h3>
-          <p className="text-xs text-[#8B8987]">
+          <p className="text-xs text-[#94A3B8]">
             Bạn cần đăng nhập tài khoản để lưu trữ và xem lại toàn bộ lịch sử các ván đấu đã tham gia.
           </p>
         </div>
@@ -237,15 +239,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto h-full overflow-hidden flex flex-col p-2 md:p-4">
-      <div className="bg-[#262421] rounded-2xl border border-[#312E2B] p-4 md:p-6 flex flex-col h-full shadow-2xl justify-between">
+      <div className="bg-[#16202E] rounded-2xl border border-[#2A374A] p-4 md:p-6 flex flex-col h-full shadow-2xl justify-between">
         <div>
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[#312E2B] pb-3 md:pb-4 mb-3 md:mb-4">
+          <div className="flex items-center justify-between border-b border-[#2A374A] pb-3 md:pb-4 mb-3 md:mb-4">
             <div className="flex items-center gap-3">
               <History className="w-6 h-6 md:w-7 md:h-7 text-pink-500" />
               <div>
                 <h2 className="text-base md:text-lg font-black text-white">Lịch Sử Thi Đấu</h2>
-                <p className="text-[11px] md:text-xs text-[#8B8987]">
+                <p className="text-[11px] md:text-xs text-[#94A3B8]">
                   Danh sách các ván cờ và giải đấu của kỳ thủ <span className="text-pink-400 font-bold">{currentUser.username}</span>
                 </p>
               </div>
@@ -260,7 +262,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 }
               }}
               disabled={activeSubTab === 'matches' ? loading : tournamentsLoading}
-              className="p-2 rounded-xl bg-[#2F2D2A] hover:bg-[#3A3733] border border-[#3A3733] text-[#8B8987] hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-[#94A3B8] hover:text-white transition-colors"
               title="Làm mới danh sách"
             >
               <RefreshCw
@@ -274,13 +276,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           </div>
 
           {/* TAB ĐIỀU HƯỚNG: VÁN ĐẤU CÁ NHÂN vs GIẢI ĐẤU */}
-          <div className="flex items-center gap-2 mb-3 md:mb-4 bg-[#1C1A17] p-1 rounded-xl border border-[#312E2B] w-fit">
+          <div className="flex items-center gap-2 mb-3 md:mb-4 bg-[#0F172A] p-1 rounded-xl border border-[#2A374A] w-fit">
             <button
               onClick={() => setActiveSubTab('matches')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeSubTab === 'matches'
                   ? 'bg-pink-600 text-white shadow-md'
-                  : 'text-[#8B8987] hover:text-white hover:bg-[#2A2825]'
+                  : 'text-[#94A3B8] hover:text-white hover:bg-[#2A2825]'
               }`}
             >
               <Swords className="w-3.5 h-3.5" />
@@ -291,7 +293,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeSubTab === 'tournaments'
                   ? 'bg-amber-600 text-white shadow-md'
-                  : 'text-[#8B8987] hover:text-white hover:bg-[#2A2825]'
+                  : 'text-[#94A3B8] hover:text-white hover:bg-[#2A2825]'
               }`}
             >
               <Trophy className="w-3.5 h-3.5" />
@@ -304,7 +306,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             {activeSubTab === 'matches' ? (
               // TAB 1: VÁN ĐẤU CÁ NHÂN
               loading ? (
-                <div className="flex flex-col items-center justify-center h-48 gap-2 text-[#8B8987]">
+                <div className="flex flex-col items-center justify-center h-48 gap-2 text-[#94A3B8]">
                   <RefreshCw className="w-6 h-6 animate-spin text-pink-500" />
                   <span className="text-xs">Đang tải lịch sử ván cờ từ máy chủ...</span>
                 </div>
@@ -322,14 +324,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </button>
                 </div>
               ) : matches.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-56 text-center text-[#8B8987] gap-3">
-                  <div className="p-4 rounded-full bg-[#1C1A17] border border-[#312E2B]">
+                <div className="flex flex-col items-center justify-center h-56 text-center text-[#94A3B8] gap-3">
+                  <div className="p-4 rounded-full bg-[#0F172A] border border-[#2A374A]">
                     <Swords className="w-8 h-8 text-[#73716E]" />
                   </div>
                   <div>
                     <p className="text-sm font-bold text-white">Chưa có ván đấu nào được ghi nhận</p>
-                    <p className="text-xs text-[#8B8987] mt-1">
-                      Hãy tham gia thi đấu Đấu Xếp Hạng (Rated) hoặc Đấu Bạn Bè để bắt đầu ghi lại lịch sử!
+                    <p className="text-xs text-[#94A3B8] mt-1">
+                      Hãy tham gia thi đấu Đấu xếp hạng hoặc Đấu bạn bè để bắt đầu lưu lại lịch sử!
                     </p>
                   </div>
                 </div>
@@ -376,6 +378,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         ? 'Rời trận'
                         : 'Hòa cờ';
 
+                    const cachedAnalysis: any = m.analysis || AnalysisCacheService.getCache(m._id);
+                    const userAccuracy = cachedAnalysis
+                      ? (isWhite
+                        ? (cachedAnalysis.whiteAccuracy ?? cachedAnalysis.summary?.white?.accuracy)
+                        : (cachedAnalysis.blackAccuracy ?? cachedAnalysis.summary?.black?.accuracy))
+                      : null;
+
                     return (
                       <div
                         key={m._id}
@@ -384,7 +393,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                             ? 'bg-[#1D241C] border-emerald-500/30 hover:border-emerald-500/60'
                             : isLose
                             ? 'bg-[#241C1D] border-rose-500/30 hover:border-rose-500/60'
-                            : 'bg-[#1F1E1B] border-[#312E2B] hover:border-[#4A4742]'
+                            : 'bg-[#1F1E1B] border-[#2A374A] hover:border-[#4A4742]'
                         }`}
                       >
                         {/* Cột trái: Kết quả & Đối thủ */}
@@ -412,14 +421,21 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                                   m.isRated
                                     ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                    : 'bg-[#2F2D2A] text-[#8B8987] border-[#3A3733]'
+                                    : 'bg-[#1E293B] text-[#94A3B8] border-[#334155]'
                                 }`}
                               >
                                 {gameModeLabel}
                               </span>
+
+                              {userAccuracy !== null && userAccuracy !== undefined && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shadow-sm">
+                                  <span>🎯</span>
+                                  <span>{Math.round(userAccuracy)}% chính xác</span>
+                                </span>
+                              )}
                             </div>
 
-                            <p className="text-[10px] md:text-[11px] text-[#8B8987] flex items-center gap-2 mt-0.5">
+                            <p className="text-[10px] md:text-[11px] text-[#94A3B8] flex items-center gap-2 mt-0.5">
                               <span>{endReasonLabel} ({m.movesCount} nước)</span>
                               <span>•</span>
                               <span className="flex items-center gap-1">
@@ -449,8 +465,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                           )}
 
                           <button
-                            onClick={() => onSelectReplay(m)}
-                            className="px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl bg-[#1C1A17] hover:bg-pink-600 hover:text-white border border-[#3A3733] text-[#C3C0B8] font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
+                            onClick={() => {
+                              const matchToReplay = cachedAnalysis ? { ...m, analysis: cachedAnalysis } : m;
+                              onSelectReplay(matchToReplay);
+                            }}
+                            className="px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl bg-[#0F172A] hover:bg-pink-600 hover:text-white border border-[#334155] text-[#C3C0B8] font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
                             title="Xem lại ván cờ trên bàn"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -459,12 +478,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
                           {onOpenAnalysis && m.moves && m.moves.length > 0 && (
                             <button
-                              onClick={() => onOpenAnalysis(m)}
-                              className="px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl bg-indigo-950/60 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-1.5 shadow transition-all active:scale-95"
-                              title="Phân tích ván cờ với AI Engine"
+                              onClick={() => {
+                                const matchToAnalyze = cachedAnalysis ? { ...m, analysis: cachedAnalysis } : m;
+                                onOpenAnalysis(matchToAnalyze);
+                              }}
+                              className={`px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow transition-all active:scale-95 ${
+                                cachedAnalysis
+                                  ? 'bg-emerald-950/60 hover:bg-emerald-600 hover:text-white border-emerald-500/40 text-emerald-300'
+                                  : 'bg-indigo-950/60 hover:bg-indigo-600 hover:text-white border-indigo-500/30 text-indigo-300'
+                              }`}
+                              title={cachedAnalysis ? "Xem báo cáo phân tích sẵn có (0s)" : "Phân tích ván cờ với AI Engine"}
                             >
                               <span>📊</span>
-                              <span className="hidden sm:inline">Phân tích</span>
+                              <span className="hidden sm:inline">{cachedAnalysis ? 'Báo cáo' : 'Phân tích'}</span>
                             </button>
                           )}
                         </div>
@@ -476,7 +502,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             ) : (
               // TAB 2: GIẢI ĐẤU ĐÃ THAM GIA
               tournamentsLoading ? (
-                <div className="flex flex-col items-center justify-center h-48 gap-2 text-[#8B8987]">
+                <div className="flex flex-col items-center justify-center h-48 gap-2 text-[#94A3B8]">
                   <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
                   <span className="text-xs">Đang tải danh sách giải đấu...</span>
                 </div>
@@ -494,13 +520,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </button>
                 </div>
               ) : tournaments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-56 text-center text-[#8B8987] gap-3">
-                  <div className="p-4 rounded-full bg-[#1C1A17] border border-[#312E2B]">
+                <div className="flex flex-col items-center justify-center h-56 text-center text-[#94A3B8] gap-3">
+                  <div className="p-4 rounded-full bg-[#0F172A] border border-[#2A374A]">
                     <Trophy className="w-8 h-8 text-amber-500/40" />
                   </div>
                   <div>
                     <p className="text-sm font-bold text-white">Chưa tham gia giải đấu nào</p>
-                    <p className="text-xs text-[#8B8987] mt-1 mb-3">
+                    <p className="text-xs text-[#94A3B8] mt-1 mb-3">
                       Hãy tạo hoặc nhập mã tham gia Giải đấu loại trực tiếp để tranh cúp Quán quân!
                     </p>
                     {onOpenTournamentModal && (
@@ -530,7 +556,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     return (
                       <div
                         key={t.tournamentId}
-                        className="p-3 md:p-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] hover:border-amber-500/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md"
+                        className="p-3 md:p-4 rounded-2xl bg-[#0F172A] border border-[#2A374A] hover:border-amber-500/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md"
                       >
                         {/* Cột trái: Tên giải & Badge thành tích */}
                         <div className="flex items-center gap-3">
@@ -567,12 +593,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                                   BÁN KẾT 🥉
                                 </span>
                               ) : (
-                                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#2F2D2A] text-[#8B8987]">
+                                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#1E293B] text-[#94A3B8]">
                                   {res.roundName || 'Vòng bảng'}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 text-[11px] text-[#8B8987] font-medium mt-1">
+                            <div className="flex items-center gap-3 text-[11px] text-[#94A3B8] font-medium mt-1">
                               <span>Quy mô: {t.size} kỳ thủ</span>
                               <span>•</span>
                               <span>Thắng {res.wins} / Thua {res.losses}</span>
@@ -603,14 +629,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         {/* Thanh phân trang Pagination */}
         {activeSubTab === 'matches' ? (
           matches.length > 0 && (
-            <div className="pt-3 mt-2 border-t border-[#312E2B] flex items-center justify-between text-xs text-[#8B8987] shrink-0">
+            <div className="pt-3 mt-2 border-t border-[#2A374A] flex items-center justify-between text-xs text-[#94A3B8] shrink-0">
               <span>Tổng số {totalMatches} ván đấu</span>
               {totalPages > 1 && (
                 <div className="flex items-center gap-2">
                   <button
                     disabled={loading || page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="px-2.5 py-1 rounded-lg bg-[#2F2D2A] hover:bg-[#3A3733] border border-[#3A3733] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
+                    className="px-2.5 py-1 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                     <span>Trang trước</span>
@@ -621,7 +647,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   <button
                     disabled={loading || page >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    className="px-2.5 py-1 rounded-lg bg-[#2F2D2A] hover:bg-[#3A3733] border border-[#3A3733] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
+                    className="px-2.5 py-1 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
                   >
                     <span>Trang sau</span>
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -632,14 +658,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           )
         ) : (
           tournaments.length > 0 && (
-            <div className="pt-3 mt-2 border-t border-[#312E2B] flex items-center justify-between text-xs text-[#8B8987] shrink-0">
+            <div className="pt-3 mt-2 border-t border-[#2A374A] flex items-center justify-between text-xs text-[#94A3B8] shrink-0">
               <span>Tổng số {tournamentsTotal} giải đấu</span>
               {tournamentsTotalPages > 1 && (
                 <div className="flex items-center gap-2">
                   <button
                     disabled={tournamentsLoading || tournamentsPage <= 1}
                     onClick={() => setTournamentsPage((p) => Math.max(1, p - 1))}
-                    className="px-2.5 py-1 rounded-lg bg-[#2F2D2A] hover:bg-[#3A3733] border border-[#3A3733] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
+                    className="px-2.5 py-1 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                     <span>Trang trước</span>
@@ -650,7 +676,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   <button
                     disabled={tournamentsLoading || tournamentsPage >= tournamentsTotalPages}
                     onClick={() => setTournamentsPage((p) => Math.min(tournamentsTotalPages, p + 1))}
-                    className="px-2.5 py-1 rounded-lg bg-[#2F2D2A] hover:bg-[#3A3733] border border-[#3A3733] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
+                    className="px-2.5 py-1 rounded-lg bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-white disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1"
                   >
                     <span>Trang sau</span>
                     <ChevronRight className="w-3.5 h-3.5" />

@@ -111,9 +111,9 @@ export const TournamentDetailModal: React.FC<TournamentDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#262421] border border-[#3A3733] rounded-3xl shadow-2xl overflow-hidden transition-all duration-300">
+      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-[#16202E] border border-[#334155] rounded-3xl shadow-2xl overflow-hidden transition-all duration-300">
         {/* HEADER MODAL */}
-        <div className="flex items-center justify-between p-4 px-5 border-b border-[#312E2B] bg-[#1F1E1B] shrink-0">
+        <div className="flex items-center justify-between p-4 px-5 border-b border-[#2A374A] bg-[#1F1E1B] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <Trophy className="w-5 h-5" />
@@ -129,7 +129,7 @@ export const TournamentDetailModal: React.FC<TournamentDetailModalProps> = ({
                   {tournament?.status === 'IN_PROGRESS' ? '⚔️ Đang Diễn Ra' : 'Đã Hoàn Thành'}
                 </span>
               </h3>
-              <div className="flex items-center gap-3 text-[11px] text-[#8B8987] font-medium mt-0.5">
+              <div className="flex items-center gap-3 text-[11px] text-[#94A3B8] font-medium mt-0.5">
                 <span className="flex items-center gap-1">
                   <Users className="w-3 h-3 text-amber-400" />
                   <span>Quy mô: {tournament?.size || 4} kỳ thủ</span>
@@ -150,7 +150,7 @@ export const TournamentDetailModal: React.FC<TournamentDetailModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2.5 rounded-xl text-[#8B8987] hover:text-white hover:bg-[#312E2B] transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
+            className="p-2.5 rounded-xl text-[#94A3B8] hover:text-white hover:bg-[#2A374A] transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
@@ -159,7 +159,7 @@ export const TournamentDetailModal: React.FC<TournamentDetailModalProps> = ({
         {/* BODY MODAL (SCROLLABLE) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-4">
           {loading ? (
-            <div className="py-16 flex flex-col items-center justify-center gap-2 text-[#8B8987]">
+            <div className="py-16 flex flex-col items-center justify-center gap-2 text-[#94A3B8]">
               <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
               <span className="text-xs font-bold">Đang tải sơ đồ giải đấu...</span>
             </div>
@@ -169,7 +169,7 @@ export const TournamentDetailModal: React.FC<TournamentDetailModalProps> = ({
               <span className="text-xs font-bold">{error}</span>
               <button
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-[#1C1A17] text-[#BAB8B6] border border-[#3A3835] text-xs font-bold"
+                className="px-4 py-2 rounded-xl bg-[#0F172A] text-[#CBD5E1] border border-[#3A3835] text-xs font-bold"
               >
                 Đóng
               </button>

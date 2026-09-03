@@ -59,14 +59,13 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
   ];
 
   return (
-    <div className="w-full h-full bg-[#262421] rounded-2xl border border-[#312E2B] p-4 flex flex-col justify-between shadow-2xl overflow-y-auto custom-scrollbar select-none">
+    <div className="w-full h-full bg-[#16202E] rounded-2xl border border-[#2A374A] p-4 flex flex-col justify-between shadow-2xl overflow-y-auto custom-scrollbar select-none">
       {/* Header */}
       <div>
-        <div className="flex items-center justify-between border-b border-[#312E2B] pb-3 mb-3">
+        <div className="flex items-center justify-between border-b border-[#2A374A] pb-3 mb-3">
           <h2 className="text-base font-black text-white flex items-center gap-2">
             <span className="text-xl">♟️</span> Chọn Chế độ chơi
           </h2>
-          <span className="text-xs text-[#8B8987] font-medium">Chess.com Style</span>
         </div>
 
         {/* Menu Cards List */}
@@ -77,7 +76,7 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
               <button
                 key={option.id}
                 onClick={() => onSelectMode(option.id)}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl bg-[#2F2D2A] hover:bg-[#383531] border border-[#3A3733] hover:border-pink-500/50 transition-all duration-200 group text-left shadow-md"
+                className="w-full flex items-center justify-between p-3.5 rounded-xl bg-[#1E293B] hover:bg-[#2A374A] border border-[#334155] hover:border-pink-500/50 transition-all duration-200 group text-left shadow-md"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <div className={`p-2.5 rounded-xl border ${option.iconBg} ${option.iconColor} shrink-0 group-hover:scale-105 transition-transform`}>
@@ -105,13 +104,6 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
             );
           })}
         </div>
-      </div>
-
-      {/* Footer Info */}
-      <div className="mt-4 pt-3 border-t border-[#312E2B] text-center">
-        <p className="text-[11px] text-[#787673]">
-          Mọi nước đi trực tuyến đều được xác thực phía Server (Anti-cheat)
-        </p>
       </div>
     </div>
   );

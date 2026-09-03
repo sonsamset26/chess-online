@@ -26,7 +26,7 @@ export interface ITournament extends Document {
   hostUserId: string;
   hostUsername: string;
   size: 4 | 8;
-  status: 'WAITING' | 'IN_PROGRESS' | 'FINISHED';
+  status: 'WAITING' | 'IN_PROGRESS' | 'FINISHED' | 'CANCELLED';
   players: ITournamentPlayer[];
   rounds: ITournamentRound[];
   championId: string | null;
@@ -90,7 +90,7 @@ const TournamentSchema = new Schema<ITournament>(
     },
     status: {
       type: String,
-      enum: ['WAITING', 'IN_PROGRESS', 'FINISHED'],
+      enum: ['WAITING', 'IN_PROGRESS', 'FINISHED', 'CANCELLED'],
       default: 'WAITING',
       index: true,
     },

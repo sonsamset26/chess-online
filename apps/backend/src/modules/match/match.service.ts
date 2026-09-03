@@ -170,4 +170,41 @@ export class MatchService {
 
     return match;
   }
+
+  /**
+   * Lưu hoặc cập nhật kết quả phân tích ván đấu (Idempotent CAS)
+   */
+  public static async saveMatchAnalysis(
+    matchId: string,
+    analysisData: any
+  ): Promise<IMatch | null> {
+    if (!mongoose.Types.ObjectId.isValid(matchId)) return null;
+
+    const existing = await Match.findById(matchId);
+    if (!existing) return null;
+
+    // Idempotent guard: Nếu ván đấu đã có phân tích, trả về luôn để tránh ghi đè xung đột
+    if (existing.analysis?.analyzedAt) {
+      return existing;
+    }
+
+    const updated = await Match.findByIdAndUpdate(
+      matchId,
+      {
+        $set: {
+          analysis: {
+            whiteAccuracy: analysisData.whiteAccuracy,
+            blackAccuracy: analysisData.blackAccuracy,
+            whiteAvgCpl: analysisData.whiteAvgCpl,
+            blackAvgCpl: analysisData.blackAvgCpl,
+            moveClassifications: analysisData.moveClassifications || [],
+            analyzedAt: new Date(),
+          },
+        },
+      },
+      { new: true }
+    );
+
+    return updated;
+  }
 }

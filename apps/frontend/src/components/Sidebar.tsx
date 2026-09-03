@@ -58,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 md:w-60 h-[100dvh] bg-[#262421] text-[#C3C1C0] border-r border-[#312E2B] flex flex-col justify-between p-3 shrink-0 select-none shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
+        className={`fixed md:static inset-y-0 left-0 z-50 w-64 md:w-60 h-[100dvh] bg-[#16202E] text-[#E2E8F0] border-r border-[#2A374A] flex flex-col justify-between p-3 shrink-0 select-none shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
@@ -71,14 +71,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div>
                 <h1 className="font-black text-base md:text-lg text-white tracking-wide">Chess Online</h1>
-                <p className="text-[10px] md:text-[11px] text-[#8B8987] font-medium">Nền tảng cờ vua quốc tế</p>
               </div>
             </div>
 
             {/* Nút Đóng Sidebar trên Mobile */}
             <button
               onClick={onCloseMobile}
-              className="md:hidden p-1.5 rounded-xl text-[#8B8987] hover:text-white hover:bg-[#312E2B] transition-colors"
+              className="md:hidden p-1.5 rounded-xl text-[#94A3B8] hover:text-white hover:bg-[#2A374A] transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -95,11 +94,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => handleTabClick(item.id)}
                   className={`flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-200 font-bold text-sm text-left ${
                     isActive
-                      ? 'bg-[#363431] text-white shadow-md border-l-4 border-pink-500'
-                      : 'hover:bg-[#2F2D2A] text-[#BAB8B6] hover:text-white'
+                      ? 'bg-[#243247] text-white shadow-md border-l-4 border-pink-500'
+                      : 'hover:bg-[#1E293B] text-[#CBD5E1] hover:text-white'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-pink-400' : 'text-[#8B8987]'}`} />
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-pink-400' : 'text-[#94A3B8]'}`} />
                   <span className="flex-1">{item.label}</span>
                   {item.badge && (
                     <span className="px-2 py-0.5 text-[10px] font-extrabold bg-pink-500/20 text-pink-300 rounded-full border border-pink-500/30">
@@ -113,14 +112,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* User Footer / Auth Section */}
-        <div className="border-t border-[#312E2B] pt-3 mt-auto">
+        <div className="border-t border-[#2A374A] pt-3 mt-auto">
           {user ? (
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#2F2D2A]">
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#1E293B]">
               <div className="flex items-center gap-2.5 min-w-0">
                 <img
-                  src={user.avatarUrl || 'https://api.dicebear.com/7.x/bottts/svg?seed=chess'}
+                  src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.username)}`}
                   alt="Avatar"
-                  className="w-9 h-9 rounded-lg bg-[#363431] shrink-0"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.username)}`;
+                  }}
+                  className="w-9 h-9 rounded-lg bg-[#243247] shrink-0 object-cover"
                 />
                 <div className="min-w-0">
                   <p className="font-bold text-xs text-white truncate">{user.username}</p>
@@ -131,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={onLogout}
                 title="Đăng xuất"
-                className="p-2 hover:bg-[#363431] text-[#8B8987] hover:text-rose-400 rounded-lg transition-colors"
+                className="p-2 hover:bg-[#243247] text-[#94A3B8] hover:text-rose-400 rounded-lg transition-colors"
               >
                 <LogOut className="w-4 h-4" />
               </button>

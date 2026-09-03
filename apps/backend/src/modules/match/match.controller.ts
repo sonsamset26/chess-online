@@ -69,4 +69,31 @@ export class MatchController {
       next(error);
     }
   }
+
+  /**
+   * POST /api/v1/matches/:id/analysis
+   * Lưu kết quả phân tích ván đấu từ client
+   */
+  public static async saveAnalysis(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const analysisData = req.body;
+
+      if (!analysisData) {
+        return ApiResponse.error(res, 'Dữ liệu phân tích không hợp lệ', 400);
+      }
+
+      const match = await MatchService.saveMatchAnalysis(id, analysisData);
+      if (!match) {
+        return ApiResponse.error(res, 'Không tìm thấy ván đấu cần lưu phân tích', 404);
+      }
+
+      return ApiResponse.success(res, match.analysis, 'Lưu phân tích ván đấu thành công');
+    } catch (error: any) {
+      if (error?.statusCode) {
+        return ApiResponse.error(res, error.message, error.statusCode);
+      }
+      next(error);
+    }
+  }
 }

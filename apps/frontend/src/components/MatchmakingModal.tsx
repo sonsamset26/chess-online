@@ -54,11 +54,11 @@ export const MatchmakingModal: React.FC<MatchmakingModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none">
-      <div className="w-full max-w-sm bg-[#262421] border border-[#3A3733] rounded-2xl p-6 shadow-2xl relative text-center">
+      <div className="w-full max-w-sm bg-[#16202E] border border-[#334155] rounded-2xl p-6 shadow-2xl relative text-center">
         {/* Close Button */}
         <button
           onClick={onCancel}
-          className="absolute top-3.5 right-3.5 text-[#8B8987] hover:text-white p-1 rounded-lg hover:bg-[#312E2B] transition-colors"
+          className="absolute top-3.5 right-3.5 text-[#94A3B8] hover:text-white p-1 rounded-lg hover:bg-[#2A374A] transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -79,20 +79,20 @@ export const MatchmakingModal: React.FC<MatchmakingModalProps> = ({
         <div className="flex items-center justify-center gap-1.5 text-xs text-amber-400 font-mono font-bold mb-4">
           <Clock className="w-3.5 h-3.5" />
           <span>{formattedTime}</span>
-          <span className="text-[#8B8987] mx-1">•</span>
+          <span className="text-[#94A3B8] mx-1">•</span>
           <span className="text-[#A7A4A1] font-sans">{timeControlLabel}</span>
         </div>
 
         {/* Khung Elo quét trực quan */}
-        <div className="p-3 rounded-xl bg-[#1C1A17] border border-[#312E2B] mb-5 text-left text-xs space-y-2">
+        <div className="p-3 rounded-xl bg-[#0F172A] border border-[#2A374A] mb-5 text-left text-xs space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[#8B8987] flex items-center gap-1">
+            <span className="text-[#94A3B8] flex items-center gap-1">
               <Shield className="w-3.5 h-3.5 text-blue-400" /> Điểm Elo của bạn:
             </span>
             <span className="font-bold text-white font-mono">{userElo}</span>
           </div>
           <div className="flex items-center justify-between border-t border-[#2A2825] pt-2">
-            <span className="text-[#8B8987] flex items-center gap-1">
+            <span className="text-[#94A3B8] flex items-center gap-1">
               <Target className="w-3.5 h-3.5 text-amber-400" /> Khung tìm kiếm:
             </span>
             <span className="font-bold text-amber-400 font-mono">
@@ -103,7 +103,7 @@ export const MatchmakingModal: React.FC<MatchmakingModalProps> = ({
 
         <button
           onClick={onCancel}
-          className="w-full py-2.5 rounded-xl bg-[#363431] hover:bg-[#403D39] text-white font-bold text-xs transition-colors"
+          className="w-full py-2.5 rounded-xl bg-[#243247] hover:bg-[#403D39] text-white font-bold text-xs transition-colors"
         >
           Hủy tìm kiếm
         </button>

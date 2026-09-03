@@ -10,6 +10,7 @@ interface PlayerCardProps {
   isThinking?: boolean;
   gameStatus?: string;
   capturedPieces?: string[];
+  materialAdvantage?: number;
   timeLeftMs?: number;
   isClockActive?: boolean;
 }
@@ -27,7 +28,7 @@ const formatClock = (ms?: number): string => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-export const PlayerCard: React.FC<PlayerCardProps> = ({
+const PlayerCardComponent: React.FC<PlayerCardProps> = ({
   isAi = false,
   name,
   subText,
@@ -35,6 +36,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   isThinking = false,
   gameStatus,
   capturedPieces = [],
+  materialAdvantage = 0,
   timeLeftMs,
   isClockActive = false,
 }) => {
@@ -50,7 +52,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
     <div className={`w-full max-w-[500px] flex items-center justify-between px-3 py-1.5 md:py-2 rounded-xl border transition-all duration-300 ${
       isThinking
         ? 'bg-pink-950/30 border-pink-500/40 shadow-md shadow-pink-500/10'
-        : 'bg-[#262421] border-[#312E2B]'
+        : 'bg-[#16202E] border-[#2A374A]'
     }`}>
       {/* User Info */}
       <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
@@ -60,7 +62,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
             : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
         }`}>
           {isAi ? <Bot className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <User className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-          <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#161512] flex items-center justify-center text-[7px] md:text-[8px] font-black ${
+          <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#0B0F19] flex items-center justify-center text-[7px] md:text-[8px] font-black ${
             color === 'w' ? 'bg-slate-100 text-slate-950' : 'bg-slate-900 text-slate-100'
           }`}>
             {color === 'w' ? 'W' : 'B'}
@@ -76,19 +78,37 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
               </span>
             )}
           </div>
-          <p className="text-[9px] md:text-[10px] text-[#8B8987] truncate">{subText}</p>
+          <div className="flex items-center gap-1.5 overflow-hidden">
+            <p className="text-[9px] md:text-[10px] text-[#94A3B8] truncate">{subText}</p>
+            {capturedPieces.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0 select-none">
+                <div className="flex items-center text-[10px] md:text-[11px] leading-none opacity-80 text-gray-300">
+                  {capturedPieces.map((piece, i) => (
+                    <span key={i} className="inline-block hover:scale-125 transition-transform cursor-default">
+                      {piece}
+                    </span>
+                  ))}
+                </div>
+                {materialAdvantage > 0 && (
+                  <span className="text-[9px] font-mono font-black text-amber-400 bg-amber-500/15 px-1 py-0.2 rounded border border-amber-500/30">
+                    +{materialAdvantage}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Clock & Dynamic Status */}
       <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
         {timeLeftMs !== undefined && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 md:px-3 md:py-1.5 rounded-xl font-mono font-black text-xs md:text-sm tracking-wider border transition-all duration-300 ${
+          <div className={`flex items-center justify-center gap-1.5 px-2.5 py-1 md:px-3 md:py-1.5 rounded-xl font-mono font-black text-xs md:text-sm tracking-wider border tabular-nums min-w-[68px] md:min-w-[80px] transition-all duration-300 ${
             timeLeftMs < 30000 && isClockActive
               ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-lg shadow-rose-500/20 animate-pulse'
               : isClockActive
               ? 'bg-amber-500/15 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
-              : 'bg-[#1A1816] text-[#A6A4A0] border-[#312E2B]'
+              : 'bg-[#1A1816] text-[#A6A4A0] border-[#2A374A]'
           }`}>
             <Clock className={`w-3.5 h-3.5 shrink-0 ${isClockActive ? 'text-amber-400' : 'text-[#73716E]'}`} />
             <span>{formatClock(timeLeftMs)}</span>
@@ -126,3 +146,5 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
     </div>
   );
 };
+
+export const PlayerCard = React.memo(PlayerCardComponent);
