@@ -10,4 +10,7 @@ router.get('/me', authenticateJWT, MatchController.getMyHistory);
 // Endpoint xem chi tiết ván đấu (cho phép công khai với giải đấu, hoặc kiểm tra quyền sở hữu)
 router.get('/:id', optionalAuthenticateJWT, MatchController.getMatchById);
 
+// Endpoint lưu kết quả phân tích ván đấu
+router.post('/:id/analysis', optionalAuthenticateJWT, MatchController.saveAnalysis);
+
 export default router;

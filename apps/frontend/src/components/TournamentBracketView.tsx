@@ -176,12 +176,12 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
           m.status === 'PLAYING'
             ? 'bg-amber-950/30 border-amber-500 shadow-lg shadow-amber-500/15'
             : hasUser
-            ? 'bg-[#1F1D1A] border-amber-500/60 shadow-md shadow-amber-500/5'
-            : 'bg-[#1C1A17] border-[#312E2B] hover:border-[#423E3A]'
+            ? 'bg-[#16202E] border-amber-500/60 shadow-md shadow-amber-500/5'
+            : 'bg-[#0F172A] border-[#2A374A] hover:border-[#423E3A]'
         }`}
       >
         {/* Tiêu đề trận & Trạng thái */}
-        <div className="flex items-center justify-between text-[10px] text-[#8B8987] font-bold mb-1.5 pb-1 border-b border-[#2B2926]">
+        <div className="flex items-center justify-between text-[10px] text-[#94A3B8] font-bold mb-1.5 pb-1 border-b border-[#1E293B]">
           <span className="flex items-center gap-1">
             <span>Trận #{m.matchIndex + 1}</span>
             {hasUser && (
@@ -215,15 +215,15 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
               isP1Winner
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 : m.winnerId && !isP1Winner
-                ? 'bg-[#22201D] text-[#73716E] line-through decoration-[#555]'
+                ? 'bg-[#1E293B] text-[#73716E] line-through decoration-[#555]'
                 : m.player1
-                ? 'bg-[#262421] text-[#E8E6E3]'
-                : 'bg-[#22201D] text-[#63615E] italic text-[11px]'
+                ? 'bg-[#16202E] text-[#E8E6E3]'
+                : 'bg-[#1E293B] text-[#63615E] italic text-[11px]'
             }`}
           >
             <div className="flex items-center gap-1.5 truncate">
               {m.player1 ? (
-                <User className="w-3.5 h-3.5 text-[#8B8987] shrink-0" />
+                <User className="w-3.5 h-3.5 text-[#94A3B8] shrink-0" />
               ) : (
                 <div className="w-3.5 h-3.5 rounded border border-dashed border-[#555] shrink-0" />
               )}
@@ -245,15 +245,15 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                 : isP2Winner
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 : m.winnerId && !isP2Winner
-                ? 'bg-[#22201D] text-[#73716E] line-through decoration-[#555]'
+                ? 'bg-[#1E293B] text-[#73716E] line-through decoration-[#555]'
                 : m.player2
-                ? 'bg-[#262421] text-[#E8E6E3]'
-                : 'bg-[#22201D] text-[#63615E] italic text-[11px]'
+                ? 'bg-[#16202E] text-[#E8E6E3]'
+                : 'bg-[#1E293B] text-[#63615E] italic text-[11px]'
             }`}
           >
             <div className="flex items-center gap-1.5 truncate">
               {m.player2 ? (
-                <User className="w-3.5 h-3.5 text-[#8B8987] shrink-0" />
+                <User className="w-3.5 h-3.5 text-[#94A3B8] shrink-0" />
               ) : (
                 <div className="w-3.5 h-3.5 rounded border border-dashed border-[#555] shrink-0" />
               )}
@@ -272,10 +272,10 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
 
         {/* Nút Xem lại / Phân tích khi xem lịch sử */}
         {!isLive && m.status === 'DONE' && (m.matchId || m.armageddonMatchId) && (
-          <div className="mt-2 pt-2 border-t border-[#2B2926] flex flex-col gap-1.5">
+          <div className="mt-2 pt-2 border-t border-[#1E293B] flex flex-col gap-1.5">
             {m.matchId && (
               <div className="flex items-center justify-between gap-1 text-[11px]">
-                <span className="text-[#8B8987] font-semibold">
+                <span className="text-[#94A3B8] font-semibold">
                   {hasArmageddon ? 'Ván chính:' : 'Ván cờ:'}
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -283,7 +283,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                     <button
                       onClick={() => onSelectMatchReplay(m.matchId!)}
                       disabled={loadingMatchId === m.matchId}
-                      className="px-2 py-1 rounded-lg bg-[#2A2825] hover:bg-[#383531] text-[#E8E6E3] font-bold text-[10px] flex items-center gap-1 border border-[#3A3835] transition-all active:scale-95 disabled:opacity-50"
+                      className="px-2 py-1 rounded-lg bg-[#2A2825] hover:bg-[#2A374A] text-[#E8E6E3] font-bold text-[10px] flex items-center gap-1 border border-[#3A3835] transition-all active:scale-95 disabled:opacity-50"
                       title="Xem lại ván đấu"
                     >
                       {loadingMatchId === m.matchId ? (
@@ -345,13 +345,13 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
       {/* THANH ĐIỀU HƯỚNG VIEW & BANNER ĐẾM NGƯỢC */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         {/* Toggle Chế độ xem */}
-        <div className="flex items-center gap-1 p-1 bg-[#1A1816] rounded-xl border border-[#312E2B] self-start">
+        <div className="flex items-center gap-1 p-1 bg-[#1A1816] rounded-xl border border-[#2A374A] self-start">
           <button
             onClick={() => setViewMode('tree')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
               viewMode === 'tree'
                 ? 'bg-amber-600 text-white shadow'
-                : 'text-[#8B8987] hover:text-[#E8E6E3]'
+                : 'text-[#94A3B8] hover:text-[#E8E6E3]'
             }`}
           >
             <GitBranch className="w-3.5 h-3.5" />
@@ -362,7 +362,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
               viewMode === 'list'
                 ? 'bg-amber-600 text-white shadow'
-                : 'text-[#8B8987] hover:text-[#E8E6E3]'
+                : 'text-[#94A3B8] hover:text-[#E8E6E3]'
             }`}
           >
             <ListFilter className="w-3.5 h-3.5" />
@@ -396,7 +396,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                   {/* CỘT CÁC VÁN ĐẤU CỦA VÒNG */}
                   <div className="flex flex-col gap-2 min-w-[220px] sm:min-w-[240px]">
                     {/* Header Cột */}
-                    <div className="text-center pb-2 border-b border-[#312E2B]">
+                    <div className="text-center pb-2 border-b border-[#2A374A]">
                       <span className="text-[11px] font-extrabold text-amber-400 font-mono uppercase tracking-wider block">
                         VÒNG {round.roundNumber}
                       </span>
@@ -428,13 +428,13 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                           ? '#10B981'
                           : isTopUser
                           ? '#F59E0B'
-                          : '#3A3733';
+                          : '#787571';
 
                         const bottomColor = isBottomDone
                           ? '#10B981'
                           : isBottomUser
                           ? '#F59E0B'
-                          : '#3A3733';
+                          : '#787571';
 
                         return (
                           <div
@@ -452,6 +452,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                                 fill="none"
                                 stroke={topColor}
                                 strokeWidth={isTopDone || isTopUser ? '2.5' : '1.5'}
+                                strokeDasharray={(!isTopDone && !isTopUser) ? '4 3' : undefined}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                               />
@@ -461,6 +462,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                                 fill="none"
                                 stroke={bottomColor}
                                 strokeWidth={isBottomDone || isBottomUser ? '2.5' : '1.5'}
+                                strokeDasharray={(!isBottomDone && !isBottomUser) ? '4 3' : undefined}
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                               />
@@ -483,8 +485,9 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                           <path
                             d="M 0,50 H 48"
                             fill="none"
-                            stroke={championId ? '#F59E0B' : '#3A3733'}
+                            stroke={championId ? '#F59E0B' : '#787571'}
                             strokeWidth={championId ? '3' : '1.5'}
+                            strokeDasharray={!championId ? '4 3' : undefined}
                             strokeLinecap="round"
                           />
                         </svg>
@@ -495,15 +498,15 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                         <div
                           className={`p-4 rounded-3xl border flex flex-col items-center text-center relative overflow-hidden transition-all ${
                             championId
-                              ? 'bg-gradient-to-b from-amber-500/20 via-[#262421] to-[#1C1A17] border-amber-500 shadow-xl shadow-amber-500/20'
-                              : 'bg-[#1C1A17] border-[#312E2B]'
+                              ? 'bg-gradient-to-b from-amber-500/20 via-[#16202E] to-[#0F172A] border-amber-500 shadow-xl shadow-amber-500/20'
+                              : 'bg-[#0F172A] border-[#2A374A]'
                           }`}
                         >
                           <div
                             className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-lg ${
                               championId
                                 ? 'bg-gradient-to-tr from-amber-500 to-orange-400 text-black shadow-amber-500/30'
-                                : 'bg-[#262421] text-[#63615E] border border-[#3A3733]'
+                                : 'bg-[#16202E] text-[#63615E] border border-[#334155]'
                             }`}
                           >
                             <Trophy className="w-7 h-7" />
@@ -524,7 +527,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
                           )}
 
                           {!championId && (
-                            <span className="text-[10px] text-[#8B8987] italic">
+                            <span className="text-[10px] text-[#94A3B8] italic">
                               Cạnh tranh danh hiệu
                             </span>
                           )}
@@ -546,7 +549,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
             <div key={`list-round-${round.roundNumber}`} className="flex flex-col gap-2">
               <span className="text-[11px] font-extrabold text-amber-400 font-mono uppercase tracking-wider flex items-center gap-1.5">
                 <span>VÒNG {round.roundNumber}</span>
-                <span className="text-[#8B8987]">• {round.name}</span>
+                <span className="text-[#94A3B8]">• {round.name}</span>
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

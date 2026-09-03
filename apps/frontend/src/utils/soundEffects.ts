@@ -3,8 +3,31 @@
 class SoundManager {
   private audioCtx: AudioContext | null = null;
 
+  private isMuted: boolean = false;
+
+  public setMuted(muted: boolean) {
+    this.isMuted = muted;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('chess_sound_muted', muted ? 'true' : 'false');
+      } catch {}
+    }
+  }
+
+  public getMuted(): boolean {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('chess_sound_muted');
+        if (stored !== null) {
+          this.isMuted = stored === 'true';
+        }
+      } catch {}
+    }
+    return this.isMuted;
+  }
+
   private getContext(): AudioContext | null {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined' || this.getMuted()) return null;
     if (!this.audioCtx) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {

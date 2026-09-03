@@ -139,7 +139,23 @@ export function useChessEngine() {
       }
       setIsAiThinking(false);
 
-      gameRef.current.load(newFen);
+      if (history && history.length > 0) {
+        // Tái tạo lại lịch sử nước đi đầy đủ để chess.js giữ nguyên history verbose (phục vụ phát âm thanh và highlight)
+        gameRef.current.reset();
+        for (const san of history) {
+          try {
+            gameRef.current.move(san);
+          } catch {
+            break;
+          }
+        }
+        if (gameRef.current.fen() !== newFen) {
+          gameRef.current.load(newFen);
+        }
+      } else {
+        gameRef.current.load(newFen);
+      }
+
       setFen(newFen);
       if (history) setMoveHistory(history);
       updateGameStatus(gameRef.current);

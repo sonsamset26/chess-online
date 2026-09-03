@@ -57,7 +57,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
           return (
             <span
               className="w-4 h-4 shrink-0 flex items-center justify-center text-[9px] font-black rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 select-none"
-              title="Nước đi tối ưu (Best)"
+              title="Nước đi tối ưu"
             >
               ★
             </span>
@@ -66,7 +66,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
           return (
             <span
               className="w-4 h-4 shrink-0 flex items-center justify-center text-[9px] font-black rounded bg-teal-500/20 text-teal-400 border border-teal-500/30 select-none"
-              title="Rất tốt (Excellent)"
+              title="Rất tốt"
             >
               ★
             </span>
@@ -75,7 +75,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
           return (
             <span
               className="w-4 h-4 shrink-0 flex items-center justify-center text-[9px] font-black rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 select-none"
-              title="Tốt (Good)"
+              title="Tốt"
             >
               ✓
             </span>
@@ -84,7 +84,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
           return (
             <span
               className="w-4 h-4 shrink-0 flex items-center justify-center text-[9px] font-bold rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 select-none"
-              title="Không chuẩn xác (Inaccuracy)"
+              title="Chưa tối ưu"
             >
               ?!
             </span>
@@ -93,7 +93,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
           return (
             <span
               className="w-4 h-4 shrink-0 flex items-center justify-center text-[9px] font-bold rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 select-none"
-              title="Sai lầm (Mistake)"
+              title="Sai lầm"
             >
               ?
             </span>
@@ -102,7 +102,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
           return (
             <span
               className="w-4 h-4 shrink-0 flex items-center justify-center text-[9px] font-black rounded bg-red-500/25 text-red-400 border border-red-500/40 select-none"
-              title="Sai lầm nghiêm trọng (Blunder)"
+              title="Sai sót lớn"
             >
               ??
             </span>

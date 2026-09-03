@@ -43,7 +43,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none">
-      <div className="w-full max-w-md bg-[#262421] border border-[#3A3733] rounded-3xl p-6 shadow-2xl relative">
+      <div className="w-full max-w-md bg-[#16202E] border border-[#334155] rounded-3xl p-6 shadow-2xl relative">
         {/* Nút Đóng */}
         <button
           onClick={() => {
@@ -52,7 +52,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
             setView('menu');
             setInputCode('');
           }}
-          className="absolute top-4 right-4 text-[#8B8987] hover:text-white p-1 rounded-lg hover:bg-[#312E2B] transition-colors"
+          className="absolute top-4 right-4 text-[#94A3B8] hover:text-white p-1 rounded-lg hover:bg-[#2A374A] transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -63,7 +63,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
             <Users className="w-7 h-7" />
           </div>
           <h2 className="text-xl font-extrabold text-white">Thách Đấu Bạn Bè</h2>
-          <p className="text-xs text-[#8B8987] mt-1">Tạo phòng riêng hoặc nhập mã phòng để thi đấu 1v1</p>
+          <p className="text-xs text-[#94A3B8] mt-1">Tạo phòng riêng hoặc nhập mã phòng để thi đấu 1v1</p>
         </div>
 
         {/* Thông báo Lỗi nếu có */}
@@ -77,14 +77,14 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
         {/* MÀN HÌNH 1: HIỂN THỊ MÃ PHÒNG ĐÃ TẠO VÀ ĐANG CHỜ BẠN BÈ */}
         {createdRoomCode ? (
           <div className="flex flex-col items-center text-center py-2">
-            <span className="text-xs font-bold text-[#8B8987] uppercase tracking-wider mb-2">Mã Phòng Đấu Của Bạn</span>
+            <span className="text-xs font-bold text-[#94A3B8] uppercase tracking-wider mb-2">Mã Phòng Đấu Của Bạn</span>
             
             {/* Mã phòng 6 chữ số to rực rỡ */}
-            <div className="flex items-center gap-3 bg-[#1C1A17] border border-[#3A3733] rounded-2xl px-6 py-3.5 mb-4 shadow-inner">
+            <div className="flex items-center gap-3 bg-[#0F172A] border border-[#334155] rounded-2xl px-6 py-3.5 mb-4 shadow-inner">
               <span className="font-mono text-3xl font-black text-pink-400 tracking-widest">{createdRoomCode}</span>
               <button
                 onClick={handleCopyCode}
-                className="p-2 rounded-xl bg-[#2B2926] hover:bg-[#363431] text-[#BAB8B6] hover:text-white transition-colors"
+                className="p-2 rounded-xl bg-[#1E293B] hover:bg-[#243247] text-[#CBD5E1] hover:text-white transition-colors"
                 title="Sao chép Mã phòng"
               >
                 {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
@@ -100,7 +100,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
 
             <button
               onClick={onCancelRoom}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-rose-400 font-bold text-xs transition-colors"
+              className="w-full py-2.5 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-rose-400 font-bold text-xs transition-colors"
             >
               Hủy phòng đấu
             </button>
@@ -110,7 +110,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
           <div className="flex flex-col gap-3">
             <button
               onClick={onCreateRoom}
-              className="w-full p-4 rounded-2xl bg-[#2B2926] hover:bg-[#363431] border border-[#3A3733] hover:border-pink-500/50 flex items-center justify-between group transition-all"
+              className="w-full p-4 rounded-2xl bg-[#1E293B] hover:bg-[#243247] border border-[#334155] hover:border-pink-500/50 flex items-center justify-between group transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-pink-600/15 border border-pink-500/30 flex items-center justify-center text-pink-400">
@@ -118,14 +118,14 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
                 </div>
                 <div className="text-left">
                   <h4 className="font-bold text-sm text-white group-hover:text-pink-400 transition-colors">Tạo phòng đấu mới</h4>
-                  <p className="text-[11px] text-[#8B8987]">Tạo mã phòng 6 chữ số để gửi cho bạn bè</p>
+                  <p className="text-[11px] text-[#94A3B8]">Tạo mã phòng 6 chữ số để gửi cho bạn bè</p>
                 </div>
               </div>
             </button>
 
             <button
               onClick={() => setView('join')}
-              className="w-full p-4 rounded-2xl bg-[#2B2926] hover:bg-[#363431] border border-[#3A3733] hover:border-emerald-500/50 flex items-center justify-between group transition-all"
+              className="w-full p-4 rounded-2xl bg-[#1E293B] hover:bg-[#243247] border border-[#334155] hover:border-emerald-500/50 flex items-center justify-between group transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-600/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -133,7 +133,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
                 </div>
                 <div className="text-left">
                   <h4 className="font-bold text-sm text-white group-hover:text-emerald-400 transition-colors">Nhập mã phòng có sẵn</h4>
-                  <p className="text-[11px] text-[#8B8987]">Nhập mã phòng bạn bè đã gửi để tham gia</p>
+                  <p className="text-[11px] text-[#94A3B8]">Nhập mã phòng bạn bè đã gửi để tham gia</p>
                 </div>
               </div>
             </button>
@@ -142,7 +142,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
           /* MÀN HÌNH 3: KHUNG NHẬP MÃ PHÒNG VÀO THAM GIA */
           <form onSubmit={handleJoinSubmit} className="flex flex-col gap-4">
             <div>
-              <label className="text-xs font-bold text-[#C3C1C0] mb-2 block text-center">
+              <label className="text-xs font-bold text-[#E2E8F0] mb-2 block text-center">
                 Nhập mã phòng 6 chữ số:
               </label>
               <input
@@ -152,7 +152,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="Ví dụ: 849201"
-                className="w-full py-3 px-4 rounded-xl bg-[#1C1A17] border border-[#3A3733] text-white text-center font-mono text-2xl font-black tracking-widest focus:outline-none focus:border-pink-500 transition-colors"
+                className="w-full py-3 px-4 rounded-xl bg-[#0F172A] border border-[#334155] text-white text-center font-mono text-2xl font-black tracking-widest focus:outline-none focus:border-pink-500 transition-colors"
               />
             </div>
 
@@ -160,7 +160,7 @@ export const FriendRoomModal: React.FC<FriendRoomModalProps> = ({
               <button
                 type="button"
                 onClick={() => setView('menu')}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs transition-colors"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs transition-colors"
               >
                 Quay lại
               </button>
