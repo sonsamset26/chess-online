@@ -20,6 +20,11 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
 }) => {
   const movePairs = Array.from({ length: Math.ceil(moveHistory.length / 2) });
   const selectedAnalysis = selectedPly ? analysisByPly[selectedPly] : null;
+  const listEndRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    listEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [moveHistory.length]);
 
   return (
     <div className="p-3 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 flex flex-col flex-1 min-h-0 shadow-lg overflow-hidden">
@@ -80,6 +85,7 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                 </div>
               );
             })}
+            <div ref={listEndRef} />
           </div>
         )}
       </div>

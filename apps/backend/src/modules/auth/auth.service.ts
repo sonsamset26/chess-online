@@ -11,10 +11,14 @@ export interface AuthTokens {
 
 export class AuthService {
   private static get JWT_ACCESS_SECRET(): Secret {
-    return process.env.JWT_SECRET || 'supersecretchessaccesskey123';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('Lỗi cấu hình server: JWT_SECRET chưa được thiết lập.');
+    return secret;
   }
   private static get JWT_REFRESH_SECRET(): Secret {
-    return process.env.JWT_REFRESH_SECRET || 'supersecretchessrefreshkey456';
+    const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+    if (!secret) throw new Error('Lỗi cấu hình server: JWT_REFRESH_SECRET chưa được thiết lập.');
+    return secret;
   }
   private static get googleClient(): OAuth2Client {
     return new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -116,17 +120,14 @@ export class AuthService {
           audience: process.env.GOOGLE_CLIENT_ID,
         });
         const payload = ticket.getPayload();
-        if (!payload || !payload.email) {
-          throw { statusCode: 400, message: 'Xác thực Token Google thất bại' };
+        if (!payload || !payload.email || payload.email_verified === false) {
+          throw { statusCode: 400, message: 'Xác thực Token Google thất bại hoặc email chưa được xác minh' };
         }
         email = payload.email;
         name = payload.name || payload.given_name || email.split('@')[0];
         picture = payload.picture || '';
       } else {
-        const decoded: any = jwt.decode(idToken);
-        email = decoded?.email || `user_${Date.now()}@gmail.com`;
-        name = decoded?.name || 'Tài khoản Google';
-        picture = decoded?.picture || 'https://api.dicebear.com/7.x/bottts/svg?seed=google';
+        throw { statusCode: 500, message: 'Lỗi cấu hình server: GOOGLE_CLIENT_ID chưa được thiết lập.' };
       }
 
       if (!email) {
@@ -145,8 +146,11 @@ export class AuthService {
           name,
           username: name,
           passwordHash,
-          avatarUrl: picture || 'https://api.dicebear.com/7.x/bottts/svg?seed=google',
+          avatarUrl: picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`,
         });
+      } else if (picture && user.avatarUrl !== picture) {
+        user.avatarUrl = picture;
+        await user.save();
       }
 
       const { accessToken, refreshToken } = this.generateTokens(user._id.toString(), user.role);

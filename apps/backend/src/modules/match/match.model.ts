@@ -1,5 +1,22 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
+export interface IMatchAnalysisMove {
+  ply: number;
+  san: string;
+  classification: string;
+  eval?: number;
+  bestMoveSan?: string;
+}
+
+export interface IMatchAnalysisSummary {
+  whiteAccuracy?: number;
+  blackAccuracy?: number;
+  whiteAvgCpl?: number;
+  blackAvgCpl?: number;
+  moveClassifications?: IMatchAnalysisMove[];
+  analyzedAt?: Date;
+}
+
 export interface IMatch extends Document {
   whitePlayer?: Types.ObjectId;
   blackPlayer?: Types.ObjectId;
@@ -29,6 +46,7 @@ export interface IMatch extends Document {
     initialSeconds: number;
     incrementSeconds: number;
   };
+  analysis?: IMatchAnalysisSummary;
   startedAt: Date;
   endedAt?: Date;
   createdAt: Date;
@@ -153,6 +171,22 @@ const MatchSchema = new Schema<IMatch>(
     endedAt: {
       type: Date,
       default: Date.now,
+    },
+    analysis: {
+      whiteAccuracy: { type: Number },
+      blackAccuracy: { type: Number },
+      whiteAvgCpl: { type: Number },
+      blackAvgCpl: { type: Number },
+      moveClassifications: [
+        {
+          ply: { type: Number },
+          san: { type: String },
+          classification: { type: String },
+          eval: { type: Number },
+          bestMoveSan: { type: String },
+        },
+      ],
+      analyzedAt: { type: Date },
     },
   },
   {

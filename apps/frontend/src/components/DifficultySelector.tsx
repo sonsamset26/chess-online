@@ -52,7 +52,7 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
         <label className="text-xs font-semibold text-slate-300">
           Độ khó AI Engine:
         </label>
-        <span className="text-[10px] text-[#8B8987] font-mono">
+        <span className="text-[10px] text-[#94A3B8] font-mono">
           Fast Engine
         </span>
       </div>
@@ -70,7 +70,7 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
               className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 ${
                 isSelected
                   ? `${item.activeStyle} ring-1 ring-white/20`
-                  : 'border-[#3A3733] bg-[#2B2926] hover:bg-[#363431] text-[#BAB8B6]'
+                  : 'border-[#334155] bg-[#1E293B] hover:bg-[#243247] text-[#CBD5E1]'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <Icon className="w-4 h-4 mb-1" />

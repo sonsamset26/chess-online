@@ -151,7 +151,7 @@ export const PuzzleView: React.FC = () => {
         <div className="flex flex-col gap-3 h-full justify-between">
           
           {/* Top Bar: Thẻ Tiêu đề & Cấp độ */}
-          <div className="p-3 bg-[#262421] rounded-2xl border border-[#312E2B] flex items-center justify-between shadow-lg shrink-0">
+          <div className="p-3 bg-[#16202E] rounded-2xl border border-[#2A374A] flex items-center justify-between shadow-lg shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-pink-600/20 border border-pink-500/30 flex items-center justify-center text-pink-400">
                 <Puzzle className="w-4 h-4" />
@@ -177,16 +177,16 @@ export const PuzzleView: React.FC = () => {
           </div>
 
           {/* Khung Thông Tin & Mô Tả Bài Tập */}
-          <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-3 shadow-xl shrink-0">
-            <div className="border-b border-[#312E2B] pb-2">
+          <div className="p-4 bg-[#16202E] rounded-2xl border border-[#2A374A] flex flex-col gap-3 shadow-xl shrink-0">
+            <div className="border-b border-[#2A374A] pb-2">
               <h3 className="font-bold text-xs text-white mb-1">Mô tả nhiệm vụ:</h3>
-              <p className="text-xs text-[#8B8987] leading-relaxed">{puzzle.description}</p>
+              <p className="text-xs text-[#94A3B8] leading-relaxed">{puzzle.description}</p>
             </div>
 
             {/* Trạng thái Giải Đố */}
             <div className="mt-1">
               {status === 'IDLE' && (
-                <div className="p-3 rounded-xl bg-[#1C1A17] border border-[#312E2B] text-center text-xs font-semibold text-slate-300">
+                <div className="p-3 rounded-xl bg-[#0F172A] border border-[#2A374A] text-center text-xs font-semibold text-slate-300">
                   Lượt đi của quân <strong className={puzzle.turn === 'w' ? 'text-amber-300' : 'text-pink-400'}>{puzzle.turn === 'w' ? 'Trắng' : 'Đen'}</strong>. Hãy tìm nước cờ giải đố!
                 </div>
               )}
@@ -216,7 +216,7 @@ export const PuzzleView: React.FC = () => {
           </div>
 
           {/* Bảng Điều Khiển Nút Thao Tác */}
-          <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-2.5 shadow-xl shrink-0">
+          <div className="p-4 bg-[#16202E] rounded-2xl border border-[#2A374A] flex flex-col gap-2.5 shadow-xl shrink-0">
             <button
               onClick={handleNextPuzzle}
               className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-rose-500 hover:from-pink-500 hover:to-rose-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-pink-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
@@ -236,7 +236,7 @@ export const PuzzleView: React.FC = () => {
 
               <button
                 onClick={handleRetry}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Thử lại</span>

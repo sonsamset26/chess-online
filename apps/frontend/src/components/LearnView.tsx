@@ -122,7 +122,7 @@ export const LearnView: React.FC = () => {
         <div className="flex flex-col gap-3 h-full justify-between">
           
           {/* Top Bar: Chọn Bài Học & Tiến độ */}
-          <div className="p-3 bg-[#262421] rounded-2xl border border-[#312E2B] flex items-center justify-between shadow-lg shrink-0">
+          <div className="p-3 bg-[#16202E] rounded-2xl border border-[#2A374A] flex items-center justify-between shadow-lg shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-600 to-rose-500 flex items-center justify-center text-white shadow-md shadow-pink-500/20">
                 <GraduationCap className="w-4 h-4" />
@@ -143,7 +143,7 @@ export const LearnView: React.FC = () => {
           </div>
 
           {/* Khung Nội Dung Hướng Dẫn & Giải Thích Sư Phạm */}
-          <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-3 shadow-xl shrink-0">
+          <div className="p-4 bg-[#16202E] rounded-2xl border border-[#2A374A] flex flex-col gap-3 shadow-xl shrink-0">
             <div>
               <div className="flex items-center gap-1.5 text-xs font-bold text-pink-400 mb-1">
                 <BookOpen className="w-4 h-4" />
@@ -157,7 +157,7 @@ export const LearnView: React.FC = () => {
             {/* Trạng thái Hoàn thành bước */}
             <div>
               {status === 'IDLE' && (
-                <div className="p-3 rounded-xl bg-[#1C1A17] border border-[#312E2B] text-center text-xs font-semibold text-slate-300">
+                <div className="p-3 rounded-xl bg-[#0F172A] border border-[#2A374A] text-center text-xs font-semibold text-slate-300">
                   Hãy thực hiện nước cờ theo chỉ dẫn trên bàn cờ bên trái.
                 </div>
               )}
@@ -192,8 +192,8 @@ export const LearnView: React.FC = () => {
           </div>
 
           {/* Menu Danh Sách Các Bài Học Nhập Môn */}
-          <div className="p-3 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-1.5 shadow-xl max-h-36 overflow-y-auto custom-scrollbar">
-            <span className="text-[10px] font-black text-[#8B8987] uppercase tracking-wider px-1">Danh mục bài học:</span>
+          <div className="p-3 bg-[#16202E] rounded-2xl border border-[#2A374A] flex flex-col gap-1.5 shadow-xl max-h-36 overflow-y-auto custom-scrollbar">
+            <span className="text-[10px] font-black text-[#94A3B8] uppercase tracking-wider px-1">Danh mục bài học:</span>
             <div className="grid grid-cols-2 gap-1.5">
               {LESSONS_DATA.map((l, idx) => (
                 <button
@@ -205,7 +205,7 @@ export const LearnView: React.FC = () => {
                   className={`py-1.5 px-2.5 rounded-lg text-left text-xs font-bold truncate transition-all ${
                     idx === lessonIndex
                       ? 'bg-pink-600 text-white shadow-md'
-                      : 'bg-[#2F2D2A] text-[#BAB8B6] hover:bg-[#383531] hover:text-white'
+                      : 'bg-[#1E293B] text-[#CBD5E1] hover:bg-[#2A374A] hover:text-white'
                   }`}
                 >
                   {l.title}
@@ -215,7 +215,7 @@ export const LearnView: React.FC = () => {
           </div>
 
           {/* Bảng Điều Khiển Nút Thao Tác (Gợi ý, Làm lại, Tiếp tục) */}
-          <div className="p-4 bg-[#262421] rounded-2xl border border-[#312E2B] flex flex-col gap-2.5 shadow-xl shrink-0">
+          <div className="p-4 bg-[#16202E] rounded-2xl border border-[#2A374A] flex flex-col gap-2.5 shadow-xl shrink-0">
             {status === 'STEP_DONE' ? (
               <button
                 onClick={handleNextStep}
@@ -236,7 +236,7 @@ export const LearnView: React.FC = () => {
 
                 <button
                   onClick={handleRetryStep}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <RotateCcw className="w-4 h-4" />
                   <span>Làm lại</span>

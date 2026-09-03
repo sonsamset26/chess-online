@@ -233,7 +233,7 @@ export const ChessBoardComponent: React.FC<ChessBoardComponentProps> = ({
     >
       <div
         style={{ width: `${boardWidth}px`, height: `${boardWidth}px` }}
-        className="rounded-xl overflow-hidden shadow-2xl border-[3px] border-[#21201D] bg-[#262421] flex items-center justify-center shrink-0 transition-all duration-200"
+        className="rounded-xl overflow-hidden shadow-2xl border-[3px] border-[#1E293B] bg-[#16202E] flex items-center justify-center shrink-0 transition-all duration-200"
       >
         <Chessboard
           position={fen}

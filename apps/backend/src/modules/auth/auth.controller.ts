@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
 import { ApiResponse } from '../../utils/apiResponse';
+import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
+import { User } from '../user/user.model';
 
 const COOKIE_OPTIONS = {
   httpOnly: true, // Chống XSS (JavaScript browser không thể đọc document.cookie)
@@ -137,6 +139,39 @@ export class AuthController {
       });
 
       return ApiResponse.success(res, null, 'Đăng xuất thành công', 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // 6. Lấy thông tin tài khoản hiện tại (Profile / Me)
+  public static async getMe(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return ApiResponse.error(res, 'Chưa xác thực danh tính', 401);
+      }
+
+      const user = await User.findById(userId).select('-passwordHash');
+      if (!user) {
+        return ApiResponse.error(res, 'Không tìm thấy người dùng', 404);
+      }
+
+      return ApiResponse.success(
+        res,
+        {
+          user: {
+            id: user._id,
+            email: user.email,
+            username: user.name || user.username,
+            avatarUrl: user.avatarUrl,
+            eloRating: user.eloRating,
+            role: user.role,
+          },
+        },
+        'Lấy thông tin tài khoản thành công',
+        200
+      );
     } catch (error) {
       next(error);
     }

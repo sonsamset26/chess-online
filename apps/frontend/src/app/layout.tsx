@@ -5,6 +5,7 @@ import { GoogleAuthProvider } from '../components/GoogleAuthProvider';
 export const metadata: Metadata = {
   title: 'Chess online - Chơi cờ vua trực tuyến',
   description: 'Nền tảng thi đấu và chơi cờ vua trực tuyến.',
+  referrer: 'no-referrer',
   icons: {
     icon: '/icon.svg',
     shortcut: '/icon.svg',
@@ -26,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      <body className="bg-[#161512] text-[#C3C1C0] antialiased font-sans overflow-x-hidden">
+      <body className="bg-[#0B0F19] text-[#E2E8F0] antialiased font-sans overflow-x-hidden">
         <GoogleAuthProvider>
           {children}
         </GoogleAuthProvider>

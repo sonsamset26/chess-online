@@ -26,26 +26,33 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
 
   const movePairs = Array.from({ length: Math.ceil(moveHistory.length / 2) });
   const selectedAnalysis = selectedPly ? analysisByPly[selectedPly] : null;
+  const listEndRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      listEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isOpen, moveHistory.length]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 select-none">
-      <div className="w-full max-w-sm bg-[#262421] border border-[#3A3733] rounded-3xl p-5 shadow-2xl relative flex flex-col max-h-[85vh]">
+      <div className="w-full max-w-sm bg-[#16202E] border border-[#334155] rounded-3xl p-5 shadow-2xl relative flex flex-col max-h-[85vh]">
         
         {/* Header Modal */}
-        <div className="flex items-center justify-between border-b border-[#312E2B] pb-3 mb-3">
+        <div className="flex items-center justify-between border-b border-[#2A374A] pb-3 mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-pink-600/20 border border-pink-500/30 flex items-center justify-center text-pink-400">
               <ScrollText className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-extrabold text-sm text-white">Lịch Sử Nước Đi</h3>
-              <p className="text-[10px] text-[#8B8987]">Tổng cộng {moveHistory.length} nước đã đi</p>
+              <p className="text-[10px] text-[#94A3B8]">Tổng cộng {moveHistory.length} nước đã đi</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="text-[#8B8987] hover:text-white p-1.5 rounded-xl hover:bg-[#312E2B] transition-colors"
+            className="text-[#94A3B8] hover:text-white p-1.5 rounded-xl hover:bg-[#2A374A] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -71,7 +78,7 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
                     key={index}
                     className="grid grid-cols-[28px_1fr_1fr] items-center gap-1.5 py-0.5"
                   >
-                    <span className="text-[10px] font-mono text-[#8B8987] font-semibold text-center select-none">
+                    <span className="text-[10px] font-mono text-[#94A3B8] font-semibold text-center select-none">
                       {index + 1}.
                     </span>
                     <MoveItem
@@ -92,18 +99,19 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
                         onClick={(p) => onSelectPly?.(selectedPly === p ? null : p)}
                       />
                     ) : (
-                      <div className="h-7 rounded-lg bg-[#2F2D2A]/40 border border-dashed border-[#3A3733]/50" />
+                      <div className="h-7 rounded-lg bg-[#1E293B]/40 border border-dashed border-[#334155]/50" />
                     )}
                   </div>
                 );
               })}
+              <div ref={listEndRef} />
             </div>
           )}
         </div>
 
         {/* Mobile Inspection Panel: Chỉ hiển thị khi bật Live Analysis và có nước được chọn */}
         {showLiveAnalysis && selectedAnalysis && (
-          <div className="mt-2 p-2.5 bg-[#1E1C1A] border border-[#3A3733] rounded-2xl flex flex-col gap-1 text-[11px] font-mono animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="mt-2 p-2.5 bg-[#1E1C1A] border border-[#334155] rounded-2xl flex flex-col gap-1 text-[11px] font-mono animate-in fade-in slide-in-from-bottom-2 duration-150">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-white text-xs">
@@ -127,7 +135,7 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
                   {selectedAnalysis.classification}
                 </span>
               </div>
-              <div className="text-[10px] text-[#8B8987]">
+              <div className="text-[10px] text-[#94A3B8]">
                 {selectedAnalysis.cpl !== undefined && (
                   <span>CPL: <strong className="text-white">{selectedAnalysis.cpl}</strong></span>
                 )}
@@ -150,7 +158,7 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
                 <span>Gợi ý tối ưu: <strong className="font-bold">{selectedAnalysis.bestMoveSan}</strong></span>
               </div>
             ) : (
-              <div className="text-[10px] text-[#8B8987] truncate">
+              <div className="text-[10px] text-[#94A3B8] truncate">
                 {selectedAnalysis.status === 'PENDING'
                   ? 'Đang phân tích nước đi này...'
                   : selectedAnalysis.status === 'FAILED'
@@ -162,10 +170,10 @@ export const MoveHistoryModal: React.FC<MoveHistoryModalProps> = ({
         )}
 
         {/* Footer Button */}
-        <div className="mt-3 pt-3 border-t border-[#312E2B]">
+        <div className="mt-3 pt-3 border-t border-[#2A374A]">
           <button
             onClick={onClose}
-            className="w-full py-2.5 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs transition-colors"
+            className="w-full py-2.5 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs transition-colors"
           >
             Đóng
           </button>

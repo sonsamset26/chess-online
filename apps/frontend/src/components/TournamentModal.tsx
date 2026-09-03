@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trophy, Users, PlusCircle, LogIn, Copy, Check, Swords, Shield, Crown, Play } from 'lucide-react';
+import { X, Trophy, Users, PlusCircle, LogIn, Copy, Check, Swords, Shield, Crown, Play, Trash2, LogOut } from 'lucide-react';
 import { TournamentBracketView } from './TournamentBracketView';
 
 export interface TournamentPlayer {
@@ -73,6 +73,17 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
     }
   }, [externalTournament]);
 
+  // ADV-01: Đồng bộ mã giải đấu đang tham gia vào localStorage để hỗ trợ F5 Reconnect
+  useEffect(() => {
+    if (tournament?.tournamentId) {
+      if (tournament.status === 'IN_PROGRESS' || tournament.status === 'WAITING') {
+        localStorage.setItem('chess_active_tournament_id', tournament.tournamentId);
+      } else if (tournament.status === 'FINISHED') {
+        localStorage.removeItem('chess_active_tournament_id');
+      }
+    }
+  }, [tournament]);
+
   // Lắng nghe các sự kiện socket của giải đấu
   useEffect(() => {
     if (!socket) return;
@@ -117,10 +128,21 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       if (onTournamentUpdated) onTournamentUpdated(data.tournament);
     };
 
+    const handleTournamentCancelled = (data: { message?: string }) => {
+      setErrorMessage(data?.message || 'Giải đấu đã bị hủy bởi chủ phòng.');
+      setLoading(false);
+      setTournament(null);
+      localStorage.removeItem('chess_active_tournament_id');
+      setTimeout(() => {
+        setErrorMessage(null);
+      }, 4000);
+    };
+
     socket.on('tournament_updated', handleTournamentUpdated);
     socket.on('tournament_started', handleTournamentStarted);
     socket.on('round_countdown', handleRoundCountdown);
     socket.on('tournament_finished', handleTournamentFinished);
+    socket.on('tournament_cancelled', handleTournamentCancelled);
     socket.on('tournament_error', handleTournamentError);
 
     return () => {
@@ -128,6 +150,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       socket.off('tournament_started', handleTournamentStarted);
       socket.off('round_countdown', handleRoundCountdown);
       socket.off('tournament_finished', handleTournamentFinished);
+      socket.off('tournament_cancelled', handleTournamentCancelled);
       socket.off('tournament_error', handleTournamentError);
     };
   }, [socket, onTournamentUpdated]);
@@ -218,6 +241,34 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
     });
   };
 
+  // Hủy giải đấu (chỉ Host khi đang ở sảnh chờ)
+  const handleCancelTournament = () => {
+    if (!socket || !tournament || !tournament.code) return;
+    setLoading(true);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
+    socket.emit('cancel_tournament', {
+      code: tournament.code,
+      token: token || undefined,
+    });
+    setTournament(null);
+    localStorage.removeItem('chess_active_tournament_id');
+    setLoading(false);
+  };
+
+  // Rời khỏi phòng giải đấu (khi đang ở sảnh chờ)
+  const handleLeaveTournament = () => {
+    if (!socket || !tournament || !tournament.code) return;
+    setLoading(true);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
+    socket.emit('leave_tournament', {
+      code: tournament.code,
+      token: token || undefined,
+    });
+    setTournament(null);
+    localStorage.removeItem('chess_active_tournament_id');
+    setLoading(false);
+  };
+
   const hostPlayer = tournament?.players.find((p) => p.userId === tournament.hostUserId);
   const isHost =
     tournament?.hostUserId === currentUserId ||
@@ -235,11 +286,20 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200 select-none">
-      <div className={`w-full ${tournament?.status === 'IN_PROGRESS' || tournament?.status === 'FINISHED' ? 'max-w-5xl' : 'max-w-2xl'} bg-[#262421] border border-[#3A3733] rounded-3xl p-4 sm:p-6 shadow-2xl relative max-h-[92vh] flex flex-col transition-all duration-300`}>
+      <div className={`w-full ${tournament?.status === 'IN_PROGRESS' || tournament?.status === 'FINISHED' ? 'max-w-5xl' : 'max-w-2xl'} bg-[#16202E] border border-[#334155] rounded-3xl p-4 sm:p-6 shadow-2xl relative max-h-[92vh] flex flex-col transition-all duration-300`}>
         {/* Nút Đóng */}
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-[#8B8987] hover:text-white p-1.5 rounded-xl bg-[#1C1A17] hover:bg-[#312E2B] border border-[#3A3733] transition-colors"
+          onClick={() => {
+            if (tournament?.status === 'WAITING') {
+              if (isHost) {
+                handleCancelTournament();
+              } else {
+                handleLeaveTournament();
+              }
+            }
+            onClose();
+          }}
+          className="absolute top-4 right-4 text-[#94A3B8] hover:text-white p-1.5 rounded-xl bg-[#0F172A] hover:bg-[#2A374A] border border-[#334155] transition-colors"
           title="Đóng bảng giải đấu"
         >
           <X className="w-5 h-5" />
@@ -254,12 +314,12 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
             <h2 className="text-xl font-black text-white tracking-wide flex items-center gap-2">
               GIẢI ĐẤU CỜ VUA
               {tournament && (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#1C1A17] border border-amber-500/30 text-amber-400 font-mono">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#0F172A] border border-amber-500/30 text-amber-400 font-mono">
                   {tournament.size} Người • Loại trực tiếp
                 </span>
               )}
             </h2>
-            <p className="text-xs text-[#8B8987] font-medium">
+            <p className="text-xs text-[#94A3B8] font-medium">
               Thi đấu loại trực tiếp, cạnh tranh danh hiệu Quán quân!
             </p>
           </div>
@@ -278,8 +338,8 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
             // MÀN HÌNH CHỌN TẠO HOẶC NHẬP PHÒNG
             view === 'menu' ? (
               <div className="flex flex-col gap-4 py-2">
-                <div className="p-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex flex-col gap-3">
-                  <span className="text-xs font-bold text-[#BAB8B6] uppercase tracking-wider">
+                <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#2A374A] flex flex-col gap-3">
+                  <span className="text-xs font-bold text-[#CBD5E1] uppercase tracking-wider">
                     Quy mô giải đấu:
                   </span>
                   <div className="grid grid-cols-2 gap-3">
@@ -288,22 +348,22 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                       className={`p-3 rounded-xl border flex flex-col items-center gap-1 font-bold text-xs transition-all ${
                         selectedSize === 4
                           ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                          : 'bg-[#262421] border-[#3A3733] text-[#8B8987] hover:text-white'
+                          : 'bg-[#16202E] border-[#334155] text-[#94A3B8] hover:text-white'
                       }`}
                     >
                       <span className="text-base font-black">4 Người</span>
-                      <span className="text-[10px] text-[#A8A6A4]">Bán kết & Chung kết (2 vòng)</span>
+                      <span className="text-[10px] text-[#94A3B8]">Bán kết & Chung kết (2 vòng)</span>
                     </button>
                     <button
                       onClick={() => setSelectedSize(8)}
                       className={`p-3 rounded-xl border flex flex-col items-center gap-1 font-bold text-xs transition-all ${
                         selectedSize === 8
                           ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                          : 'bg-[#262421] border-[#3A3733] text-[#8B8987] hover:text-white'
+                          : 'bg-[#16202E] border-[#334155] text-[#94A3B8] hover:text-white'
                       }`}
                     >
                       <span className="text-base font-black">8 Người</span>
-                      <span className="text-[10px] text-[#A8A6A4]">Tứ kết, Bán kết, Chung kết (3 vòng)</span>
+                      <span className="text-[10px] text-[#94A3B8]">Tứ kết, Bán kết, Chung kết (3 vòng)</span>
                     </button>
                   </div>
 
@@ -317,17 +377,17 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                   </button>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-between">
+                <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#2A374A] flex items-center justify-between">
                   <div className="text-left">
                     <h4 className="text-sm font-bold text-white">Bạn đã có mã phòng giải?</h4>
-                    <p className="text-xs text-[#8B8987]">Nhập mã mời 6 ký tự để vào thi đấu</p>
+                    <p className="text-xs text-[#94A3B8]">Nhập mã mời 6 ký tự để vào thi đấu</p>
                   </div>
                   <button
                     onClick={() => {
                       setView('join');
                       setErrorMessage(null);
                     }}
-                    className="py-2.5 px-4 rounded-xl bg-[#262421] hover:bg-[#312E2B] text-amber-400 border border-amber-500/30 font-bold text-xs flex items-center gap-2 transition-all active:scale-95"
+                    className="py-2.5 px-4 rounded-xl bg-[#16202E] hover:bg-[#2A374A] text-amber-400 border border-amber-500/30 font-bold text-xs flex items-center gap-2 transition-all active:scale-95"
                   >
                     <LogIn className="w-4 h-4" />
                     <span>Nhập mã</span>
@@ -339,7 +399,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
               <form onSubmit={handleJoinTournament} className="flex flex-col gap-4 py-4">
                 <div className="text-center mb-2">
                   <h3 className="text-base font-bold text-white mb-1">Nhập mã giải đấu</h3>
-                  <p className="text-xs text-[#8B8987]">Nhận mã từ người tạo phòng và nhập vào ô dưới</p>
+                  <p className="text-xs text-[#94A3B8]">Nhận mã từ người tạo phòng và nhập vào ô dưới</p>
                 </div>
 
                 <div className="flex justify-center">
@@ -349,7 +409,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                     value={inputCode}
                     onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                     placeholder="MÃ 6 KÝ TỰ"
-                    className="w-64 bg-[#1C1A17] border-2 border-amber-500/40 focus:border-amber-400 text-center font-mono text-2xl font-black tracking-widest text-amber-300 py-3 rounded-2xl uppercase outline-none shadow-inner"
+                    className="w-64 bg-[#0F172A] border-2 border-amber-500/40 focus:border-amber-400 text-center font-mono text-2xl font-black tracking-widest text-amber-300 py-3 rounded-2xl uppercase outline-none shadow-inner"
                     autoFocus
                   />
                 </div>
@@ -362,7 +422,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                       setInputCode('');
                       setErrorMessage(null);
                     }}
-                    className="flex-1 py-2.5 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs transition-colors"
+                    className="flex-1 py-2.5 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs transition-colors"
                   >
                     Quay lại
                   </button>
@@ -380,9 +440,9 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
             // MÀN HÌNH GIẢI ĐẤU (LOBBY / BRACKET)
             <div className="flex flex-col gap-4">
               {/* THẺ MÃ PHÒNG VÀ TRẠNG THÁI */}
-              <div className="p-3.5 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl bg-[#0F172A] border border-[#2A374A] flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-[#8B8987] block uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[#94A3B8] block uppercase tracking-wider">
                     MÃ PHÒNG THI ĐẤU
                   </span>
                   <div className="flex items-center gap-2 mt-0.5">
@@ -391,7 +451,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                     </span>
                     <button
                       onClick={handleCopyCode}
-                      className="p-1 rounded-lg bg-[#262421] hover:bg-[#312E2B] text-[#A8A6A4] hover:text-white transition-colors"
+                      className="p-1 rounded-lg bg-[#16202E] hover:bg-[#2A374A] text-[#94A3B8] hover:text-white transition-colors"
                       title="Sao chép mã"
                     >
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -400,7 +460,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[10px] font-bold text-[#8B8987] block uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[#94A3B8] block uppercase tracking-wider">
                     KỲ THỦ THAM GIA
                   </span>
                   <span className="text-sm font-bold text-white">
@@ -422,7 +482,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
               {/* GIAI ĐOẠN 1: SẢNH CHỜ (WAITING ROOM) */}
               {tournament.status === 'WAITING' ? (
                 <div className="flex flex-col gap-3">
-                  <h4 className="text-xs font-bold text-[#BAB8B6] uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-bold text-[#CBD5E1] uppercase tracking-wider flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-amber-400" />
                     <span>Danh sách kỳ thủ đã tham gia</span>
                   </h4>
@@ -431,17 +491,17 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                     {tournament.players.map((p, idx) => (
                       <div
                         key={p.userId || idx}
-                        className="p-3 rounded-xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-between"
+                        className="p-3 rounded-xl bg-[#0F172A] border border-[#2A374A] flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2.5">
-                          <span className="w-6 h-6 rounded-full bg-[#262421] text-xs font-mono font-bold flex items-center justify-center text-[#8B8987]">
+                          <span className="w-6 h-6 rounded-full bg-[#16202E] text-xs font-mono font-bold flex items-center justify-center text-[#94A3B8]">
                             {idx + 1}
                           </span>
                           <div>
                             <span className="text-xs font-bold text-white block">
                               {p.username} {p.userId === tournament.hostUserId && '👑'}
                             </span>
-                            <span className="text-[10px] text-[#8B8987] font-mono">Elo: {p.eloRating}</span>
+                            <span className="text-[10px] text-[#94A3B8] font-mono">Elo: {p.eloRating}</span>
                           </div>
                         </div>
                         {p.userId === tournament.hostUserId && (
@@ -469,15 +529,35 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                       </span>
                     </button>
                   )}
+                  {isHost && (
+                    <button
+                      onClick={handleCancelTournament}
+                      disabled={loading}
+                      className="w-full mt-2 py-2.5 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center justify-center gap-2 border border-rose-500/20 hover:border-rose-500/40 transition-colors active:scale-95 disabled:opacity-40"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Hủy giải đấu
+                    </button>
+                  )}
                   {!isHost && (
-                    <p className="text-center text-xs text-[#8B8987] font-medium mt-2">
-                      Đang đợi chủ phòng bắt đầu giải đấu...
-                    </p>
+                    <div className="mt-2 flex flex-col gap-2">
+                      <p className="text-center text-xs text-[#94A3B8] font-medium">
+                        Đang đợi chủ phòng bắt đầu giải đấu...
+                      </p>
+                      <button
+                        onClick={handleLeaveTournament}
+                        disabled={loading}
+                        className="w-full py-2.5 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] hover:text-white font-bold text-xs flex items-center justify-center gap-2 border border-[#334155] hover:border-[#555250] transition-colors active:scale-95 disabled:opacity-40"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Rời phòng chờ
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  <h4 className="text-xs font-bold text-[#BAB8B6] uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-bold text-[#CBD5E1] uppercase tracking-wider flex items-center gap-1.5">
                     <Swords className="w-3.5 h-3.5 text-amber-400" />
                     <span>Sơ đồ thi đấu (Bracket)</span>
                   </h4>

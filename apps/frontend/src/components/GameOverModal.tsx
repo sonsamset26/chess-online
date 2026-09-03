@@ -1,4 +1,3 @@
-import React from 'react';
 import { Trophy, Frown, Handshake, RotateCcw, ArrowLeft, PlusCircle, TrendingUp, TrendingDown, Eye, X, Swords, Users, Crown } from 'lucide-react';
 import { PlayerColor } from '../hooks/useChessEngine';
 import { EloPlayerResult } from '../hooks/useSocket';
@@ -49,36 +48,36 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const isPlayerWin = (isWhiteWin && playerColor === 'w') || (isBlackWin && playerColor === 'b');
   const isPlayerLose = (isWhiteWin && playerColor === 'b') || (isBlackWin && playerColor === 'w');
 
-  // Xác định nhãn lý do kết thúc chuẩn xác từ Backend
+  // Xác định nhãn lý do kết thúc ván đấu
   let reasonBadge = 'KẾT THÚC VÁN';
   if (endReason === 'RESIGNED') {
-    reasonBadge = '🏳️ ĐẦU HÀNG (RESIGNED)';
+    reasonBadge = '🏳️ ĐẦU HÀNG';
   } else if (endReason === 'TIMEOUT') {
-    reasonBadge = '⏱️ HẾT THỜI GIAN (TIMEOUT)';
+    reasonBadge = '⏱️ HẾT THỜI GIAN';
   } else if (endReason === 'ABANDONED') {
-    reasonBadge = '⚠️ ĐỐI THỦ RỜI TRẬN (ABANDONED)';
+    reasonBadge = '⚠️ ĐỐI THỦ RỜI TRẬN';
   } else if (endReason === 'DRAW' || isDraw) {
-    reasonBadge = '🤝 HÒA CỜ (STALEMATE / DRAW)';
+    reasonBadge = '🤝 HÒA CỜ';
   } else if (endReason === 'CHECKMATE') {
-    reasonBadge = '👑 CHIẾU HẾT (CHECKMATE)';
+    reasonBadge = '👑 CHIẾU HẾT';
   } else if (customMessage?.includes('hết giờ') || customMessage?.includes('thời gian') || customMessage?.includes('Timeout')) {
-    reasonBadge = '⏱️ HẾT THỜI GIAN (TIMEOUT)';
+    reasonBadge = '⏱️ HẾT THỜI GIAN';
   } else if (customMessage?.includes('đầu hàng') || customMessage?.includes('ngắt kết nối')) {
     reasonBadge = '🏳️ ĐẦU HÀNG / RỜI TRẬN';
   } else if (isDraw) {
-    reasonBadge = '🤝 HÒA CỜ (STALEMATE / DRAW)';
+    reasonBadge = '🤝 HÒA CỜ';
   } else {
-    reasonBadge = '👑 CHIẾU HẾT (CHECKMATE)';
+    reasonBadge = '👑 CHIẾU HẾT';
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in-95 duration-300 select-none">
-      <div className="w-full max-w-sm bg-[#262421] border border-[#3A3733] rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center relative">
+      <div className="w-full max-w-sm bg-[#16202E] border border-[#334155] rounded-3xl p-6 shadow-2xl text-center flex flex-col items-center relative">
         
         {/* NÚT ĐÓNG X GÓC TRÊN ĐỂ XEM BÀN CỜ */}
         <button
           onClick={onCloseToReview}
-          className="absolute top-4 right-4 text-[#8B8987] hover:text-white p-2 rounded-xl bg-[#1C1A17] hover:bg-[#312E2B] border border-[#3A3733] transition-colors"
+          className="absolute top-4 right-4 text-[#94A3B8] hover:text-white p-2 rounded-xl bg-[#0F172A] hover:bg-[#2A374A] border border-[#334155] transition-colors"
           title="Đóng bảng để xem bàn cờ"
         >
           <X className="w-4 h-4" />
@@ -86,7 +85,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* BADGE LÝ DO KẾT THÚC */}
         <div className="mb-3 flex items-center gap-1.5">
-          <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-[#1C1A17] text-pink-400 border border-pink-500/20 shadow-sm">
+          <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-[#0F172A] text-pink-400 border border-pink-500/20 shadow-sm">
             {reasonBadge}
           </span>
         </div>
@@ -105,7 +104,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <h2 className="text-2xl font-black text-amber-400 tracking-wide mb-1">
               BẠN LÀ NHÀ VÔ ĐỊCH!
             </h2>
-            <p className="text-xs text-[#BAB8B6] mb-4 leading-relaxed font-medium">
+            <p className="text-xs text-[#CBD5E1] mb-4 leading-relaxed font-medium">
               Chúc mừng bạn đã xuất sắc chiến thắng toàn bộ các vòng đấu và giành chức Vô địch giải đấu Cờ vua!
             </p>
           </>
@@ -117,7 +116,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <h2 className="text-2xl font-black text-emerald-400 tracking-wide mb-1">
               BẠN ĐÃ CHIẾN THẮNG!
             </h2>
-            <p className="text-xs text-[#A8A6A4] mb-4 leading-relaxed font-medium">
+            <p className="text-xs text-[#94A3B8] mb-4 leading-relaxed font-medium">
               {customMessage || 'Chúc mừng bạn đã xuất sắc đánh bại đối thủ!'}
             </p>
           </>
@@ -131,7 +130,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <h2 className="text-2xl font-black text-rose-400 tracking-wide mb-1">
               BẠN ĐÃ THẤT BẠI!
             </h2>
-            <p className="text-xs text-[#A8A6A4] mb-4 leading-relaxed font-medium">
+            <p className="text-xs text-[#94A3B8] mb-4 leading-relaxed font-medium">
               {customMessage || 'Ván đấu kết thúc. Hãy xem lại bàn cờ để rút kinh nghiệm cho ván tiếp theo!'}
             </p>
           </>
@@ -145,7 +144,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <h2 className="text-2xl font-black text-blue-400 tracking-wide mb-1">
               VÁN CỜ HÒA!
             </h2>
-            <p className="text-xs text-[#A8A6A4] mb-4 leading-relaxed font-medium">
+            <p className="text-xs text-[#94A3B8] mb-4 leading-relaxed font-medium">
               {customMessage || 'Trận đấu kết thúc với kết quả Hòa.'}
             </p>
           </>
@@ -153,9 +152,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* THẺ BIẾN ĐỘNG ELO KHI LÀ ĐẤU XẾP HẠNG RATED */}
         {isRated && myEloResult && (
-          <div className="w-full p-3 mb-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-between shadow-inner">
+          <div className="w-full p-3 mb-4 rounded-2xl bg-[#0F172A] border border-[#2A374A] flex items-center justify-between shadow-inner">
             <div className="text-left">
-              <span className="text-[10px] text-[#8B8987] font-bold block uppercase tracking-wider">
+              <span className="text-[10px] text-[#94A3B8] font-bold block uppercase tracking-wider">
                 Điểm Elo Xếp Hạng
               </span>
               <span className="text-sm font-extrabold text-white font-mono">
@@ -176,10 +175,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* THẺ GIAO HỮU NẾU LÀ ĐẤU BẠN BÈ (CUSTOM ROOM UNRATED) */}
         {!isRated && isOnlineMatch && !isTournamentMatch && (
-          <div className="w-full p-2.5 mb-4 rounded-2xl bg-[#1C1A17] border border-[#312E2B] flex items-center justify-center gap-2 shadow-inner">
+          <div className="w-full p-2.5 mb-4 rounded-2xl bg-[#0F172A] border border-[#2A374A] flex items-center justify-center gap-2 shadow-inner">
             <Users className="w-3.5 h-3.5 text-pink-400" />
-            <span className="text-[11px] font-bold text-[#A8A6A4]">
-              Đấu Bạn Bè (Giao Hữu • Không tính điểm Elo)
+            <span className="text-[11px] font-bold text-[#94A3B8]">
+              Đấu Bạn Bè • Không tính điểm Elo
             </span>
           </div>
         )}
@@ -203,18 +202,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     <span>{isChampion ? 'Xem Bảng Xếp Hạng Giải Đấu' : 'Xem Nhánh Đấu / Chờ Vòng Sau'}</span>
                   </button>
                 )}
-                {onOpenAnalysis && moveHistory.length > 0 && isChampion && (
-                  <button
-                    onClick={onOpenAnalysis}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-500 hover:from-indigo-500 hover:to-purple-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                  >
-                    <span>📊</span>
-                    <span>Phân Tích Ván Chung Kết</span>
-                  </button>
-                )}
                 <button
                   onClick={onCloseToReview}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
                   <Eye className="w-4 h-4" />
                   <span>Xem lại bàn cờ</span>
@@ -222,19 +212,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               </>
             ) : (
               <>
-                {onOpenAnalysis && moveHistory.length > 0 && (
-                  <button
-                    onClick={onOpenAnalysis}
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-500 hover:from-indigo-500 hover:to-purple-400 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                  >
-                    <span>📊</span>
-                    <span>Phân Tích Ván Đấu</span>
-                  </button>
-                )}
                 {onViewBracket && (
                   <button
                     onClick={onViewBracket}
-                    className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
                   >
                     <Trophy className="w-4 h-4" />
                     <span>Xem Nhánh Đấu</span>
@@ -242,7 +223,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 )}
                 <button
                   onClick={onCloseToReview}
-                  className="w-full py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
                 >
                   <Eye className="w-4 h-4" />
                   <span>Xem lại bàn cờ</span>
@@ -274,19 +255,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 )}
               </button>
 
-              {onOpenAnalysis && moveHistory.length > 0 && (
-                <button
-                  onClick={onOpenAnalysis}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-950/80 to-purple-950/80 hover:from-indigo-900/90 hover:to-purple-900/90 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
-                >
-                  <span>📊</span>
-                  <span>Phân Tích Ván Đấu</span>
-                </button>
-              )}
-
               <button
                 onClick={onCloseToReview}
-                className="w-full py-2.5 px-4 rounded-xl bg-[#1C1A17] hover:bg-[#2B2926] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                className="w-full py-2.5 px-4 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
               >
                 <Eye className="w-4 h-4" />
                 <span>Xem lại bàn cờ</span>
@@ -294,7 +265,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
               <button
                 onClick={onBackToMenu}
-                className="w-full py-2 px-4 rounded-xl bg-[#312E2B] hover:bg-[#3B3835] text-[#BAB8B6] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Trở về Menu</span>

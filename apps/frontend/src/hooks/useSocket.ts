@@ -63,10 +63,10 @@ export interface MoveData {
 
 export interface ResignationData {
   roomId: string;
-  winnerColor: 'w' | 'b';
+  winnerColor: 'w' | 'b' | 'draw';
   winnerName: string;
   loserName: string;
-  reason: 'RESIGNATION' | 'DISCONNECT' | 'TIMEOUT';
+  reason: 'RESIGNATION' | 'DISCONNECT' | 'TIMEOUT' | 'DRAW';
   message: string;
   eloResult?: EloCalculationResult | null;
 }
@@ -75,6 +75,12 @@ export interface DisconnectedOpponentInfo {
   disconnectedPlayer: string;
   gracePeriodSeconds: number;
   message: string;
+}
+
+export interface DrawOfferData {
+  roomId: string;
+  offeredBy: 'w' | 'b';
+  username: string;
 }
 
 export function useSocket() {
@@ -89,6 +95,10 @@ export function useSocket() {
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const [friendRoomError, setFriendRoomError] = useState<string | null>(null);
   const [resignationEvent, setResignationEvent] = useState<ResignationData | null>(null);
+
+  // States cho sự kiện Cầu hòa (Mutual Draw Offer - FIDE 9.1)
+  const [drawOffer, setDrawOffer] = useState<DrawOfferData | null>(null);
+  const [drawDeclinedMsg, setDrawDeclinedMsg] = useState<string | null>(null);
 
   // States cho sự kiện Mất kết nối & Kết nối lại (Reconnect 45s Grace Period)
   const [disconnectedOpponent, setDisconnectedOpponent] = useState<DisconnectedOpponentInfo | null>(null);
@@ -118,6 +128,12 @@ export function useSocket() {
 
     socketInstance.on('queue_left', () => {
       setIsSearchingQueue(false);
+    });
+
+    socketInstance.on('queue_error', (data: { message: string }) => {
+      console.warn('⚠️ [Socket.io Client] Queue Error:', data.message);
+      setIsSearchingQueue(false);
+      alert(data.message || 'Không thể tham gia hàng chờ xếp hạng.');
     });
 
     socketInstance.on('friend_room_created', (data: { roomCode: string; roomId: string }) => {
@@ -191,6 +207,27 @@ export function useSocket() {
       setCreatedRoomCode(null);
     });
 
+    // Lắng nghe các sự kiện Cầu hòa (Mutual Draw Offer - FIDE 9.1)
+    socketInstance.on('draw_offered', (data: DrawOfferData) => {
+      console.log('🤝 [Draw Offer]:', data);
+      setDrawOffer(data);
+    });
+
+    socketInstance.on('draw_declined', (data: { message: string }) => {
+      console.log('❌ [Draw Declined]:', data.message);
+      setDrawOffer(null);
+      setDrawDeclinedMsg(data.message || 'Đối thủ đã từ chối lời mời hòa.');
+      setTimeout(() => setDrawDeclinedMsg(null), 3500);
+    });
+
+    socketInstance.on('draw_cancelled', () => {
+      setDrawOffer(null);
+    });
+
+    socketInstance.on('game_draw', () => {
+      setDrawOffer(null);
+    });
+
     setSocket(socketInstance);
 
     return () => {
@@ -234,9 +271,14 @@ export function useSocket() {
   };
 
   // Reconnect lại phòng đấu khi F5 web
-  const reconnectMatch = (roomId: string, userId: string) => {
+  const reconnectMatch = (roomId: string, tokenOrUserId: string) => {
     if (socket && isConnected) {
-      socket.emit('reconnect_match', { roomId, userId });
+      const isJwt = typeof tokenOrUserId === 'string' && tokenOrUserId.split('.').length === 3;
+      socket.emit('reconnect_match', {
+        roomId,
+        token: isJwt ? tokenOrUserId : undefined,
+        userId: !isJwt ? tokenOrUserId : undefined,
+      });
     }
   };
 
@@ -244,6 +286,27 @@ export function useSocket() {
   const resignMatch = (roomId: string) => {
     if (socket && isConnected) {
       socket.emit('resign_match', { roomId });
+    }
+  };
+
+  // Cầu hòa trận đấu (Mutual Draw Offer)
+  const offerDraw = (roomId: string) => {
+    if (socket && isConnected) {
+      socket.emit('offer_draw', { roomId });
+    }
+  };
+
+  const acceptDraw = (roomId: string) => {
+    if (socket && isConnected) {
+      socket.emit('accept_draw', { roomId });
+      setDrawOffer(null);
+    }
+  };
+
+  const declineDraw = (roomId: string) => {
+    if (socket && isConnected) {
+      socket.emit('decline_draw', { roomId });
+      setDrawOffer(null);
     }
   };
 
@@ -261,10 +324,15 @@ export function useSocket() {
     setFriendRoomError(null);
     setResignationEvent(null);
     setDisconnectedOpponent(null);
+    setDrawOffer(null);
+    setDrawDeclinedMsg(null);
   };
 
-  const registerUser = (token: string, userId?: string) => {
-    if (socket && isConnected && token) {
+  const registerUser = (arg1?: string, arg2?: string) => {
+    if (socket && isConnected) {
+      const isJwt = (s?: string) => typeof s === 'string' && s.split('.').length === 3;
+      const token = isJwt(arg1) ? arg1 : (isJwt(arg2) ? arg2 : undefined);
+      const userId = !isJwt(arg1) ? arg1 : (!isJwt(arg2) ? arg2 : undefined);
       socket.emit('register_user', { token, userId });
     }
   };
@@ -290,6 +358,8 @@ export function useSocket() {
     currentClock,
     resignationEvent,
     disconnectedOpponent,
+    drawOffer,
+    drawDeclinedMsg,
     forceLogoutMessage,
     clearForceLogoutMessage,
     registerUser,
@@ -301,6 +371,9 @@ export function useSocket() {
     cancelFriendRoom,
     reconnectMatch,
     resignMatch,
+    offerDraw,
+    acceptDraw,
+    declineDraw,
     sendMove,
     clearActiveMatch,
   };
