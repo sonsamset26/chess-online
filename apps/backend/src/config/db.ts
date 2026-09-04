@@ -8,7 +8,9 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 export const connectDB = async (): Promise<void> => {
   try {
     const mongoURI =
-      process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/chess_online';
+      process.env.MONGODB_URI ||
+      process.env.MONGO_URI ||
+      'mongodb://127.0.0.1:27017/chess_online';
 
     const isCloud = mongoURI.includes('mongodb+srv');
 
