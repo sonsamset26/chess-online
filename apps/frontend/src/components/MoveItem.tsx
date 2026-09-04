@@ -10,7 +10,7 @@ interface MoveItemProps {
   onClick?: (ply: number) => void;
 }
 
-export const MoveItem: React.FC<MoveItemProps> = ({
+const MoveItemComponent: React.FC<MoveItemProps> = ({
   ply,
   san,
   color,
@@ -113,7 +113,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
     <button
       type="button"
       onClick={() => onClick?.(ply)}
-      className={`h-7 px-2 rounded-lg border text-left font-mono text-[11px] flex items-center justify-between gap-1 transition-all select-none cursor-pointer ${
+      className={`h-7 px-2 rounded-lg border text-left font-mono text-[11px] flex items-center justify-between gap-1 transition-colors select-none cursor-pointer ${
         isSelected
           ? 'bg-pink-500/20 border-pink-500/60 shadow-sm shadow-pink-500/20 text-pink-200'
           : 'bg-slate-800/40 border-slate-800/80 hover:bg-slate-800/70 hover:border-slate-700 text-slate-300'
@@ -132,3 +132,5 @@ export const MoveItem: React.FC<MoveItemProps> = ({
     </button>
   );
 };
+
+export const MoveItem = React.memo(MoveItemComponent);

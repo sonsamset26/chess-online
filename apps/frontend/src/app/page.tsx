@@ -373,19 +373,17 @@ export default function Home() {
     };
   }, [replayMatch?._id, replayMatch?.moves, user?.token]);
 
-  // TÍCH HỢP LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
+  // TÍCH HỢP LIVE MOVE ANALYSIS (CHỈ KÍCH HOẠT KHI ĐẤU VỚI MÁY / BOTS THEO CHUẨN QUỐC TẾ)
   const isLiveAnalysisEnabled =
     activeTab === 'play' &&
     replayMatch === null &&
-    (activeMode === 'bots' || activeMode === 'friend' || (activeMatch !== null && activeMatch.isRated === false && !activeMatch.isTournament));
+    activeMode === 'bots';
 
   const handleMoveAnalyzed = useCallback(
     (ply: number, analysis: any) => {
-      if (activeMatch && activeMatch.isRated === false && !activeMatch.isTournament) {
-        shareMoveAnalysis(activeMatch.roomId, ply, analysis);
-      }
+      // Khi đấu với máy, phân tích chỉ phục vụ hiển thị cục bộ cho người chơi
     },
-    [activeMatch, shareMoveAnalysis]
+    []
   );
 
   const {
