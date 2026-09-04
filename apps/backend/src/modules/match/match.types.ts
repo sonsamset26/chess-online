@@ -56,6 +56,7 @@ export interface GameState {
   };
   isArmageddon?: boolean;
   drawOfferedBy?: 'w' | 'b' | null;
+  liveAnalyses?: Record<number, any>;
 }
 
 export interface QueueEntry {

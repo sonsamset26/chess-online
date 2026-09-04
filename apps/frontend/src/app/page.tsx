@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Sidebar, ActiveTab } from '../components/Sidebar';
 import { GameModeSelection } from '../components/PlayMenu';
 import { AuthModal } from '../components/AuthModal';
@@ -213,6 +213,8 @@ export default function Home() {
     reconnectMatch,
     resignMatch,
     sendMove,
+    shareMoveAnalysis,
+    syncedAnalysis,
     clearActiveMatch,
   } = useSocket();
 
@@ -377,14 +379,26 @@ export default function Home() {
     replayMatch === null &&
     (activeMode === 'bots' || activeMode === 'friend' || (activeMatch !== null && activeMatch.isRated === false && !activeMatch.isTournament));
 
+  const handleMoveAnalyzed = useCallback(
+    (ply: number, analysis: any) => {
+      if (activeMatch && activeMatch.isRated === false && !activeMatch.isTournament) {
+        shareMoveAnalysis(activeMatch.roomId, ply, analysis);
+      }
+    },
+    [activeMatch, shareMoveAnalysis]
+  );
+
   const {
     analysisByPly,
     selectedPly,
     setSelectedPly,
     enqueueMove,
     resetAnalysis,
+    syncRemoteAnalysis,
+    syncAllRemoteAnalyses,
   } = useLiveAnalysis({
     enabled: isLiveAnalysisEnabled,
+    onMoveAnalyzed: handleMoveAnalyzed,
   });
 
   const processedPlyRef = useRef<number>(0);
@@ -410,7 +424,7 @@ export default function Home() {
       return;
     }
 
-    // Tái tạo lại FEN từng nước và enqueue các nước chưa có kết quả phân tích ANALYZED
+    // Tái tạo lại FEN từng nước và enqueue các nước chưa có kết quả phân tích
     const clone = new Chess();
     for (let p = 1; p <= currentPlies; p++) {
       const ply = p;
@@ -424,9 +438,9 @@ export default function Home() {
       }
       const fenAfter = clone.fen();
 
-      // Reconciliation: Chỉ enqueue nếu nước này chưa có kết quả phân tích ANALYZED thành công
+      // Reconciliation: Chỉ enqueue nếu nước này chưa từng được phân tích hoặc bị FAILED (tránh trùng lặp khi PENDING)
       const existing = analysisByPly[ply];
-      if (!existing || existing.status !== 'ANALYZED') {
+      if (!existing || existing.status === 'FAILED') {
         enqueueMove({
           ply,
           fenBefore,
@@ -439,6 +453,20 @@ export default function Home() {
 
     processedPlyRef.current = currentPlies;
   }, [moveHistory, isLiveAnalysisEnabled, enqueueMove, resetAnalysis, analysisByPly]);
+
+  // Đồng bộ phân tích nước đi tức thời từ đối thủ qua WebSocket trong phòng bạn bè
+  useEffect(() => {
+    if (syncedAnalysis && activeMatch && syncedAnalysis.roomId === activeMatch.roomId) {
+      syncRemoteAnalysis(syncedAnalysis.ply, syncedAnalysis.analysis);
+    }
+  }, [syncedAnalysis, activeMatch, syncRemoteAnalysis]);
+
+  // Phục hồi phân tích của các nước đi trước đó khi F5 / Reconnect vào phòng bạn bè
+  useEffect(() => {
+    if (activeMatch?.liveAnalyses && Object.keys(activeMatch.liveAnalyses).length > 0) {
+      syncAllRemoteAnalyses(activeMatch.liveAnalyses);
+    }
+  }, [activeMatch, syncAllRemoteAnalyses]);
 
   // ---------------------------------------------------------------------------
   // ĐỒNG HỒ THI ĐẤU THỜI GIAN THỰC (REALTIME IN-GAME CHESS CLOCK)

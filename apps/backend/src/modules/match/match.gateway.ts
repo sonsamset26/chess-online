@@ -354,6 +354,34 @@ export class MatchGateway {
         }
       });
 
+      // 6b. CHIA SẺ VÀ ĐỒNG BỘ PHÂN TÍCH NƯỚC ĐI REALTIME GIỮA 2 KỲ THỦ
+      socket.on('share_move_analysis', (data: { roomId: string; ply: number; analysis: any }) => {
+        if (!data || !data.roomId || !data.ply || !data.analysis) return;
+        const room = this.activeRooms.get(data.roomId);
+        if (!room) return;
+
+        // Chỉ chấp nhận từ 2 người chơi trong phòng
+        const isWhite = room.players.white.socketId === socket.id;
+        const isBlack = room.players.black.socketId === socket.id;
+        if (!isWhite && !isBlack) return;
+
+        if (!room.liveAnalyses) {
+          room.liveAnalyses = {};
+        }
+
+        // Canonical single-source of truth: Lấy kết quả đầu tiên được gửi lên
+        if (!room.liveAnalyses[data.ply]) {
+          room.liveAnalyses[data.ply] = data.analysis;
+        }
+
+        // Broadcast bản phân tích chuẩn cho cả 2 bên cùng hiển thị đồng nhất 100%
+        this.io.to(data.roomId).emit('sync_move_analysis', {
+          roomId: data.roomId,
+          ply: data.ply,
+          analysis: room.liveAnalyses[data.ply],
+        });
+      });
+
       // 7. XỬ LÝ KẾT NỐI LẠI PHÒNG (RECONNECT / F5 GRACE PERIOD)
       socket.on('reconnect_match', (data: { roomId: string; userId?: string; token?: string }) => {
         if (!data || !data.roomId) {
@@ -425,6 +453,7 @@ export class MatchGateway {
           turn: room.game.turn(),
           isRated: room.isRated,
           yourColor: isWhite ? 'w' : 'b',
+          liveAnalyses: room.liveAnalyses || {},
           clock: {
             whiteTimeMs: room.clock.whiteTimeMs,
             blackTimeMs: room.clock.blackTimeMs,

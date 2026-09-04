@@ -18,10 +18,11 @@ export interface UseLiveAnalysisOptions {
   enabled: boolean;
   depth?: number;
   movetimeMs?: number;
+  onMoveAnalyzed?: (ply: number, analysis: MoveAnalysis) => void;
 }
 
 export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
-  const { enabled, depth = 8, movetimeMs = 150 } = options;
+  const { enabled, depth = 8, movetimeMs = 150, onMoveAnalyzed } = options;
 
   const [analysisByPly, setAnalysisByPly] = useState<Record<number, MoveAnalysis>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -34,6 +35,12 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
   const queueRef = useRef<LiveAnalysisJob[]>([]);
   const isProcessingRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const inFlightPliesRef = useRef<Set<number>>(new Set());
+
+  const onMoveAnalyzedRef = useRef(onMoveAnalyzed);
+  useEffect(() => {
+    onMoveAnalyzedRef.current = onMoveAnalyzed;
+  }, [onMoveAnalyzed]);
 
   // Khởi tạo và warmup Stockfish Worker sớm ngay khi mount
   useEffect(() => {
@@ -63,6 +70,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
       queueRef.current = [];
+      inFlightPliesRef.current.clear();
       isProcessingRef.current = false;
       sessionCacheRef.current.clear();
       setAnalysisByPly({});
@@ -83,7 +91,10 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
         if (!currentJob) break;
 
         // Bỏ qua nếu job thuộc thế hệ ván cờ cũ (do game reset)
-        if (currentJob.generation !== generationRef.current) continue;
+        if (currentJob.generation !== generationRef.current) {
+          inFlightPliesRef.current.delete(currentJob.ply);
+          continue;
+        }
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -105,10 +116,20 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
           );
 
           if (currentJob.generation === generationRef.current) {
-            setAnalysisByPly((prev) => ({
-              ...prev,
-              [currentJob.ply]: result,
-            }));
+            let shouldEmit = true;
+            setAnalysisByPly((prev) => {
+              if (prev[currentJob.ply]?.status === 'ANALYZED' && (prev[currentJob.ply] as any)?.isSynced) {
+                shouldEmit = false;
+                return prev;
+              }
+              return {
+                ...prev,
+                [currentJob.ply]: result,
+              };
+            });
+            if (shouldEmit) {
+              onMoveAnalyzedRef.current?.(currentJob.ply, result);
+            }
           }
         } catch (err: any) {
           if (
@@ -117,25 +138,29 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
             err?.message !== 'Worker terminated' &&
             currentJob.generation === generationRef.current
           ) {
-            setAnalysisByPly((prev) => ({
-              ...prev,
-              [currentJob.ply]: {
-                ply: currentJob.ply,
-                moveNumber: Math.floor((currentJob.ply - 1) / 2) + 1,
-                color: currentJob.playerColor,
-                san: currentJob.moveSan,
-                from: 'a1',
-                to: 'a1',
-                fenBefore: currentJob.fenBefore,
-                fenAfter: currentJob.fenAfter,
-                bestMoveSan: '',
-                bestMoveUci: '',
-                phase: 'OPENING',
-                status: 'FAILED',
-              },
-            }));
+            setAnalysisByPly((prev) => {
+              if (prev[currentJob.ply]?.status === 'ANALYZED') return prev;
+              return {
+                ...prev,
+                [currentJob.ply]: {
+                  ply: currentJob.ply,
+                  moveNumber: Math.floor((currentJob.ply - 1) / 2) + 1,
+                  color: currentJob.playerColor,
+                  san: currentJob.moveSan,
+                  from: 'a1',
+                  to: 'a1',
+                  fenBefore: currentJob.fenBefore,
+                  fenAfter: currentJob.fenAfter,
+                  bestMoveSan: '',
+                  bestMoveUci: '',
+                  phase: 'OPENING',
+                  status: 'FAILED',
+                },
+              };
+            });
           }
         } finally {
+          inFlightPliesRef.current.delete(currentJob.ply);
           abortControllerRef.current = null;
         }
       }
@@ -145,7 +170,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     }
   }, [enabled, depth, movetimeMs]);
 
-  // Đẩy nước đi mới vào hàng đợi phân tích
+  // Đẩy nước đi mới vào hàng đợi phân tích (Chống enqueue trùng lặp triệt để)
   const enqueueMove = useCallback(
     (params: {
       ply: number;
@@ -156,9 +181,14 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     }) => {
       if (!enabled) return;
 
+      // Không phân tích nếu nước này đang được phân tích hoặc đã có trong hàng đợi
+      if (inFlightPliesRef.current.has(params.ply)) return;
+
       if (!bridgeRef.current) {
         bridgeRef.current = new StockfishBridge();
       }
+
+      inFlightPliesRef.current.add(params.ply);
 
       const job: LiveAnalysisJob = {
         ...params,
@@ -207,11 +237,40 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     queueRef.current = [];
+    inFlightPliesRef.current.clear();
     isProcessingRef.current = false;
     sessionCacheRef.current.clear();
     setAnalysisByPly({});
     setIsAnalyzing(false);
     setSelectedPly(null);
+  }, []);
+
+  // Nhận bản phân tích chuẩn từ đối thủ qua WebSocket
+  const syncRemoteAnalysis = useCallback((ply: number, analysis: MoveAnalysis) => {
+    inFlightPliesRef.current.delete(ply);
+    queueRef.current = queueRef.current.filter((q) => !(q.ply === ply && q.generation === generationRef.current));
+    const taggedAnalysis = { ...analysis, isSynced: true };
+    setAnalysisByPly((prev) => ({
+      ...prev,
+      [ply]: taggedAnalysis,
+    }));
+  }, []);
+
+  // Khôi phục tất cả các nước đã phân tích khi F5 / Reconnect
+  const syncAllRemoteAnalyses = useCallback((analyses: Record<number, MoveAnalysis>) => {
+    if (!analyses || Object.keys(analyses).length === 0) return;
+    const plies = Object.keys(analyses).map(Number);
+    plies.forEach((p) => inFlightPliesRef.current.delete(p));
+    queueRef.current = queueRef.current.filter((q) => !(plies.includes(q.ply) && q.generation === generationRef.current));
+
+    const tagged: Record<number, MoveAnalysis> = {};
+    for (const [k, v] of Object.entries(analyses)) {
+      tagged[Number(k)] = { ...v, isSynced: true };
+    }
+    setAnalysisByPly((prev) => ({
+      ...prev,
+      ...tagged,
+    }));
   }, []);
 
   return {
@@ -221,5 +280,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     setSelectedPly,
     enqueueMove,
     resetAnalysis,
+    syncRemoteAnalysis,
+    syncAllRemoteAnalyses,
   };
 }

@@ -150,6 +150,7 @@ export class FriendRoomManager {
           incrementMs,
         },
         moveTelemetry: [],
+        liveAnalyses: {},
       };
 
       this.activeRooms.set(friendRoom.roomId, newRoom);
@@ -175,6 +176,7 @@ export class FriendRoomManager {
         fen: game.fen(),
         history: game.history(),
         isRated: false,
+        liveAnalyses: {},
         clock: {
           whiteTimeMs: initialTimeMs,
           blackTimeMs: initialTimeMs,

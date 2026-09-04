@@ -217,6 +217,7 @@ export class MatchmakingManager {
       },
       timeControl: p1.timeControl,
       moveTelemetry: [],
+      liveAnalyses: {},
     };
 
     this.activeRooms.set(roomId, newRoom);
@@ -243,6 +244,7 @@ export class MatchmakingManager {
       fen: game.fen(),
       history: game.history(),
       isRated: p1.isRated,
+      liveAnalyses: {},
       clock: {
         whiteTimeMs: initialTimeMs,
         blackTimeMs: initialTimeMs,

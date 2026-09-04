@@ -46,6 +46,7 @@ export interface MoveAnalysis {
   status?: MoveAnalysisStatus;   // Trạng thái phân tích trong hàng đợi Live Analysis
   timeSpentMs?: number;          // Thời gian suy nghĩ của nước đi (nếu có)
   isTimePressure?: boolean;      // Đi khi thời gian còn dưới 30s
+  isSynced?: boolean;            // Được đồng bộ từ đối thủ qua WebSocket
 }
 
 export interface AnalyzeSingleMoveInput {

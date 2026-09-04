@@ -354,6 +354,7 @@ export class TournamentMatchManager {
       },
       timeControl,
       moveTelemetry: [],
+      liveAnalyses: {},
       tournamentContext: prevRoom.tournamentContext,
       isArmageddon: true,
     };
@@ -471,6 +472,7 @@ export class TournamentMatchManager {
         incrementMs: 0,
       },
       moveTelemetry: [],
+      liveAnalyses: {},
       tournamentContext: {
         tournamentId: tournament.tournamentId,
         roundNumber,

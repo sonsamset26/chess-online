@@ -31,6 +31,7 @@ export interface ActiveMatch {
   drawOdds?: 'w' | 'b';
   isTournament?: boolean;
   clock?: ClockPayload;
+  liveAnalyses?: Record<number, any>;
 }
 
 export interface EloPlayerResult {
@@ -105,6 +106,9 @@ export function useSocket() {
 
   // State cho sự kiện Bị đá phiên do đăng nhập ở nơi khác (Single Session Enforcement)
   const [forceLogoutMessage, setForceLogoutMessage] = useState<string | null>(null);
+
+  // State cho sự kiện Đồng bộ phân tích nước đi Realtime (Friend Match live analysis sync)
+  const [syncedAnalysis, setSyncedAnalysis] = useState<{ roomId: string; ply: number; analysis: any } | null>(null);
 
   useEffect(() => {
     const socketInstance = io(SOCKET_URL, {
@@ -228,6 +232,11 @@ export function useSocket() {
       setDrawOffer(null);
     });
 
+    // Lắng nghe sự kiện đồng bộ phân tích nước đi Realtime giữa 2 kỳ thủ
+    socketInstance.on('sync_move_analysis', (data: { roomId: string; ply: number; analysis: any }) => {
+      setSyncedAnalysis(data);
+    });
+
     setSocket(socketInstance);
 
     return () => {
@@ -326,6 +335,13 @@ export function useSocket() {
     setDisconnectedOpponent(null);
     setDrawOffer(null);
     setDrawDeclinedMsg(null);
+    setSyncedAnalysis(null);
+  };
+
+  const shareMoveAnalysis = (roomId: string, ply: number, analysis: any) => {
+    if (socket && isConnected) {
+      socket.emit('share_move_analysis', { roomId, ply, analysis });
+    }
   };
 
   const registerUser = (arg1?: string, arg2?: string) => {
@@ -361,6 +377,7 @@ export function useSocket() {
     drawOffer,
     drawDeclinedMsg,
     forceLogoutMessage,
+    syncedAnalysis,
     clearForceLogoutMessage,
     registerUser,
     unregisterUser,
@@ -375,6 +392,7 @@ export function useSocket() {
     acceptDraw,
     declineDraw,
     sendMove,
+    shareMoveAnalysis,
     clearActiveMatch,
   };
 }
