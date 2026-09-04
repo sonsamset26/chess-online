@@ -32,6 +32,22 @@ export class AnalysisCacheService {
   }
 
   /**
+   * Kiểm tra xem một đối tượng phân tích có thực sự hợp lệ và có dữ liệu phân loại nước đi hay không
+   */
+  public static isValidAnalysis(analysis?: any): boolean {
+    if (!analysis) return false;
+    if (analysis.status === 'NOT_ANALYZED' || analysis.status === 'FAILED') return false;
+
+    // Phải có ít nhất 1 nước đi được phân tích
+    const hasMoves = Array.isArray(analysis.moves) && analysis.moves.length > 0;
+    const hasClassifications =
+      (Array.isArray(analysis.moveClassifications) && analysis.moveClassifications.length > 0) ||
+      (Array.isArray(analysis.summary?.moveClassifications) && analysis.summary.moveClassifications.length > 0);
+
+    return hasMoves || hasClassifications;
+  }
+
+  /**
    * Lấy báo cáo phân tích từ bộ nhớ đệm LocalStorage (tìm kép theo matchId và chuỗi nước đi)
    */
   public static getCache(matchIdOrKey?: string | null, moves?: string[]): GameAnalysisReport | null {
@@ -41,7 +57,12 @@ export class AnalysisCacheService {
     if (matchIdOrKey) {
       try {
         const raw = localStorage.getItem(`${CACHE_PREFIX}${matchIdOrKey}`);
-        if (raw) return JSON.parse(raw) as GameAnalysisReport;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (this.isValidAnalysis(parsed)) {
+            return parsed as GameAnalysisReport;
+          }
+        }
       } catch (err) {
         console.warn('Lỗi đọc cache theo matchId:', err);
       }
@@ -52,7 +73,12 @@ export class AnalysisCacheService {
     if (movesKey) {
       try {
         const raw = localStorage.getItem(`${CACHE_PREFIX}${movesKey}`);
-        if (raw) return JSON.parse(raw) as GameAnalysisReport;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (this.isValidAnalysis(parsed)) {
+            return parsed as GameAnalysisReport;
+          }
+        }
       } catch (err) {
         console.warn('Lỗi đọc cache theo movesKey:', err);
       }
@@ -62,22 +88,21 @@ export class AnalysisCacheService {
   }
 
   /**
-   * Trích xuất phân tích hợp lệ: ưu tiên từ object nếu đã COMPLETED hoặc có dữ liệu, sau đó tìm trong Cache
+   * Trích xuất phân tích hợp lệ: ưu tiên từ object nếu đã hợp lệ và có dữ liệu, sau đó tìm trong Cache
    */
   public static getValidAnalysis(
     analysis?: any,
     matchIdOrKey?: string | null,
     moves?: string[]
   ): GameAnalysisReport | any | null {
-    if (
-      analysis &&
-      (analysis.status === 'COMPLETED' ||
-        Array.isArray(analysis.moves) ||
-        Array.isArray(analysis.moveClassifications))
-    ) {
+    if (this.isValidAnalysis(analysis)) {
       return analysis;
     }
-    return this.getCache(matchIdOrKey, moves);
+    const cached = this.getCache(matchIdOrKey, moves);
+    if (this.isValidAnalysis(cached)) {
+      return cached;
+    }
+    return null;
   }
 
   /**
@@ -178,7 +203,14 @@ export class AnalysisCacheService {
     const result: Record<number, MoveAnalysis> = {};
     if (!reportOrSummary) return result;
 
-    if (Array.isArray(reportOrSummary.moves)) {
+    // Nếu object truyền vào vốn đã là dictionary theo ply
+    if (reportOrSummary && typeof reportOrSummary === 'object' && !Array.isArray(reportOrSummary)) {
+      if (reportOrSummary[1]?.ply === 1 || reportOrSummary['1']?.ply === 1) {
+        return reportOrSummary;
+      }
+    }
+
+    if (Array.isArray(reportOrSummary.moves) && reportOrSummary.moves.length > 0) {
       for (const m of reportOrSummary.moves) {
         result[m.ply] = {
           ...m,
@@ -192,7 +224,7 @@ export class AnalysisCacheService {
       reportOrSummary.moveClassifications ||
       reportOrSummary.summary?.moveClassifications;
 
-    if (Array.isArray(classifications)) {
+    if (Array.isArray(classifications) && classifications.length > 0) {
       for (const mc of classifications) {
         result[mc.ply] = {
           ply: mc.ply,

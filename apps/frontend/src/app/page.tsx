@@ -294,13 +294,21 @@ export default function Home() {
       replayMatch.moves
     );
     if (reportOrSummary) {
-      return AnalysisCacheService.convertToAnalysisByPly(reportOrSummary);
+      const converted = AnalysisCacheService.convertToAnalysisByPly(reportOrSummary);
+      if (Object.keys(converted).length > 0) {
+        return converted;
+      }
     }
     if (Object.keys(progressiveReplayAnalysis).length > 0) {
       return progressiveReplayAnalysis;
     }
     return undefined;
   }, [replayMatch, progressiveReplayAnalysis]);
+
+  // Khóa định danh bất biến của ván cờ đang xem lại để tránh useEffect re-trigger không cần thiết
+  const replayMatchKey = replayMatch
+    ? replayMatch._id || AnalysisCacheService.getMovesKey(replayMatch.moves)
+    : null;
 
   // Tự động phân tích ván cờ nếu đang xem lại mà chưa có dữ liệu đánh giá (Cấp tiến theo thời gian thực)
   useEffect(() => {
@@ -371,7 +379,7 @@ export default function Home() {
     return () => {
       controller.abort();
     };
-  }, [replayMatch?._id, replayMatch?.moves, user?.token]);
+  }, [replayMatchKey, user?.token]);
 
   // TÍCH HỢP LIVE MOVE ANALYSIS (CHỈ KÍCH HOẠT KHI ĐẤU VỚI MÁY / BOTS THEO CHUẨN QUỐC TẾ)
   const isLiveAnalysisEnabled =
