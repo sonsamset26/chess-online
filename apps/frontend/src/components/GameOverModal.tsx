@@ -131,7 +131,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               BẠN ĐÃ THUA
             </h2>
             <p className="text-xs text-[#94A3B8] mb-4 leading-relaxed font-medium">
-              {customMessage || 'Ván cờ kết thúc. Bạn có thể xem lại bàn cờ để rút kinh nghiệm cho ván sau.'}
+              {(customMessage && !customMessage.includes('Bạn thắng')) ? customMessage : 'Ván cờ kết thúc. Bạn có thể xem lại bàn cờ để rút kinh nghiệm cho ván sau.'}
             </p>
           </>
         )}

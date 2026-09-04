@@ -375,7 +375,7 @@ export default function Home() {
   const isLiveAnalysisEnabled =
     activeTab === 'play' &&
     replayMatch === null &&
-    (activeMode === 'bots' || (activeMatch !== null && activeMatch.isRated === false && !activeMatch.isTournament));
+    (activeMode === 'bots' || activeMode === 'friend' || (activeMatch !== null && activeMatch.isRated === false && !activeMatch.isTournament));
 
   const {
     analysisByPly,
@@ -676,13 +676,17 @@ export default function Home() {
         setCurrentEndReason('TIMEOUT');
         setLocalGameOverStatus(resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN');
         setCustomGameOverMsg(
-          resignationEvent.message || (isMeWin ? 'Đối thủ đã hết thời gian thi đấu. Bạn thắng!' : 'Bạn đã hết thời gian thi đấu. Bạn thua!')
+          isMeWin
+            ? (resignationEvent.message || 'Đối thủ đã hết thời gian thi đấu. Bạn thắng!')
+            : 'Bạn đã hết thời gian thi đấu. Bạn thua!'
         );
       } else {
         setCurrentEndReason(resignationEvent.reason === 'DISCONNECT' ? 'ABANDONED' : 'RESIGNED');
         setLocalGameOverStatus(resignationEvent.winnerColor === 'w' ? 'WHITE_WIN' : 'BLACK_WIN');
         setCustomGameOverMsg(
-          resignationEvent.message || (isMeWin ? 'Đối thủ đã rời trận hoặc đầu hàng. Bạn thắng!' : 'Bạn đã đầu hàng.')
+          isMeWin
+            ? (resignationEvent.message || 'Đối thủ đã rời trận hoặc đầu hàng. Bạn thắng!')
+            : (resignationEvent.reason === 'DISCONNECT' ? 'Bạn đã ngắt kết nối quá lâu và bị xử thua.' : 'Bạn đã đầu hàng.')
         );
       }
 

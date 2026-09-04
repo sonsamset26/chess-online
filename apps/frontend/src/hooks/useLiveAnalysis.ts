@@ -41,6 +41,9 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       if (!bridgeRef.current) {
         bridgeRef.current = new StockfishBridge();
       }
+      if (queueRef.current.length > 0 && !isProcessingRef.current) {
+        processQueue();
+      }
     } else {
       // Khi disabled (chuyển mode / replay / tournament): hủy bỏ mọi tác vụ
       generationRef.current += 1;
@@ -148,6 +151,10 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       playerColor: 'w' | 'b';
     }) => {
       if (!enabled) return;
+
+      if (!bridgeRef.current) {
+        bridgeRef.current = new StockfishBridge();
+      }
 
       const job: LiveAnalysisJob = {
         ...params,
