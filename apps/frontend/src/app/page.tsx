@@ -695,6 +695,7 @@ export default function Home() {
 
   // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật kết thúc trận (Checkmate / Draw)
   useEffect(() => {
+    if (replayMatch) return; // Không can thiệp bàn cờ khi đang ở chế độ Xem lại (Replay)
     if (latestMove && (activeMode === 'online' || activeMode === 'tournament' || activeMode === 'friend' || Boolean(activeMatch))) {
       if (latestMove.fen !== fen || latestMove.history?.length !== moveHistory.length) {
         setBoardFen(latestMove.fen, latestMove.history);
@@ -754,7 +755,7 @@ export default function Home() {
         }
       }
     }
-  }, [latestMove, activeMode, activeMatch?.roomId, playerColor, fen, moveHistory, user?.token, triggerAutoAnalysis, setBoardFen, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
+  }, [replayMatch, latestMove, activeMode, activeMatch?.roomId, playerColor, fen, moveHistory, user?.token, triggerAutoAnalysis, setBoardFen, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
 
   // Xử lý chọn Chế độ chơi từ PlayMenu (RÀNG BUỘC ĐĂNG NHẬP CHO ĐẤU TRỰC TUYẾN)
   const handleSelectMode = (mode: GameModeSelection) => {
@@ -1346,6 +1347,7 @@ export default function Home() {
               startedAt: new Date().toISOString(),
               createdAt: new Date().toISOString(),
             };
+            clearActiveMatch();
             setReplayOrigin({ source: 'game_over', preferredColor: playerColor });
             setReplayMatch(record);
             setReplayMoveIndex(moveHistory.length);
