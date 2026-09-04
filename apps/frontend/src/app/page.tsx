@@ -230,7 +230,7 @@ export default function Home() {
   // Tính toán Quân cờ bị ăn và Chênh lệch điểm số (Material Advantage)
   const materialDetails = useMemo(() => {
     return calculateMaterialDetails(fen || game.fen());
-  }, [fen, game]);
+  }, [fen]);
 
   const currentStatus = !activeMode ? 'IDLE' : (localGameOverStatus || engineStatus);
 
@@ -506,34 +506,14 @@ export default function Home() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleTournamentJoined = (data: { tournament: TournamentData }) => {
+    const handleTournamentUpdated = (data: { tournament: TournamentData }) => {
       setTournamentData(data.tournament);
-      setIsTournamentModalOpen(true);
     };
 
     const handleTournamentCancelled = (data: { tournamentId: string; message: string }) => {
       alert(data.message || 'Giải đấu đã bị hủy bởi chủ phòng.');
       setTournamentData(null);
       setIsTournamentModalOpen(false);
-    };
-
-    const handleTournamentMatchStarted = (data: {
-      tournamentId: string;
-      roundNumber: number;
-      matchIndex: number;
-      whitePlayer: any;
-      blackPlayer: any;
-      yourColor: 'w' | 'b';
-      timeControl: any;
-      isArmageddon?: boolean;
-    }) => {
-      setReplayMatch(null);
-      setReplayOrigin(null);
-      setIsTournamentModalOpen(false);
-      setIsFriendModalOpen(false);
-      setActiveMode('tournament');
-      resetGameOverState();
-      setIsGameOverModalOpen(false);
     };
 
     const handleTournamentFinished = (data: { tournament: TournamentData; championId: string }) => {
@@ -545,18 +525,16 @@ export default function Home() {
       }
     };
 
-    socket.on('tournament_joined', handleTournamentJoined);
+    socket.on('tournament_updated', handleTournamentUpdated);
     socket.on('tournament_cancelled', handleTournamentCancelled);
-    socket.on('tournament_match_started', handleTournamentMatchStarted);
     socket.on('tournament_finished', handleTournamentFinished);
 
     return () => {
-      socket.off('tournament_joined', handleTournamentJoined);
+      socket.off('tournament_updated', handleTournamentUpdated);
       socket.off('tournament_cancelled', handleTournamentCancelled);
-      socket.off('tournament_match_started', handleTournamentMatchStarted);
       socket.off('tournament_finished', handleTournamentFinished);
     };
-  }, [socket, activeMode, setIsTournamentModalOpen, setIsFriendModalOpen, setIsGameOverModalOpen, resetGameOverState, setTournamentChampionId]);
+  }, [socket, activeMode, setIsTournamentModalOpen, setIsGameOverModalOpen, setTournamentChampionId]);
 
   // 2. LẮNG NGHE VÀO PHÒNG TRẬN ĐẤU MỚI (MATCH_FOUND)
   const currentActiveRoomIdRef = useRef<string | null>(null);
@@ -604,6 +582,7 @@ export default function Home() {
 
   // 3. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
   useEffect(() => {
+    if (replayMatch) return; // F-01 Fix: Không can thiệp hoặc mở GameOverModal khi đang xem lại ván cờ (Replay)
     if (resignationEvent) {
       const eventKey = `${resignationEvent.roomId}_${resignationEvent.reason}_${resignationEvent.winnerColor}`;
       if (processedGameOverRef.current === eventKey) return;
@@ -646,7 +625,7 @@ export default function Home() {
         triggerAutoAnalysis(resignationEvent.roomId, moveHistory, user?.token);
       }
     }
-  }, [resignationEvent, playerColor, moveHistory, user?.token, triggerAutoAnalysis, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
+  }, [replayMatch, resignationEvent, playerColor, moveHistory, user?.token, triggerAutoAnalysis, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
 
   // 4. LẮNG NGHE ĐỐI THỦ MẤT KẾT NỐI (GRACE PERIOD 45S)
   useEffect(() => {
@@ -1177,6 +1156,7 @@ export default function Home() {
             onOpenAnalysis={(matchRecord: MatchRecord) => handleStartAnalysis(matchRecord.moves, matchRecord._id, user?.token)}
             onOpenTournamentDetail={(idOrCode: string) => setSelectedTournamentDetailId(idOrCode)}
             onOpenTournamentModal={() => setIsTournamentModalOpen(true)}
+            onOpenAuthModal={() => setIsAuthOpen(true)}
           />
         )}
 

@@ -55,6 +55,7 @@ interface HistoryViewProps {
   onOpenAnalysis?: (match: MatchRecord) => void;
   onOpenTournamentDetail?: (tournamentIdOrCode: string) => void;
   onOpenTournamentModal?: () => void;
+  onOpenAuthModal?: () => void;
   initialSubTab?: 'matches' | 'tournaments';
 }
 
@@ -64,6 +65,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   onOpenAnalysis,
   onOpenTournamentDetail,
   onOpenTournamentModal,
+  onOpenAuthModal,
   initialSubTab = 'matches',
 }) => {
   const [matches, setMatches] = useState<MatchRecord[]>([]);
@@ -226,12 +228,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   if (!currentUser) {
     return (
       <div className="w-full max-w-4xl mx-auto h-full flex items-center justify-center p-4">
-        <div className="bg-[#16202E] rounded-2xl border border-[#2A374A] p-8 text-center max-w-md shadow-2xl">
+        <div className="bg-[#16202E] rounded-2xl border border-[#2A374A] p-8 text-center max-w-md shadow-2xl flex flex-col items-center">
           <History className="w-12 h-12 text-[#94A3B8] mx-auto mb-3" />
           <h3 className="text-lg font-bold text-white mb-2">Vui lòng đăng nhập</h3>
-          <p className="text-xs text-[#94A3B8]">
+          <p className="text-xs text-[#94A3B8] mb-4">
             Bạn cần đăng nhập tài khoản để lưu trữ và xem lại toàn bộ lịch sử các ván đấu đã tham gia.
           </p>
+          {onOpenAuthModal && (
+            <button
+              onClick={onOpenAuthModal}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-bold text-xs shadow-lg shadow-pink-600/30 transition-all active:scale-95"
+            >
+              Đăng nhập ngay
+            </button>
+          )}
         </div>
       </div>
     );
@@ -316,12 +326,22 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                     <span>{error}</span>
                   </div>
-                  <button
-                    onClick={() => fetchHistory(page)}
-                    className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold text-xs transition-colors shrink-0"
-                  >
-                    Thử lại
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onOpenAuthModal && error.toLowerCase().includes('đăng nhập') && (
+                      <button
+                        onClick={onOpenAuthModal}
+                        className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs transition-colors shadow"
+                      >
+                        Đăng nhập lại
+                      </button>
+                    )}
+                    <button
+                      onClick={() => fetchHistory(page)}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold text-xs transition-colors"
+                    >
+                      Thử lại
+                    </button>
+                  </div>
                 </div>
               ) : matches.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-56 text-center text-[#94A3B8] gap-3">
@@ -512,12 +532,22 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                     <span>{tournamentsError}</span>
                   </div>
-                  <button
-                    onClick={() => fetchTournaments(tournamentsPage)}
-                    className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold text-xs transition-colors shrink-0"
-                  >
-                    Thử lại
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onOpenAuthModal && tournamentsError.toLowerCase().includes('đăng nhập') && (
+                      <button
+                        onClick={onOpenAuthModal}
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow"
+                      >
+                        Đăng nhập lại
+                      </button>
+                    )}
+                    <button
+                      onClick={() => fetchTournaments(tournamentsPage)}
+                      className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold text-xs transition-colors"
+                    >
+                      Thử lại
+                    </button>
+                  </div>
                 </div>
               ) : tournaments.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-56 text-center text-[#94A3B8] gap-3">

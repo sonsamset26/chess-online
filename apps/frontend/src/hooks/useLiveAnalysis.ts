@@ -12,6 +12,7 @@ export interface LiveAnalysisJob {
   moveSan: string;
   playerColor: 'w' | 'b';
   generation: number;
+  isBacklog?: boolean;
 }
 
 export interface UseLiveAnalysisOptions {
@@ -33,6 +34,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
 
   const currentJobRef = useRef<LiveAnalysisJob | null>(null);
   const pendingJobRef = useRef<LiveAnalysisJob | null>(null);
+  const backlogRef = useRef<LiveAnalysisJob[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Khởi tạo hoặc giải phóng StockfishBridge theo trạng thái enabled
@@ -48,6 +50,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       abortControllerRef.current = null;
       currentJobRef.current = null;
       pendingJobRef.current = null;
+      backlogRef.current = [];
       sessionCacheRef.current.clear();
       setAnalysisByPly({});
       setIsAnalyzing(false);
@@ -66,19 +69,27 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     };
   }, [enabled]);
 
-  // Xử lý tuần tự hàng đợi Coalescing Queue: CURRENT + LATEST PENDING
+  // Xử lý tuần tự hàng đợi Coalescing Queue: CURRENT + LATEST PENDING + OPPORTUNISTIC BACKLOG
   const processNextJob = useCallback(async () => {
     if (!enabled || !bridgeRef.current) return;
 
-    // Lấy job từ pending sang current
-    const nextJob = pendingJobRef.current;
+    // Lấy job: ưu tiên pending (nước mới nhất), nếu không có pending thì lấy từ backlog (nước bị STALE)
+    let nextJob = pendingJobRef.current;
+    if (nextJob) {
+      pendingJobRef.current = null;
+    } else if (backlogRef.current.length > 0) {
+      nextJob = backlogRef.current.pop() || null;
+      if (nextJob) {
+        nextJob.isBacklog = true;
+      }
+    }
+
     if (!nextJob) {
       currentJobRef.current = null;
       setIsAnalyzing(false);
       return;
     }
 
-    pendingJobRef.current = null;
     currentJobRef.current = nextJob;
     setIsAnalyzing(true);
 
@@ -137,8 +148,8 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       abortControllerRef.current = null;
       currentJobRef.current = null;
 
-      // Nếu trong lúc phân tích có job mới vào pending -> tiếp tục phân tích
-      if (pendingJobRef.current) {
+      // Nếu có job mới vào pending hoặc còn job trong backlog -> tiếp tục phân tích
+      if (pendingJobRef.current || backlogRef.current.length > 0) {
         processNextJob();
       } else {
         setIsAnalyzing(false);
@@ -188,15 +199,25 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
         processNextJob();
       } else {
         // Nếu worker đang bận:
-        // Nếu đã có 1 job đang chờ trong pending -> job đó trở thành STALE
+        // Nếu job hiện tại đang chạy là backlog job (nước cũ nhặt lại) -> abort ngay để nhường slot cho nước mới
+        if (currentJobRef.current.isBacklog) {
+          abortControllerRef.current?.abort();
+        }
+
+        // Nếu đã có 1 job đang chờ trong pending -> job đó trở thành STALE và đẩy vào backlog
         if (pendingJobRef.current) {
-          const stalePly = pendingJobRef.current.ply;
+          const staleJob = pendingJobRef.current;
+          backlogRef.current.push(staleJob);
+          if (backlogRef.current.length > 10) {
+            backlogRef.current.shift();
+          }
+
           setAnalysisByPly((prev) => {
-            const currentItem = prev[stalePly];
+            const currentItem = prev[staleJob.ply];
             if (currentItem && currentItem.status === 'PENDING') {
               return {
                 ...prev,
-                [stalePly]: {
+                [staleJob.ply]: {
                   ...currentItem,
                   status: 'STALE',
                 },
@@ -219,6 +240,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     abortControllerRef.current = null;
     currentJobRef.current = null;
     pendingJobRef.current = null;
+    backlogRef.current = [];
     sessionCacheRef.current.clear();
     setAnalysisByPly({});
     setIsAnalyzing(false);

@@ -14,7 +14,7 @@ export class TournamentMatchManager {
     private socketToRoom: Map<string, string>,
     private userSockets: Map<string, Socket>,
     private scheduleTimeout: (room: GameState) => void,
-    private handlePlayerResignation: (socketId: string, roomId: string, reason: 'RESIGNATION' | 'DISCONNECT') => void,
+    private handlePlayerResignation: (socketId: string, roomId: string, reason: 'RESIGNATION' | 'DISCONNECT', resignedColor?: 'w' | 'b') => void,
     private cleanupRoomResources: (room: GameState, roomId: string) => void
   ) {}
 
@@ -553,7 +553,12 @@ export class TournamentMatchManager {
       const offlineKey: 'white' | 'black' = !isP1Online ? 'white' : 'black';
       room.disconnectTimers[offlineKey] = setTimeout(() => {
         console.log(`⏰ [Tournament Walkover] ${offlinePlayer.username} không vào bàn sau 45s -> Xử thua vắng mặt.`);
-        this.handlePlayerResignation(offlinePlayer.socketId || '', roomId, 'DISCONNECT');
+        this.handlePlayerResignation(
+          offlinePlayer.socketId || '',
+          roomId,
+          'DISCONNECT',
+          offlineKey === 'white' ? 'w' : 'b'
+        );
       }, 45000);
 
       // Tuyệt đối không khởi động đồng hồ 10 phút khi chưa đủ người
@@ -561,6 +566,30 @@ export class TournamentMatchManager {
     }
 
     this.scheduleTimeout(room);
+  }
+
+  // Phục hồi các giải đấu dở dang khi Server/PM2 khởi động lại (B-03 Fix)
+  public async recoverActiveTournaments(): Promise<void> {
+    try {
+      const inProgressTournaments = await Tournament.find({ status: 'IN_PROGRESS' });
+      const now = Date.now();
+      for (const tour of inProgressTournaments) {
+        if (tour.roundBreakUntil && new Date(tour.roundBreakUntil).getTime() <= now) {
+          console.log(`🔄 [Tournament Recovery] Phục hồi giải ${tour.tournamentId} do hết hạn nghỉ giữa vòng khi server khởi động lại.`);
+          const adv = await TournamentService.advanceNextRound(tour.tournamentId);
+          if (adv.nextRound) {
+            for (let mIdx = 0; mIdx < adv.nextRound.matches.length; mIdx++) {
+              const m = adv.nextRound.matches[mIdx];
+              if (m.player1 && m.player2 && m.status === 'PENDING') {
+                this.startTournamentMatch(adv.tournament || tour, adv.nextRound.roundNumber, mIdx, m.player1, m.player2);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('❌ Lỗi khi phục hồi các giải đấu dở dang:', e);
+    }
   }
 
   // Dọn dẹp Tournament Timers khi ứng dụng tắt

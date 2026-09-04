@@ -61,11 +61,14 @@ export class MatchGateway {
       this.socketToRoom,
       this.userSockets,
       (room) => this.scheduleTimeout(room),
-      (socketId, roomId, reason) => this.handlePlayerResignation(socketId, roomId, reason),
+      (socketId, roomId, reason, resignedColor) => this.handlePlayerResignation(socketId, roomId, reason, resignedColor),
       (room, roomId) => this.cleanupRoomResources(room, roomId)
     );
 
     this.initializeSockets();
+
+    // Phục hồi các giải đấu đang diễn ra nếu server khởi động lại (B-03 Fix)
+    this.tournamentMatchManager.recoverActiveTournaments();
 
     // Khởi động Matchmaker Loop định kỳ mỗi 1.5 giây
     this.matchmakerTimer = setInterval(() => {
@@ -648,19 +651,29 @@ export class MatchGateway {
     }
   }
 
-  // Xử lý khi người chơi Đầu hàng hoặc F5 / Thoát web
-  private async handlePlayerResignation(socketId: string, roomId: string, reason: 'RESIGNATION' | 'DISCONNECT') {
+  // Xử lý khi người chơi Đầu hàng hoặc F5 / Thoát web (B-01 Fix: hỗ trợ resignedColor trực tiếp)
+  private async handlePlayerResignation(
+    socketId: string,
+    roomId: string,
+    reason: 'RESIGNATION' | 'DISCONNECT',
+    resignedColor?: 'w' | 'b'
+  ) {
     const room = this.activeRooms.get(roomId);
     if (!room || room.status === 'FINISHED') return;
 
-    const isWhite = room.players.white.socketId === socketId;
-    const isBlack = room.players.black.socketId === socketId;
-    if (!isWhite && !isBlack) {
-      console.warn(`⚠️ [Resignation] Socket ${socketId} không thuộc phòng ${roomId}. Từ chối yêu cầu đầu hàng.`);
-      return;
+    let isWhiteResigned: boolean;
+    if (resignedColor) {
+      isWhiteResigned = resignedColor === 'w';
+    } else {
+      const isWhite = room.players.white.socketId === socketId;
+      const isBlack = room.players.black.socketId === socketId;
+      if (!isWhite && !isBlack) {
+        console.warn(`⚠️ [Resignation] Socket ${socketId} không thuộc phòng ${roomId}. Từ chối yêu cầu đầu hàng.`);
+        return;
+      }
+      isWhiteResigned = isWhite;
     }
 
-    const isWhiteResigned = isWhite;
     const winnerColor = isWhiteResigned ? 'b' : 'w';
     const winnerPlayer = isWhiteResigned ? room.players.black : room.players.white;
     const loserPlayer = isWhiteResigned ? room.players.white : room.players.black;

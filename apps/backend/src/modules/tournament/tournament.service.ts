@@ -158,12 +158,26 @@ export class TournamentService {
       throw { statusCode: 400, message: 'Không thể rời giải đấu đã bắt đầu hoặc đã kết thúc' };
     }
 
-    // Nếu chủ phòng rời đi -> giải đấu bị hủy
+    // T-01 Fix: Nếu chủ phòng rời đi, chuyển quyền chủ phòng cho kỳ thủ kế tiếp nếu còn người
     const isHost = tournament.hostUserId === userId || tournament.hostUsername === userId;
     if (isHost) {
-      tournament.status = 'CANCELLED';
-      await tournament.save();
-      return tournament;
+      const remainingPlayers = tournament.players.filter((p) => p.userId !== userId && p.username !== userId);
+      if (remainingPlayers.length > 0) {
+        const nextHost = remainingPlayers[0];
+        const updated = await Tournament.findOneAndUpdate(
+          { code: code.toUpperCase(), status: 'WAITING' },
+          {
+            $set: { hostUserId: nextHost.userId, hostUsername: nextHost.username },
+            $pull: { players: { userId } },
+          },
+          { new: true }
+        );
+        return updated || tournament;
+      } else {
+        tournament.status = 'CANCELLED';
+        await tournament.save();
+        return tournament;
+      }
     }
 
     // Nếu là thành viên tham gia -> xóa khỏi danh sách người chơi
@@ -352,9 +366,8 @@ export class TournamentService {
       throw new Error(`Round ${roundNumber} không tồn tại sau khi cập nhật`);
     }
 
-    const isRoundFinished = currentRound.matches.every(
-      (m) => m.status === 'DONE' && m.winnerId !== null
-    );
+    // B-02 Fix: Vòng hoàn tất khi tất cả các trận đã DONE (kể cả trận Double Forfeit winnerId = null)
+    const isRoundFinished = currentRound.matches.every((m) => m.status === 'DONE');
 
     let isTournamentFinished = false;
     let championId: string | null = null;
@@ -362,6 +375,7 @@ export class TournamentService {
     if (isRoundFinished) {
       if (currentRound.matches.length === 1) {
         // Vòng chung kết hoàn tất -> Cập nhật giải thành FINISHED
+        const finalWinner = (winnerId && winnerId.trim().length > 0) ? winnerId : null;
         const finalFinished = await Tournament.findOneAndUpdate(
           {
             tournamentId,
@@ -370,14 +384,14 @@ export class TournamentService {
           {
             $set: {
               status: 'FINISHED',
-              championId: winnerId,
+              championId: finalWinner,
               roundBreakUntil: null,
             },
           },
           { new: true }
         );
         isTournamentFinished = true;
-        championId = winnerId;
+        championId = finalWinner;
         return {
           tournament: finalFinished || updatedTournament,
           isRoundFinished: true,

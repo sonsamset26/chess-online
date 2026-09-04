@@ -8,6 +8,7 @@ interface HistoryTabProps {
   onOpenAnalysis: (matchRecord: MatchRecord) => void;
   onOpenTournamentDetail: (idOrCode: string) => void;
   onOpenTournamentModal: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const HistoryTab: React.FC<HistoryTabProps> = ({
@@ -17,6 +18,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   onOpenAnalysis,
   onOpenTournamentDetail,
   onOpenTournamentModal,
+  onOpenAuthModal,
 }) => {
   return (
     <HistoryView
@@ -26,6 +28,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
       onOpenAnalysis={onOpenAnalysis}
       onOpenTournamentDetail={onOpenTournamentDetail}
       onOpenTournamentModal={onOpenTournamentModal}
+      onOpenAuthModal={onOpenAuthModal}
     />
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Crown, Trophy, Eye, BarChart2, Loader2, Zap, GitBranch, ListFilter, User } from 'lucide-react';
 
 export interface TournamentPlayer {
@@ -73,7 +73,14 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
   onAnalyzeMatch,
 }) => {
   // Chế độ xem: 'tree' (Sơ đồ cây phân nhánh có đường nối) hoặc 'list' (Danh sách vòng)
+  // U-02 Fix: Mặc định chế độ 'list' trên màn hình hẹp (<640px) để chống vỡ khung / tràn ngang
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) {
+      setViewMode('list');
+    }
+  }, []);
 
   const size = tournament.size || 4;
   const totalRounds = size === 8 ? 3 : 2;
@@ -385,8 +392,13 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
 
       {/* VIEW 1: SƠ ĐỒ CÂY PHÂN NHÁNH ĐẤU (TREE BRACKET WITH CONNECTORS) */}
       {viewMode === 'tree' && (
-        <div className="w-full overflow-x-auto custom-scrollbar pb-4 pt-1">
-          <div className="min-w-fit flex items-stretch gap-0 px-2">
+        <div className="w-full flex flex-col">
+          <div className="sm:hidden flex items-center justify-end gap-1 text-[11px] text-[#94A3B8] pb-1 px-1">
+            <span>Vuốt ngang để xem toàn bộ nhánh đấu</span>
+            <span>→</span>
+          </div>
+          <div className="w-full overflow-x-auto custom-scrollbar pb-4 pt-1">
+            <div className="min-w-fit flex items-stretch gap-0 px-2">
             {projectedRounds.map((round, rIdx) => {
               const nextRound = projectedRounds[rIdx + 1];
               const isLastRound = rIdx === projectedRounds.length - 1;
@@ -540,6 +552,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
             })}
           </div>
         </div>
+      </div>
       )}
 
       {/* VIEW 2: DANH SÁCH VÒNG DẠNG STACK (COMPACT LIST VIEW) */}
