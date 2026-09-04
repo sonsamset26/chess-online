@@ -23,35 +23,7 @@ export const MoveItem: React.FC<MoveItemProps> = ({
 
   // Cấu hình Badge huy hiệu phân loại nước đi với kích thước cố định w-4 h-4 chống CLS
   const renderBadge = () => {
-    if (!status) return null;
-
-    if (status === 'PENDING') {
-      return (
-        <span
-          className="w-4 h-4 shrink-0 flex items-center justify-center text-[10px] text-slate-400 animate-pulse font-mono select-none"
-          title="Đang phân tích..."
-        >
-          …
-        </span>
-      );
-    }
-
-    if (status === 'STALE') {
-      return null;
-    }
-
-    if (status === 'FAILED') {
-      return (
-        <span
-          className="w-4 h-4 shrink-0 flex items-center justify-center text-[10px] text-slate-600 font-mono select-none"
-          title="Không thể phân tích"
-        >
-          —
-        </span>
-      );
-    }
-
-    if (status === 'ANALYZED' && classification) {
+    if (classification) {
       switch (classification) {
         case 'BEST':
           return (
@@ -108,8 +80,30 @@ export const MoveItem: React.FC<MoveItemProps> = ({
             </span>
           );
         default:
-          return null;
+          break;
       }
+    }
+
+    if (status === 'PENDING') {
+      return (
+        <span
+          className="w-4 h-4 shrink-0 flex items-center justify-center text-[10px] text-slate-400 animate-pulse font-mono select-none"
+          title="Đang phân tích..."
+        >
+          …
+        </span>
+      );
+    }
+
+    if (status === 'FAILED') {
+      return (
+        <span
+          className="w-4 h-4 shrink-0 flex items-center justify-center text-[10px] text-slate-600 font-mono select-none"
+          title="Không thể phân tích"
+        >
+          —
+        </span>
+      );
     }
 
     return null;

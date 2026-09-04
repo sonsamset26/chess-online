@@ -5,7 +5,7 @@ import { MatchRecord } from './HistoryView';
 interface ReplayControlBarProps {
   replayMatch: MatchRecord;
   replayMoveIndex: number;
-  replayOrigin: { source: 'tournament_detail' | 'history' | 'active_match' } | null;
+  replayOrigin: { source: 'tournament_detail' | 'history' | 'active_match' | 'game_over' } | null;
   onExit: () => void;
   onGoToMove: (index: number) => void;
 }
@@ -30,7 +30,13 @@ export const ReplayControlBar: React.FC<ReplayControlBarProps> = ({
           className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-[11px] font-bold transition-all shadow active:scale-95 shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>{replayOrigin?.source === 'tournament_detail' ? 'Về Sơ đồ' : 'Thoát xem'}</span>
+          <span>
+            {replayOrigin?.source === 'tournament_detail'
+              ? 'Về Sơ đồ'
+              : replayOrigin?.source === 'game_over'
+              ? 'Về menu'
+              : 'Về lịch sử'}
+          </span>
         </button>
       </div>
 

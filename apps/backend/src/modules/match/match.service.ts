@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
-import { Match, IMatch } from './match.model';
+import { Match, IMatch, MoveTelemetry } from './match.model';
 import { User } from '../user/user.model';
+import { PlayerProfileService } from '../ml/profile/player-profile.service';
 
 export interface CreateMatchInput {
   whiteUserId: string;
@@ -22,6 +23,7 @@ export interface CreateMatchInput {
   whiteOldElo?: number;
   blackOldElo?: number;
   moves: string[];
+  moveTelemetry?: MoveTelemetry[];
   pgn: string;
   finalFen: string;
   movesCount: number;
@@ -45,7 +47,7 @@ export interface HistoryResult {
 
 export class MatchService {
   /**
-   * Lưu trữ ván cờ vào MongoDB Atlas khi kết thúc trận
+   * Lưu trữ ván cờ vào MongoDB Atlas khi kết thúc trận kèm dữ liệu viễn trắc MoveTelemetry
    */
   public static async saveMatch(data: CreateMatchInput): Promise<IMatch> {
     try {
@@ -71,11 +73,17 @@ export class MatchService {
         ...data,
         whitePlayer: whiteObjectId,
         blackPlayer: blackObjectId,
+        moveTelemetry: data.moveTelemetry || [],
+        analysis: {
+          status: 'NOT_ANALYZED',
+          featureVersion: 'feature-v1',
+          source: 'SERVER',
+        },
         timeControl: data.timeControl || { initialSeconds: 600, incrementSeconds: 0 },
         endedAt: data.endedAt || new Date(),
       });
 
-      console.log(`💾 [MatchService] Đã lưu ván đấu ${match._id} (${data.gameMode}) vào CSDL.`);
+      console.log(`💾 [MatchService] Đã lưu ván đấu ${match._id} (${data.gameMode}) kèm ${data.moveTelemetry?.length || 0} telemetry vào CSDL.`);
       return match;
     } catch (error) {
       console.error('❌ [MatchService] Lỗi lưu trữ ván đấu:', error);
@@ -118,12 +126,12 @@ export class MatchService {
         .sort({ endedAt: -1, createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
-        .lean() as unknown as Promise<IMatch[]>,
+        .lean(),
       Match.countDocuments(query),
     ]);
 
     return {
-      matches,
+      matches: matches as unknown as IMatch[],
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -172,6 +180,32 @@ export class MatchService {
   }
 
   /**
+   * Lấy danh sách các ván đấu thuộc về một giải đấu cụ thể
+   */
+  public static async getMatchesByTournament(tournamentId: string): Promise<IMatch[]> {
+    const matches = await Match.find({ tournamentId })
+      .sort({ tournamentRound: 1, tournamentMatchIndex: 1, createdAt: 1 })
+      .lean();
+    return matches as unknown as IMatch[];
+  }
+
+  /**
+   * Lấy các ván đấu của một người chơi trong một giải đấu cụ thể
+   */
+  public static async getTournamentMatchesByUser(
+    tournamentId: string,
+    userId: string
+  ): Promise<IMatch[]> {
+    const matches = await Match.find({
+      tournamentId,
+      $or: [{ whiteUserId: userId }, { blackUserId: userId }],
+    })
+      .sort({ tournamentRound: 1, createdAt: 1 })
+      .lean();
+    return matches as unknown as IMatch[];
+  }
+
+  /**
    * Lưu hoặc cập nhật kết quả phân tích ván đấu (Idempotent CAS)
    */
   public static async saveMatchAnalysis(
@@ -184,7 +218,7 @@ export class MatchService {
     if (!existing) return null;
 
     // Idempotent guard: Nếu ván đấu đã có phân tích, trả về luôn để tránh ghi đè xung đột
-    if (existing.analysis?.analyzedAt) {
+    if (existing.analysis?.analyzedAt && existing.analysis.status === 'ANALYZED') {
       return existing;
     }
 
@@ -193,10 +227,15 @@ export class MatchService {
       {
         $set: {
           analysis: {
+            status: 'ANALYZED',
+            featureVersion: analysisData.featureVersion || 'feature-v1',
+            source: 'CLIENT_CACHE',
             whiteAccuracy: analysisData.whiteAccuracy,
             blackAccuracy: analysisData.blackAccuracy,
             whiteAvgCpl: analysisData.whiteAvgCpl,
             blackAvgCpl: analysisData.blackAvgCpl,
+            whiteFeatures: analysisData.whiteFeatures,
+            blackFeatures: analysisData.blackFeatures,
             moveClassifications: analysisData.moveClassifications || [],
             analyzedAt: new Date(),
           },
@@ -204,6 +243,18 @@ export class MatchService {
       },
       { new: true }
     );
+
+    // Kích hoạt cập nhật hồ sơ kỳ thủ ngầm không đồng bộ (Fire-and-forget background task)
+    if (existing.whiteUserId) {
+      PlayerProfileService.aggregateAndSaveProfile(existing.whiteUserId).catch((e) =>
+        console.warn('Lỗi cập nhật ngầm profile kỳ thủ Trắng:', e)
+      );
+    }
+    if (existing.blackUserId) {
+      PlayerProfileService.aggregateAndSaveProfile(existing.blackUserId).catch((e) =>
+        console.warn('Lỗi cập nhật ngầm profile kỳ thủ Đen:', e)
+      );
+    }
 
     return updated;
   }

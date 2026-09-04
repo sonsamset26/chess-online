@@ -1,4 +1,4 @@
-import { GameAnalysisReport, MoveAnalysis } from './types';
+import { GameAnalysisReport, MoveAnalysis, PlayerFeatureVector } from './types';
 
 const CACHE_PREFIX = 'chess_analysis_';
 const LRU_KEY = 'chess_analysis_lru_keys';
@@ -9,6 +9,9 @@ export interface AnalysisSummaryPayload {
   blackAccuracy: number;
   whiteAvgCpl: number;
   blackAvgCpl: number;
+  featureVersion?: string;
+  whiteFeatures?: PlayerFeatureVector;
+  blackFeatures?: PlayerFeatureVector;
   moveClassifications: Array<{
     ply: number;
     san: string;
@@ -55,6 +58,25 @@ export class AnalysisCacheService {
     }
 
     return null;
+  }
+
+  /**
+   * Trích xuất phân tích hợp lệ: ưu tiên từ object nếu đã COMPLETED hoặc có dữ liệu, sau đó tìm trong Cache
+   */
+  public static getValidAnalysis(
+    analysis?: any,
+    matchIdOrKey?: string | null,
+    moves?: string[]
+  ): GameAnalysisReport | any | null {
+    if (
+      analysis &&
+      (analysis.status === 'COMPLETED' ||
+        Array.isArray(analysis.moves) ||
+        Array.isArray(analysis.moveClassifications))
+    ) {
+      return analysis;
+    }
+    return this.getCache(matchIdOrKey, moves);
   }
 
   /**
@@ -112,6 +134,9 @@ export class AnalysisCacheService {
       blackAccuracy: report.summary?.black?.accuracy ?? 0,
       whiteAvgCpl: report.summary?.white?.avgCpl ?? 0,
       blackAvgCpl: report.summary?.black?.avgCpl ?? 0,
+      featureVersion: 'feature-v1',
+      whiteFeatures: report.features?.white,
+      blackFeatures: report.features?.black,
       moveClassifications: (report.moves || []).map((m) => ({
         ply: m.ply,
         san: m.san,
@@ -153,13 +178,20 @@ export class AnalysisCacheService {
 
     if (Array.isArray(reportOrSummary.moves)) {
       for (const m of reportOrSummary.moves) {
-        result[m.ply] = m;
+        result[m.ply] = {
+          ...m,
+          status: m.status || 'ANALYZED',
+        };
       }
       return result;
     }
 
-    if (Array.isArray(reportOrSummary.moveClassifications)) {
-      for (const mc of reportOrSummary.moveClassifications) {
+    const classifications =
+      reportOrSummary.moveClassifications ||
+      reportOrSummary.summary?.moveClassifications;
+
+    if (Array.isArray(classifications)) {
+      for (const mc of classifications) {
         result[mc.ply] = {
           ply: mc.ply,
           moveNumber: Math.floor((mc.ply - 1) / 2) + 1,
