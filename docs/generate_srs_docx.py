@@ -279,8 +279,9 @@ def build_srs_document():
     add_p("  - Giải thuật đồng hồ thi đấu hướng sự kiện: Máy chủ chỉ ghi nhận các mốc thời gian chuyển lượt, tính toán và trừ thời gian suy nghĩ một lần khi nhận nước đi hợp lệ, kết hợp bộ hẹn giờ giám sát hết giờ nhằm tiết kiệm tài nguyên vi xử lý máy chủ.")
     add_p("  - Cơ chế khôi phục trạng thái ván cờ trong 45 giây: Khi người chơi mất kết nối mạng hoặc tải lại trang web, máy chủ duy trì ván cờ và đếm lùi thời gian cho phép người chơi vào lại mà không bị xử thua ngay lập tức.")
     add_p("• Tổ chức giải đấu loại trực tiếp: Hỗ trợ quy mô 4 hoặc 8 kỳ thủ với sơ đồ phân nhánh tự động. Khi ván đấu chính hòa, hệ thống tự động khởi tạo ván phụ thi đấu nhanh với màu quân đảo chiều và áp dụng lợi thế hòa cờ cho bên cầm quân Đen để xác định người chiến thắng đi tiếp.")
-    add_p("• Xem lại và phân tích thế cờ: Tích hợp công cụ phân tích Stockfish phiên bản WebAssembly giúp người chơi xem lại lịch sử nước đi, đánh giá chất lượng từng nước cờ thông qua chỉ số tổn thất ưu thế và phát hiện các sai lầm chiến thuật.")
-    add_p("• Học tập và giải đố cờ vua: Ngân hàng bài tập cờ thế phân loại theo các đòn phối hợp chiến thuật đặc trưng cùng hệ thống bài giảng tương tác giúp người mới bắt đầu làm quen luật chơi và nâng cao trình độ.")
+    add_p("• Xem lại và phân tích thế cờ: Tích hợp Stockfish engine phiên bản WebAssembly giúp người chơi xem lại lịch sử nước đi, đánh giá chất lượng từng nước cờ thông qua chỉ số tổn thất ưu thế và phát hiện các sai lầm chiến thuật.")
+    add_p("• Học tập và giải đố cờ vua: Ngân hàng 30 bài tập cờ thế chiến thuật phân bổ theo các dải trình độ từ 1000 đến 2050 Elo cùng hệ thống bài giảng tương tác giúp người mới bắt đầu làm quen luật chơi và nâng cao trình độ.")
+    add_p("• Hồ sơ kỳ thủ và phân tích phong cách bằng học máy: Trích xuất 8 chỉ số đặc trưng thi đấu từ lịch sử các ván cờ (độ mất điểm thế cờ trung bình và tỉ lệ sai sót qua 3 giai đoạn khai cuộc, trung cuộc, tàn cuộc; thời gian suy nghĩ trung bình; tỉ lệ sai sót khi cạn giờ). Áp dụng mô hình K-Means và bộ chuẩn hóa StandardScaler để phân cụm người chơi vào 4 nhóm phong cách: Tiến công, Toàn diện, Đột biến và Phòng thủ. Hệ thống đồng thời chẩn đoán giai đoạn thi đấu có hiệu suất thấp nhất để đề xuất các bài tập cờ thế chiến thuật phù hợp và hiển thị trực quan qua biểu đồ mạng nhện SVG 8 trục.")
     add_p("• Quản lý tài khoản và bảo mật: Xác thực danh tính với cơ chế bảo mật kết hợp mã truy cập ngắn hạn lưu trong bộ nhớ tạm và mã làm mới dài hạn lưu trong cookie bảo mật chỉ đọc, ngăn ngừa các nguy cơ khai thác trái phép qua mạng.")
 
     add_h2("1.3 Bảng thuật ngữ và định nghĩa")
@@ -309,12 +310,16 @@ def build_srs_document():
         ("PGN", "Định dạng văn bản quy định chuỗi nước đi và thông tin đi kèm của một ván cờ vua hoàn chỉnh."),
         ("UCI", "Giao thức truyền thông giữa giao diện người dùng và các công cụ tính toán nước cờ."),
         ("WASM", "Định dạng mã nhị phân hiệu năng cao thực thi trực tiếp trên trình duyệt web."),
+        ("Stockfish engine", "Động cơ phân tích thế cờ mã nguồn mở mã hóa sang WebAssembly thực thi trên Web Worker của trình duyệt."),
         ("CPL", "Độ mất mát ưu thế của nước cờ đo bằng một phần trăm giá trị quy đổi của quân Tốt."),
         ("PvAI", "Chế độ thi đấu đối kháng giữa người chơi và máy tính."),
         ("PvP", "Chế độ thi đấu đối kháng trực tiếp giữa hai người chơi thực."),
         ("WebSocket", "Giao thức mạng cho phép truyền thông hai chiều thời gian thực giữa máy chủ và máy khách qua một kết nối duy nhất."),
         ("JWT", "Định dạng mã định danh bảo mật dùng để xác thực và ủy quyền truy cập trong ứng dụng web."),
-        ("Ván phụ Armageddon", "Hình thức thi đấu ván phụ nhanh để phân định thắng thua khi hòa cờ, bên Trắng có nhiều thời gian hơn nhưng bên Đen có ưu thế hòa là thắng.")
+        ("Ván phụ Armageddon", "Hình thức thi đấu ván phụ nhanh để phân định thắng thua khi hòa cờ, bên Trắng có nhiều thời gian hơn nhưng bên Đen có ưu thế hòa là thắng."),
+        ("K-Means", "Thuật toán học máy không giám sát dùng để nhóm tập dữ liệu thành K cụm dựa trên khoảng cách hình học tới tâm cụm."),
+        ("StandardScaler", "Kỹ thuật chuẩn hóa dữ liệu đưa kỳ vọng về 0 và phương sai về 1, loại bỏ sai lệch thang đo giữa các biến đặc trưng."),
+        ("Radar Chart", "Biểu đồ mạng nhện đa giác biểu diễn đồng thời nhiều biến định lượng trên cùng một hệ tọa độ cực.")
     ]
 
     for idx, (term, desc) in enumerate(glossary_data):
