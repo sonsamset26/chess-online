@@ -216,6 +216,7 @@ export class MatchmakingManager {
         incrementMs,
       },
       timeControl: p1.timeControl,
+      moveTelemetry: [],
     };
 
     this.activeRooms.set(roomId, newRoom);

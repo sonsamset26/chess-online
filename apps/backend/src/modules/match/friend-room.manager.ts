@@ -149,6 +149,7 @@ export class FriendRoomManager {
           initialTimeMs,
           incrementMs,
         },
+        moveTelemetry: [],
       };
 
       this.activeRooms.set(friendRoom.roomId, newRoom);

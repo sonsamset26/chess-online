@@ -264,6 +264,17 @@ export class MatchGateway {
           }
         }
 
+        // Ghi nhận dữ liệu viễn trắc nước đi chính xác do Máy chủ kiểm soát (Phase 0 Data Foundation)
+        if (!room.moveTelemetry) {
+          room.moveTelemetry = [];
+        }
+        const remainingTimeMs = playerColor === 'w' ? room.clock.whiteTimeMs : room.clock.blackTimeMs;
+        room.moveTelemetry.push({
+          color: playerColor,
+          timeSpentMs: elapsed,
+          timeLeftMs: remainingTimeMs,
+        });
+
         try {
           // 6.6. Chuyển lượt và cập nhật mốc thời gian
           const nextTurn = room.game.turn();
@@ -703,6 +714,7 @@ export class MatchGateway {
         whiteOldElo: eloResult?.white.oldElo || room.players.white.eloRating,
         blackOldElo: eloResult?.black.oldElo || room.players.black.eloRating,
         moves: room.game.history(),
+        moveTelemetry: room.moveTelemetry || [],
         pgn: room.game.pgn(),
         finalFen: room.game.fen(),
         movesCount: room.game.history().length,

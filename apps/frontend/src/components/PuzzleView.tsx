@@ -187,21 +187,21 @@ export const PuzzleView: React.FC = () => {
             <div className="mt-1">
               {status === 'IDLE' && (
                 <div className="p-3 rounded-xl bg-[#0F172A] border border-[#2A374A] text-center text-xs font-semibold text-slate-300">
-                  Lượt đi của quân <strong className={puzzle.turn === 'w' ? 'text-amber-300' : 'text-pink-400'}>{puzzle.turn === 'w' ? 'Trắng' : 'Đen'}</strong>. Hãy tìm nước cờ giải đố!
+                  Lượt đi của quân <strong className={puzzle.turn === 'w' ? 'text-amber-300' : 'text-pink-400'}>{puzzle.turn === 'w' ? 'Trắng' : 'Đen'}</strong>. Hãy tìm nước đi tối ưu!
                 </div>
               )}
 
               {status === 'SOLVED' && (
-                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-center text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg animate-bounce">
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-center text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>CHÍNH XÁC 100%! Bạn đã giải thành công thế cờ này! 🎉</span>
+                  <span>Nước đi chính xác! Bạn đã tìm ra lời giải.</span>
                 </div>
               )}
 
               {status === 'FAILED' && (
                 <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-center text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg">
                   <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                  <span>NƯỚC ĐI SAI! Hãy bấm "Thử lại" để giải lại.</span>
+                  <span>Chưa chính xác. Bạn hãy bấm "Thử lại" để tìm phương án khác.</span>
                 </div>
               )}
             </div>

@@ -32,7 +32,7 @@ export interface PlayTabProps {
   activeMatch: ActiveMatch | null;
   replayMatch: MatchRecord | null;
   replayMoveIndex: number;
-  replayOrigin: { source: 'history' | 'tournament_detail' } | null;
+  replayOrigin: { source: 'history' | 'tournament_detail' | 'game_over' } | null;
   disconnectedOpponent: { disconnectedPlayer: string; gracePeriodSeconds: number } | null;
   reconnectCountdown: number;
   opponentInfo: any;
@@ -390,7 +390,13 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold transition-all shadow"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    <span>{replayOrigin?.source === 'tournament_detail' ? 'Quay lại Sơ đồ Giải' : 'Quay lại Lịch sử'}</span>
+                    <span>
+                      {replayOrigin?.source === 'tournament_detail'
+                        ? 'Quay lại Sơ đồ Giải'
+                        : replayOrigin?.source === 'game_over'
+                        ? 'Trở về menu'
+                        : 'Quay lại Lịch sử'}
+                    </span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -516,35 +522,6 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                         </button>
                       </div>
                     </div>
-
-                    {/* ĐÁNH GIÁ NƯỚC ĐI ĐANG XEM & GỢI Ý CỦA STOCKFISH */}
-                    {(() => {
-                      if (!replayAnalysisByPly || !replayAnalysisByPly[replayMoveIndex]) return null;
-                      const cur = replayAnalysisByPly[replayMoveIndex];
-                      const classification = cur.classification;
-
-                      return (
-                        <div className="flex items-center justify-between p-2 rounded-xl bg-pink-950/20 border border-pink-500/30 text-xs">
-                          <span className="font-bold text-white flex items-center gap-1.5 truncate">
-                            <span>Nước {replayMoveIndex}.</span>
-                            <span className="text-pink-400 font-mono">{cur.san}</span>
-                            <span className="font-black text-[11px] ml-1">
-                              {classification === 'BEST' && <span className="text-emerald-400">★ Tối ưu</span>}
-                              {classification === 'EXCELLENT' && <span className="text-teal-400">★ Rất tốt</span>}
-                              {classification === 'GOOD' && <span className="text-cyan-400">✓ Tốt</span>}
-                              {classification === 'INACCURACY' && <span className="text-yellow-400">?! Chưa tối ưu</span>}
-                              {classification === 'MISTAKE' && <span className="text-orange-400">? Sai lầm</span>}
-                              {classification === 'BLUNDER' && <span className="text-red-400">?? Sai sót lớn</span>}
-                            </span>
-                          </span>
-                          {cur.bestMoveSan && classification !== 'BEST' && (
-                            <span className="text-[10px] text-[#94A3B8] shrink-0 font-mono">
-                              Khuyên: <strong className="text-emerald-400">{cur.bestMoveSan}</strong>
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
                   </div>
                 ) : activeMode === 'bots' ? (
                   <>
@@ -588,7 +565,7 @@ export const PlayTab: React.FC<PlayTabProps> = ({
               {/* Move History Desktop - MỞ RỘNG TO RÕ DỄ QUAN SÁT */}
               <div className={`w-full flex flex-col ${replayMatch ? 'h-[440px] md:h-[480px]' : 'flex-1 min-h-0'}`}>
                 <MoveHistory
-                  moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory}
+                  moveHistory={replayMatch ? replayMatch.moves : moveHistory}
                   analysisByPly={replayMatch ? replayAnalysisByPly : (isLiveAnalysisEnabled ? analysisByPly : undefined)}
                   selectedPly={replayMatch ? replayMoveIndex : selectedPly}
                   onSelectPly={replayMatch ? (ply) => { if (ply !== null) goToReplayMove(ply); } : setSelectedPly}

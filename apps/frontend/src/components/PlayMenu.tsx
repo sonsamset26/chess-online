@@ -25,33 +25,33 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
   }[] = [
     {
       id: 'online',
-      title: 'Đấu Trực tuyến (Play Online)',
-      description: 'Đánh PvP ngẫu nhiên với người chơi có cùng trình độ Elo',
+      title: 'Đấu trực tuyến',
+      description: 'Ghép cặp nhanh với đối thủ cùng trình độ Elo',
       icon: Zap,
       iconBg: 'bg-amber-500/20 border-amber-500/30',
       iconColor: 'text-amber-400',
-      badge: 'PvP Realtime',
+      badge: 'Xếp hạng',
     },
     {
       id: 'bots',
-      title: 'Đánh với Máy (Play Bots)',
-      description: 'Thách thức AI Stockfish từ Dễ (~800) đến Khó (~2000 Elo)',
+      title: 'Đấu với máy',
+      description: 'Luyện tập cùng Stockfish engine với các mức từ 800 đến 2000 Elo',
       icon: Bot,
       iconBg: 'bg-blue-500/20 border-blue-500/30',
       iconColor: 'text-blue-400',
     },
     {
       id: 'friend',
-      title: 'Đấu với Bạn bè (Play a Friend)',
-      description: 'Tạo phòng riêng với Mã 6 chữ số hoặc nhập mã để tham gia',
+      title: 'Đấu với bạn bè',
+      description: 'Tạo phòng riêng hoặc nhập mã phòng 6 số để vào thi đấu',
       icon: Users,
       iconBg: 'bg-purple-500/20 border-purple-500/30',
       iconColor: 'text-purple-400',
     },
     {
       id: 'tournament',
-      title: 'Giải đấu (Tournaments)',
-      description: 'Tham gia giải đấu chia nhánh Knockout loại trực tiếp',
+      title: 'Đấu giải',
+      description: 'Tranh tài tại các nhánh đấu theo thể thức loại trực tiếp',
       icon: Trophy,
       iconBg: 'bg-rose-500/20 border-rose-500/30',
       iconColor: 'text-rose-400',
@@ -64,7 +64,7 @@ export const PlayMenu: React.FC<PlayMenuProps> = ({ onSelectMode }) => {
       <div>
         <div className="flex items-center justify-between border-b border-[#2A374A] pb-3 mb-3">
           <h2 className="text-base font-black text-white flex items-center gap-2">
-            <span className="text-xl">♟️</span> Chọn Chế độ chơi
+            <span className="text-xl">♟️</span> Chọn chế độ chơi
           </h2>
         </div>
 

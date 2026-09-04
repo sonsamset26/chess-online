@@ -8,14 +8,39 @@ export interface IMatchAnalysisMove {
   bestMoveSan?: string;
 }
 
-export interface IMatchAnalysisSummary {
+export interface MoveTelemetry {
+  color: 'w' | 'b';
+  timeSpentMs: number;
+  timeLeftMs: number;
+}
+
+export interface PlayerFeatureVector {
+  openingCpl: number;
+  middlegameCpl: number;
+  endgameCpl: number;
+  openingBlunderRate: number;
+  middlegameBlunderRate: number;
+  endgameBlunderRate: number;
+  timePressureBlunderRate: number;
+  averageThinkingTimeMs: number;
+}
+
+export interface MatchAnalysis {
+  status?: 'NOT_ANALYZED' | 'ANALYZED' | 'FAILED';
+  featureVersion?: string;
+  source?: 'SERVER' | 'CLIENT_CACHE';
   whiteAccuracy?: number;
   blackAccuracy?: number;
   whiteAvgCpl?: number;
   blackAvgCpl?: number;
+  whiteFeatures?: PlayerFeatureVector;
+  blackFeatures?: PlayerFeatureVector;
   moveClassifications?: IMatchAnalysisMove[];
   analyzedAt?: Date;
 }
+
+// Giữ alias IMatchAnalysisSummary để tương thích hoàn toàn với các tệp hiện tại
+export type IMatchAnalysisSummary = MatchAnalysis;
 
 export interface IMatch extends Document {
   whitePlayer?: Types.ObjectId;
@@ -39,6 +64,7 @@ export interface IMatch extends Document {
   whiteOldElo?: number;
   blackOldElo?: number;
   moves: string[];
+  moveTelemetry?: MoveTelemetry[];
   pgn: string;
   finalFen: string;
   movesCount: number;
@@ -46,7 +72,7 @@ export interface IMatch extends Document {
     initialSeconds: number;
     incrementSeconds: number;
   };
-  analysis?: IMatchAnalysisSummary;
+  analysis?: MatchAnalysis;
   startedAt: Date;
   endedAt?: Date;
   createdAt: Date;
@@ -141,6 +167,13 @@ const MatchSchema = new Schema<IMatch>(
       type: [String],
       default: [],
     },
+    moveTelemetry: [
+      {
+        color: { type: String, enum: ['w', 'b'], required: true },
+        timeSpentMs: { type: Number, required: true },
+        timeLeftMs: { type: Number, required: true },
+      },
+    ],
     pgn: {
       type: String,
       default: '',
@@ -173,10 +206,41 @@ const MatchSchema = new Schema<IMatch>(
       default: Date.now,
     },
     analysis: {
+      status: {
+        type: String,
+        enum: ['NOT_ANALYZED', 'ANALYZED', 'FAILED'],
+        default: 'NOT_ANALYZED',
+      },
+      featureVersion: { type: String, default: 'feature-v1' },
+      source: {
+        type: String,
+        enum: ['SERVER', 'CLIENT_CACHE'],
+        default: 'CLIENT_CACHE',
+      },
       whiteAccuracy: { type: Number },
       blackAccuracy: { type: Number },
       whiteAvgCpl: { type: Number },
       blackAvgCpl: { type: Number },
+      whiteFeatures: {
+        openingCpl: { type: Number },
+        middlegameCpl: { type: Number },
+        endgameCpl: { type: Number },
+        openingBlunderRate: { type: Number },
+        middlegameBlunderRate: { type: Number },
+        endgameBlunderRate: { type: Number },
+        timePressureBlunderRate: { type: Number },
+        averageThinkingTimeMs: { type: Number },
+      },
+      blackFeatures: {
+        openingCpl: { type: Number },
+        middlegameCpl: { type: Number },
+        endgameCpl: { type: Number },
+        openingBlunderRate: { type: Number },
+        middlegameBlunderRate: { type: Number },
+        endgameBlunderRate: { type: Number },
+        timePressureBlunderRate: { type: Number },
+        averageThinkingTimeMs: { type: Number },
+      },
       moveClassifications: [
         {
           ply: { type: Number },
