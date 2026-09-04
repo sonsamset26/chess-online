@@ -128,10 +128,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <Frown className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-black text-rose-400 tracking-wide mb-1">
-              BẠN ĐÃ THẤT BẠI!
+              BẠN ĐÃ THUA
             </h2>
             <p className="text-xs text-[#94A3B8] mb-4 leading-relaxed font-medium">
-              {customMessage || 'Ván đấu kết thúc. Hãy xem lại bàn cờ để rút kinh nghiệm cho ván tiếp theo!'}
+              {customMessage || 'Ván cờ kết thúc. Bạn có thể xem lại bàn cờ để rút kinh nghiệm cho ván sau.'}
             </p>
           </>
         )}

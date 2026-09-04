@@ -1,4 +1,5 @@
-﻿import { Chess } from 'chess.js';
+import { Chess } from 'chess.js';
+import { MoveTelemetry } from './match.model';
 
 // -----------------------------------------------------------------------------
 // DOMAIN MODELS & TYPINGS CHO HỆ THỐNG TRẬN ĐẤU CỜ VUA (MODULAR GAME STATE)
@@ -42,6 +43,7 @@ export interface GameState {
   };
   clock: ClockState;
   timeControl: TimeControlConfig;
+  moveTelemetry: MoveTelemetry[];
   winnerColor?: 'w' | 'b' | 'draw';
   endReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGNED' | 'ABANDONED' | 'DRAW';
   timeoutTimer?: NodeJS.Timeout;

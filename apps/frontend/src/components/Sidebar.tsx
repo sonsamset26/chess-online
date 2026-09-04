@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'play', label: 'Chơi cờ', icon: Gamepad2 },
     { id: 'puzzles', label: 'Giải thế cờ', icon: Puzzle, badge: 'Hot' },
     { id: 'learn', label: 'Học cờ', icon: GraduationCap },
+    { id: 'profile', label: 'Hồ sơ kỳ thủ', icon: Crown },
     { id: 'leaderboard', label: 'Xếp hạng', icon: Trophy },
     { id: 'history', label: 'Lịch sử', icon: History },
   ];
@@ -115,7 +116,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="border-t border-[#2A374A] pt-3 mt-auto">
           {user ? (
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#1E293B]">
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div 
+                onClick={() => handleTabClick('profile')}
+                className="flex items-center gap-2.5 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
+                title="Xem hồ sơ phong cách ML"
+              >
                 <img
                   src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.username)}`}
                   alt="Avatar"

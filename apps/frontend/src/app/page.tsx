@@ -23,6 +23,7 @@ import { LearnTab } from '../components/tabs/LearnTab';
 import { LeaderboardTab } from '../components/tabs/LeaderboardTab';
 import { PuzzleTab } from '../components/tabs/PuzzleTab';
 import { HistoryTab } from '../components/tabs/HistoryTab';
+import { PlayerProfileTab } from '../components/PlayerProfileTab';
 
 // Custom Hooks quản lý trạng thái
 import { useModalState } from '../hooks/useModalState';
@@ -33,6 +34,7 @@ import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
 
 import { sounds } from '../utils/soundEffects';
 import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
+import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
 import { Chess, Square } from 'chess.js';
 import { Menu, Crown, ScrollText, Flag, ArrowLeft, AlertTriangle, Volume2, VolumeX } from 'lucide-react';
 import { calculateMaterialDetails } from '../utils/chessMaterial';
@@ -98,7 +100,7 @@ export default function Home() {
   const [replayMatch, setReplayMatch] = useState<MatchRecord | null>(null);
   const [replayMoveIndex, setReplayMoveIndex] = useState<number>(0);
   const [replayOrigin, setReplayOrigin] = useState<{
-    source: 'history' | 'tournament_detail';
+    source: 'history' | 'tournament_detail' | 'game_over';
     tournamentIdOrCode?: string;
   } | null>(null);
 
@@ -248,15 +250,20 @@ export default function Home() {
   };
 
   const handleExitReplay = () => {
+    const origin = replayOrigin;
     setReplayMatch(null);
     setReplayMoveIndex(0);
     resetGameOverState();
     setIsGameOverModalOpen(false);
 
-    if (replayOrigin?.source === 'tournament_detail' && replayOrigin.tournamentIdOrCode) {
-      setSelectedTournamentDetailId(replayOrigin.tournamentIdOrCode);
+    if (origin?.source === 'tournament_detail' && origin.tournamentIdOrCode) {
+      setSelectedTournamentDetailId(origin.tournamentIdOrCode);
       setHistorySubTab('tournaments');
       setActiveTab('history');
+    } else if (origin?.source === 'game_over') {
+      setActiveTab('play');
+      setActiveMode(null);
+      clearActiveMatch();
     } else {
       setActiveTab('history');
       setHistorySubTab('matches');
@@ -267,10 +274,32 @@ export default function Home() {
   // Bản đồ phân loại nước đi khi xem lại ván cờ (Tự động nạp từ Cache hoặc MongoDB)
   const replayAnalysisByPly = useMemo(() => {
     if (!replayMatch) return undefined;
-    const reportOrSummary = replayMatch.analysis || AnalysisCacheService.getCache(replayMatch._id, replayMatch.moves);
+    const reportOrSummary = AnalysisCacheService.getValidAnalysis(
+      replayMatch.analysis,
+      replayMatch._id,
+      replayMatch.moves
+    );
     if (!reportOrSummary) return undefined;
     return AnalysisCacheService.convertToAnalysisByPly(reportOrSummary);
   }, [replayMatch]);
+
+  // Tự động phân tích ván cờ nếu đang xem lại mà chưa có dữ liệu đánh giá
+  useEffect(() => {
+    if (!replayMatch || !replayMatch.moves || replayMatch.moves.length < 2) return;
+    const existing = AnalysisCacheService.getValidAnalysis(
+      replayMatch.analysis,
+      replayMatch._id,
+      replayMatch.moves
+    );
+    if (!existing) {
+      AnalysisEngine.analyzeGame(replayMatch.moves, { depth: 8 })
+        .then((report) => {
+          AnalysisCacheService.saveCache(replayMatch._id, report, replayMatch.moves);
+          setReplayMatch((prev) => (prev ? { ...prev, analysis: report } : null));
+        })
+        .catch(() => {});
+    }
+  }, [replayMatch?._id, replayMatch?.moves]);
 
   // TÍCH HỢP LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
   const isLiveAnalysisEnabled =
@@ -987,7 +1016,13 @@ export default function Home() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold transition-all active:scale-95 shadow"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>{replayOrigin?.source === 'tournament_detail' ? 'Về Sơ đồ' : 'Thoát xem'}</span>
+                <span>
+                  {replayOrigin?.source === 'tournament_detail'
+                    ? 'Về Sơ đồ'
+                    : replayOrigin?.source === 'game_over'
+                    ? 'Về menu'
+                    : 'Về lịch sử'}
+                </span>
               </button>
             </div>
           ) : (activeMode || activeMatch) && activeTab === 'play' ? (
@@ -1112,7 +1147,7 @@ export default function Home() {
             currentUser={user}
             initialSubTab={historySubTab}
             onSelectReplay={(matchRecord: MatchRecord) => {
-              const cachedAnalysis = matchRecord.analysis || AnalysisCacheService.getCache(matchRecord._id, matchRecord.moves);
+              const cachedAnalysis = AnalysisCacheService.getValidAnalysis(matchRecord.analysis, matchRecord._id, matchRecord.moves);
               const matchToReplay = cachedAnalysis ? { ...matchRecord, analysis: cachedAnalysis as any } : matchRecord;
               setReplayOrigin({ source: 'history' });
               setHistorySubTab('matches');
@@ -1146,6 +1181,15 @@ export default function Home() {
 
         {/* 5. TAB HỌC CỜ (CHESS LESSONS) */}
         {activeTab === 'learn' && <LearnTab />}
+
+        {/* 6. TAB PHONG CÁCH & HỌC MÁY (ML BEHAVIORAL PROFILE) */}
+        {activeTab === 'profile' && (
+          <PlayerProfileTab
+            user={user}
+            onOpenAuthModal={() => setIsAuthOpen(true)}
+            onSelectTab={setActiveTab}
+          />
+        )}
       </main>
 
       {/* POPUP ĐĂNG NHẬP / ĐĂNG KÝ */}
@@ -1238,7 +1282,7 @@ export default function Home() {
       <MoveHistoryModal
         isOpen={isMoveHistoryModalOpen}
         onClose={() => setIsMoveHistoryModalOpen(false)}
-        moveHistory={replayMatch ? replayMatch.moves.slice(0, replayMoveIndex) : moveHistory}
+        moveHistory={replayMatch ? replayMatch.moves : moveHistory}
         analysisByPly={replayMatch ? replayAnalysisByPly : (isLiveAnalysisEnabled ? analysisByPly : undefined)}
         selectedPly={replayMatch ? replayMoveIndex : selectedPly}
         onSelectPly={replayMatch ? (ply) => { if (ply !== null) goToReplayMove(ply); } : setSelectedPly}
@@ -1268,7 +1312,7 @@ export default function Home() {
           setIsGameOverModalOpen(false);
           if (moveHistory && moveHistory.length > 0) {
             const matchId = activeMatch?.roomId || 'local_' + Date.now();
-            const cachedAnalysis = AnalysisCacheService.getCache(matchId, moveHistory);
+            const cachedAnalysis = AnalysisCacheService.getValidAnalysis(undefined, matchId, moveHistory);
             const isWhite = playerColor === 'w';
             const record: MatchRecord = {
               _id: matchId,
@@ -1292,7 +1336,7 @@ export default function Home() {
               startedAt: new Date().toISOString(),
               createdAt: new Date().toISOString(),
             };
-            setReplayOrigin({ source: 'history' });
+            setReplayOrigin({ source: 'game_over' });
             setReplayMatch(record);
             setReplayMoveIndex(moveHistory.length);
             setBoardFen(fen, moveHistory);

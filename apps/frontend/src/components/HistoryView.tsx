@@ -378,7 +378,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         ? 'Rời trận'
                         : 'Hòa cờ';
 
-                    const cachedAnalysis: any = m.analysis || AnalysisCacheService.getCache(m._id);
+                    const cachedAnalysis: any = AnalysisCacheService.getValidAnalysis(m.analysis, m._id, m.moves);
                     const userAccuracy = cachedAnalysis
                       ? (isWhite
                         ? (cachedAnalysis.whiteAccuracy ?? cachedAnalysis.summary?.white?.accuracy)
