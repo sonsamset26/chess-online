@@ -50,8 +50,9 @@ Hệ thống là một giải pháp trực tuyến đa người dùng trên nề
   - Giải thuật đồng hồ thi đấu hướng sự kiện: Máy chủ chỉ ghi nhận các mốc thời gian chuyển lượt, tính toán và trừ thời gian suy nghĩ một lần khi nhận nước đi hợp lệ, kết hợp bộ hẹn giờ giám sát hết giờ nhằm tiết kiệm tài nguyên vi xử lý máy chủ.
   - Cơ chế khôi phục trạng thái ván cờ trong 45 giây: Khi người chơi mất kết nối mạng hoặc tải lại trang web, máy chủ duy trì ván cờ và đếm lùi thời gian cho phép người chơi vào lại mà không bị xử thua ngay lập tức.
 - **Tổ chức giải đấu loại trực tiếp:** Hỗ trợ quy mô 4 hoặc 8 kỳ thủ với sơ đồ phân nhánh tự động. Khi ván đấu chính hòa, hệ thống tự động khởi tạo ván phụ thi đấu nhanh với màu quân đảo chiều và áp dụng lợi thế hòa cờ cho bên cầm quân Đen để xác định người chiến thắng đi tiếp.
-- **Xem lại và phân tích thế cờ:** Tích hợp công cụ phân tích Stockfish phiên bản WebAssembly giúp người chơi xem lại lịch sử nước đi, đánh giá chất lượng từng nước cờ thông qua chỉ số tổn thất ưu thế và phát hiện các sai lầm chiến thuật.
-- **Học tập và giải đố cờ vua:** Ngân hàng bài tập cờ thế phân loại theo các đòn phối hợp chiến thuật đặc trưng cùng hệ thống bài giảng tương tác giúp người mới bắt đầu làm quen luật chơi và nâng cao trình độ.
+- **Xem lại và phân tích thế cờ:** Tích hợp Stockfish engine phiên bản WebAssembly giúp người chơi xem lại lịch sử nước đi, đánh giá chất lượng từng nước cờ thông qua chỉ số tổn thất ưu thế và phát hiện các sai lầm chiến thuật.
+- **Học tập và giải đố cờ vua:** Ngân hàng 30 bài tập cờ thế chiến thuật phân bổ theo các dải trình độ từ 1000 đến 2050 Elo cùng hệ thống bài giảng tương tác giúp người mới bắt đầu làm quen luật chơi và nâng cao trình độ.
+- **Hồ sơ kỳ thủ và phân tích phong cách bằng học máy:** Trích xuất 8 chỉ số đặc trưng thi đấu từ lịch sử các ván cờ gồm độ mất điểm thế cờ trung bình và tỉ lệ sai sót qua 3 giai đoạn khai cuộc, trung cuộc, tàn cuộc; thời gian suy nghĩ trung bình; tỉ lệ sai sót khi cạn giờ. Áp dụng mô hình K-Means và bộ chuẩn hóa StandardScaler để phân cụm người chơi vào 4 nhóm phong cách: Tiến công, Toàn diện, Đột biến và Phòng thủ. Hệ thống đồng thời chẩn đoán giai đoạn thi đấu có hiệu suất thấp nhất để đề xuất các bài tập cờ thế chiến thuật phù hợp và hiển thị trực quan qua biểu đồ mạng nhện SVG 8 trục.
 - **Quản lý tài khoản và bảo mật:** Xác thực danh tính với cơ chế bảo mật kết hợp mã truy cập ngắn hạn lưu trong bộ nhớ tạm và mã làm mới dài hạn lưu trong cookie bảo mật chỉ đọc, ngăn ngừa các nguy cơ khai thác trái phép qua mạng.
 
 ### 1.3 Bảng thuật ngữ và định nghĩa
@@ -64,12 +65,16 @@ Hệ thống là một giải pháp trực tuyến đa người dùng trên nề
 | **PGN** | Định dạng văn bản quy định chuỗi nước đi và thông tin đi kèm của một ván cờ vua hoàn chỉnh. |
 | **UCI** | Giao thức truyền thông giữa giao diện người dùng và các công cụ tính toán nước cờ. |
 | **WASM** | Định dạng mã nhị phân hiệu năng cao thực thi trực tiếp trên trình duyệt web. |
+| **Stockfish engine** | Động cơ phân tích thế cờ mã nguồn mở mã hóa sang WebAssembly thực thi trên Web Worker của trình duyệt. |
 | **CPL** | Độ mất mát ưu thế của nước cờ đo bằng một phần trăm giá trị quy đổi của quân Tốt. |
 | **PvAI** | Chế độ thi đấu giữa người chơi và máy tính. |
 | **PvP** | Chế độ thi đấu đối kháng trực tiếp giữa hai người chơi thực. |
 | **WebSocket** | Giao thức mạng cho phép truyền thông hai chiều thời gian thực giữa máy chủ và máy khách qua một kết nối duy nhất. |
 | **JWT** | Định dạng mã định danh bảo mật dùng để xác thực và ủy quyền truy cập trong ứng dụng web. |
 | **Ván phụ Armageddon** | Hình thức thi đấu ván phụ nhanh để phân định thắng thua khi hòa cờ, bên Trắng có nhiều thời gian hơn nhưng bên Đen có ưu thế hòa là thắng. |
+| **K-Means** | Thuật toán học máy không giám sát dùng để nhóm tập dữ liệu thành K cụm dựa trên khoảng cách hình học tới tâm cụm. |
+| **StandardScaler** | Kỹ thuật chuẩn hóa dữ liệu đưa kỳ vọng về 0 và phương sai về 1, loại bỏ sai lệch thang đo giữa các biến đặc trưng. |
+| **Radar Chart** | Biểu đồ mạng nhện đa giác biểu diễn đồng thời nhiều biến định lượng trên cùng một hệ tọa độ cực. |
 
 ### 1.4 Tài liệu tham khảo
 1. IEEE Std 830-1998: Hướng dẫn thực hành khuyến nghị cho đặc tả yêu cầu phần mềm của Viện Kỹ sư Điện và Điện tử.
@@ -116,12 +121,16 @@ Tài liệu này gồm 3 chương chính:
 | | FN-18 | Chuyển vòng đấu sau thời gian đếm ngược 30 giây | Hệ thống, Người chơi |
 | **Phân tích ván cờ** | FN-19 | Lưu trữ lịch sử ván cờ và chuỗi nước đi | Hệ thống |
 | | FN-20 | Xem lại biên bản ván đấu từng nước đi | Người chơi, Khách |
-| | FN-21 | Đánh giá chất lượng nước cờ bằng công cụ phân tích | Người chơi |
-| **Học cờ và thế cờ** | FN-22 | Xem danh sách bài học và thực hành tương tác | Khách, Người chơi |
-| | FN-23 | Giải bài tập thế cờ chiến thuật | Khách, Người chơi |
-| **Quản trị hệ thống** | FN-24 | Quản lý tài khoản người dùng và khóa tài khoản | Quản trị viên |
-| | FN-25 | Quản lý ngân hàng bài học và bài tập cờ thế | Quản trị viên |
-| | FN-26 | Giám sát trạng thái phòng đấu và giải đấu | Quản trị viên |
+| | FN-21 | Đánh giá chất lượng nước cờ bằng Stockfish engine | Người chơi |
+| **Hồ sơ kỳ thủ & Học máy** | FN-22 | Trích xuất và tổng hợp vector 8 đặc trưng hành vi | Hệ thống |
+| | FN-23 | Phân cụm phong cách thi đấu bằng giải thuật K-Means | Hệ thống |
+| | FN-24 | Chẩn đoán điểm yếu thi đấu và gợi ý bài tập cá nhân hóa | Hệ thống |
+| | FN-25 | Hiển thị hồ sơ năng lực và biểu đồ mạng nhện SVG | Người chơi |
+| **Học cờ và thế cờ** | FN-26 | Xem danh sách bài học và thực hành tương tác | Khách, Người chơi |
+| | FN-27 | Giải bài tập 30 thế cờ chiến thuật | Khách, Người chơi |
+| **Quản trị hệ thống** | FN-28 | Quản lý tài khoản người dùng và khóa tài khoản | Quản trị viên |
+| | FN-29 | Quản lý ngân hàng bài học và bài tập cờ thế | Quản trị viên |
+| | FN-30 | Giám sát trạng thái phòng đấu và giải đấu | Quản trị viên |
 
 ---
 
@@ -153,6 +162,7 @@ rectangle "Hệ thống Chess Online" {
   usecase "Tham gia phòng bạn bè" as UC_JoinRoom
   usecase "Tham gia giải đấu" as UC_Tournament
   usecase "Xem lại và phân tích ván cờ" as UC_Analyze
+  usecase "Xem hồ sơ & phân tích học máy" as UC_MLProfile
 
   usecase "Quản lý người chơi" as UC_ManageUsers
   usecase "Quản lý ngân hàng bài học & thế cờ" as UC_ManageContent
@@ -174,6 +184,7 @@ User --> UC_CreateRoom
 User --> UC_JoinRoom
 User --> UC_Tournament
 User --> UC_Analyze
+User --> UC_MLProfile
 
 Admin --> UC_Login
 Admin --> UC_ManageUsers
@@ -202,9 +213,10 @@ flowchart LR
         UC08["Tạo & tham gia phòng bạn bè"]
         UC09["Tham gia giải đấu loại trực tiếp"]
         UC10["Xem lại & phân tích ván cờ"]
-        UC11["Quản lý người dùng"]
-        UC12["Quản lý bài học & thế cờ"]
-        UC13["Giám sát phòng & giải đấu"]
+        UC11["Hồ sơ kỳ thủ & phân tích học máy"]
+        UC12["Quản lý người dùng"]
+        UC13["Quản lý bài học & thế cờ"]
+        UC14["Giám sát phòng & giải đấu"]
     end
 
     Guest --> UC01
@@ -213,21 +225,17 @@ flowchart LR
     Guest --> UC04
     Guest --> UC05
 
-    User --> UC01
-    User --> UC02
-    User --> UC03
-    User --> UC04
-    User --> UC05
     User --> UC06
     User --> UC07
     User --> UC08
     User --> UC09
     User --> UC10
+    User --> UC11
 
     Admin --> UC01
-    Admin --> UC11
     Admin --> UC12
     Admin --> UC13
+    Admin --> UC14
 ```
 
 ---
@@ -1191,6 +1199,44 @@ sequenceDiagram
 
 ---
 
+#### 2.6.8 Đặc tả Use Case UC08: Xem hồ sơ năng lực và chẩn đoán phong cách thi đấu bằng học máy
+
+##### Bảng đặc tả Use Case:
+| Thuộc tính | Nội dung mô tả chi tiết |
+| :--- | :--- |
+| **Mã Use Case** | **UC08** |
+| **Tên Use Case** | **Xem hồ sơ năng lực và chẩn đoán phong cách thi đấu bằng học máy** |
+| **Tác nhân** | Người chơi có tài khoản |
+| **Mô tả** | Cung cấp giao diện trực quan hóa 8 đặc trưng thi đấu dưới dạng biểu đồ mạng nhện SVG, hiển thị nhãn phân cụm phong cách thi đấu K-Means, chẩn đoán giai đoạn thi đấu yếu nhất và đưa ra danh mục bài tập cờ thế cá nhân hóa. |
+| **Sự kiện kích hoạt** | Người dùng bấm chọn mục "Hồ sơ kỳ thủ" trên thanh điều hướng bên trái. |
+| **Tiền điều kiện** | Người dùng đã đăng nhập tài khoản vào hệ thống. |
+| **Hậu điều kiện** | Giao diện hiển thị đầy đủ biểu đồ mạng nhện 8 trục, nhãn phong cách thi đấu, số lượng ván đấu đã phân tích và danh sách bài tập gợi ý. |
+
+##### Luồng sự kiện chính:
+| STT | Thực hiện bởi | Hành động chi tiết |
+| :---: | :--- | :--- |
+| 1 | Người dùng | Bấm chọn tab "Hồ sơ kỳ thủ" từ thanh điều hướng chính. |
+| 2 | Hệ thống | Gửi yêu cầu API lấy dữ liệu hồ sơ phân tích của người chơi (`GET /api/v1/ml/profile`). |
+| 3 | Hệ thống | Nếu người chơi đã có hồ sơ trong cơ sở dữ liệu: Trả về vector 8 đặc trưng, nhãn phong cách (Tiến công, Toàn diện, Đột biến hoặc Phòng thủ), phân tích điểm yếu 3 giai đoạn và danh sách bài tập gợi ý. |
+| 4 | Hệ thống | Nếu người chơi chưa có hồ sơ: Tự động kích hoạt luồng tổng hợp dữ liệu từ các ván cờ đã lưu, chạy bộ chuẩn hóa StandardScaler và mô hình K-Means để phân cụm và lưu kết quả vào cơ sở dữ liệu. |
+| 5 | Hệ thống | Dựng biểu đồ mạng nhện SVG 8 trục (Khai trận, Tính toán, Dứt điểm, Bảo toàn, Vững thế, Cẩn trọng, Bản lĩnh, Linh hoạt) kèm thang điểm 0–100. |
+| 6 | Hệ thống | Hiển thị huy hiệu phong cách thi đấu, số lượng ván cờ đã phân tích gần nhất và khối gợi ý bài tập thích ứng. |
+| 7 | Người dùng | Có thể bấm nút "Cập nhật lại hồ sơ" để yêu cầu hệ thống tính toán lại từ các ván đấu mới nhất. |
+
+##### Luồng sự kiện thay thế:
+| STT | Thực hiện bởi | Hành động chi tiết |
+| :---: | :--- | :--- |
+| 3a | Hệ thống | Người chơi chưa thi đấu ván cờ nào: Hiển thị trạng thái khởi tạo mặc định kèm thông báo cần thi đấu thêm ván cờ để hệ thống thu thập dữ liệu phong cách. |
+| 7a | Hệ thống | Nếu quá trình tính toán lại gặp lỗi mạng: Giữ nguyên số liệu cũ và hiển thị thông báo thử lại. |
+
+##### Bảng dữ liệu đầu vào chi tiết:
+| STT | Trường dữ liệu | Mô tả | Bắt buộc? | Điều kiện hợp lệ | Ví dụ minh họa |
+| :---: | :--- | :--- | :--- | :--- | :--- |
+| 1 | `userId` | Mã định danh người chơi | Có | Định danh người dùng hợp lệ trong phiên đăng nhập | `usr_6631f` |
+| 2 | `forceRecompute` | Cờ yêu cầu tính toán lại cưỡng bức | Tùy chọn | Boolean (`true`/`false`) | `true` |
+
+---
+
 ### 2.7 Bảng ma trận kịch bản kiểm thử
 
 | Mã ca kiểm thử | Tên ca kiểm thử | Mục đích kiểm thử | Tiền điều kiện | Các bước thực hiện | Dữ liệu đầu vào | Kết quả mong đợi | Kết quả kiểm thử |
@@ -1205,6 +1251,8 @@ sequenceDiagram
 | **TC08** | Phân định thắng thua ván phụ khi kết quả tiếp tục hòa | Kiểm tra quy tắc ưu thế hòa: Nếu ván phụ kết thúc hòa thì bên cầm quân Đen được công nhận thắng | Ván phụ thi đấu nhanh kết thúc với kết quả hòa cờ | 1. Hết giờ hoặc hòa cờ trong ván phụ | Kết quả ván phụ là `draw` | Hệ thống tự động ghi nhận bên cầm quân Đen giành chiến thắng và đưa vào nhánh thi đấu Chung kết | **Đạt** |
 | **TC09** | Xử lý hủy giải đấu khi Chủ phòng rời phòng chờ | Đảm bảo hệ thống dọn dẹp tài nguyên và gửi thông báo đúng đắn khi người tạo giải hủy giải | Giải đấu đang ở phòng chờ, đã có 3 kỳ thủ tham gia nhưng chưa bắt đầu | 1. Chủ phòng bấm nút thoát phòng giải đấu | Sự kiện rời phòng của Chủ phòng | Giải đấu bị hủy bỏ, hệ thống gửi thông báo giải đã bị hủy tới 2 kỳ thủ còn lại và đưa về trang chủ | **Đạt** |
 | **TC10** | Đồng bộ chính xác đồng hồ thi đấu khi chuyển lượt | Xác minh giải thuật đồng hồ hướng sự kiện tính trừ thời gian chính xác theo mốc thời gian máy chủ | Ván cờ đang thi đấu, Người chơi A suy nghĩ 12 giây rồi thực hiện nước đi | 1. Người chơi A đi nước cờ sau 12 giây suy nghĩ | Nước đi kèm mốc thời gian máy chủ | Quỹ thời gian của A bị trừ chính xác 12 giây, mốc thời gian máy chủ mới được thiết lập cho lượt của B | **Đạt** |
+| **TC11** | Phân cụm phong cách thi đấu bằng mô hình K-Means | Xác minh hệ thống chuẩn hóa vector đặc trưng và phân loại đúng vào 1 trong 4 nhóm phong cách | Người chơi có ít nhất 3 ván cờ có dữ liệu phân tích | 1. Người chơi mở tab Hồ sơ kỳ thủ<br>2. Hệ thống chạy `fit_transform` qua StandardScaler<br>3. Dự đoán cụm bằng K-Means | Vector 8 chiều đặc trưng | Người chơi được gán đúng nhãn cụm (Tiến công, Toàn diện, Đột biến, hoặc Phòng thủ), độ tin cậy được cập nhật | **Đạt** |
+| **TC12** | Chẩn đoán điểm yếu và đề xuất bài tập cá nhân hóa | Kiểm tra hệ thống phát hiện chính xác giai đoạn có CPL cao nhất và lọc bài tập cờ thế theo Elo | Hồ sơ kỳ thủ ghi nhận CPL giai đoạn Tàn cuộc cao vượt trội so với Khai cuộc và Trung cuộc | 1. Hệ thống chạy bộ phân tích `WeaknessAnalyzer`<br>2. Gửi yêu cầu tới `RecommendationService` | CPL Tàn cuộc = 85, Elo = 1200 | Hệ thống chỉ định điểm yếu là Tàn cuộc, lọc ra các bài cờ thế chủ đề Tàn cuộc có dải Elo từ 1050 đến 1400 | **Đạt** |
 
 ---
 
