@@ -82,13 +82,13 @@ export class AnalysisEngine {
     let to: Square = 'a1' as Square;
 
     try {
-      let gameBefore: Chess;
+      const gameBefore = new Chess(fenBefore);
       let moveObj: any = null;
       try {
-        gameBefore = new Chess(fenBefore);
-        moveObj = gameBefore.move(moveSan);
+        const testGame = new Chess(fenBefore);
+        moveObj = testGame.move(moveSan);
       } catch {
-        gameBefore = new Chess();
+        // fallback
       }
 
       if (moveObj) {

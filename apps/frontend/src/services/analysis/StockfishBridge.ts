@@ -185,11 +185,15 @@ export class StockfishBridge {
         if (mateMatch) {
           currentMate = parseInt(mateMatch[1], 10);
         } else {
-          // Bắt điểm centipawn chính xác (bỏ qua upperbound / lowerbound tạm thời)
+          // Bắt điểm centipawn: ưu tiên điểm chính xác, fallback sang bound nếu chưa có
           const cpMatch = line.match(/score cp (-?\d+)/);
-          if (cpMatch && !line.includes('upperbound') && !line.includes('lowerbound')) {
-            currentCp = parseInt(cpMatch[1], 10);
-            currentMate = null;
+          if (cpMatch) {
+            if (!line.includes('upperbound') && !line.includes('lowerbound')) {
+              currentCp = parseInt(cpMatch[1], 10);
+              currentMate = null;
+            } else if (currentCp === 0 && currentMate === null) {
+              currentCp = parseInt(cpMatch[1], 10);
+            }
           }
         }
 

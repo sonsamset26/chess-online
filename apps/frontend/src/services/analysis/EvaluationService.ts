@@ -209,23 +209,18 @@ export class EvaluationService {
           };
         }
 
-        let isMoved = false;
         try {
-          const moveObj = game.move({
+          const cloneGame = new Chess(game.fen());
+          const moveObj = cloneGame.move({
             from: result.bestMoveUci.slice(0, 2) as any,
             to: result.bestMoveUci.slice(2, 4) as any,
             promotion: (result.bestMoveUci.slice(4, 5) || undefined) as any,
           });
           if (moveObj) {
             bestMoveSan = moveObj.san;
-            isMoved = true;
           }
         } catch {
           // ignore
-        } finally {
-          if (isMoved) {
-            game.undo();
-          }
         }
 
         return {
