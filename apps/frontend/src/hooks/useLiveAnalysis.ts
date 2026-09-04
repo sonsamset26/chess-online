@@ -35,7 +35,20 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
   const isProcessingRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Khởi tạo hoặc giải phóng StockfishBridge theo trạng thái enabled
+  // Khởi tạo và warmup Stockfish Worker sớm ngay khi mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !bridgeRef.current) {
+      bridgeRef.current = new StockfishBridge();
+    }
+    return () => {
+      if (bridgeRef.current) {
+        bridgeRef.current.terminate();
+        bridgeRef.current = null;
+      }
+    };
+  }, []);
+
+  // Quản lý trạng thái phân tích khi enabled thay đổi
   useEffect(() => {
     if (enabled) {
       if (!bridgeRef.current) {
@@ -45,7 +58,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
         processQueue();
       }
     } else {
-      // Khi disabled (chuyển mode / replay / tournament): hủy bỏ mọi tác vụ
+      // Khi disabled (chuyển mode / replay / tournament): hủy bỏ các tác vụ đang chờ
       generationRef.current += 1;
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
@@ -55,18 +68,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       setAnalysisByPly({});
       setIsAnalyzing(false);
       setSelectedPly(null);
-      if (bridgeRef.current) {
-        bridgeRef.current.terminate();
-        bridgeRef.current = null;
-      }
     }
-
-    return () => {
-      if (bridgeRef.current) {
-        bridgeRef.current.terminate();
-        bridgeRef.current = null;
-      }
-    };
   }, [enabled]);
 
   // Vòng lặp xử lý tuần tự toàn bộ hàng đợi phân tích (Đảm bảo 100% nước đi đều được đánh giá)
@@ -75,70 +77,72 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
     isProcessingRef.current = true;
     setIsAnalyzing(true);
 
-    while (queueRef.current.length > 0 && enabled) {
-      const currentJob = queueRef.current.shift();
-      if (!currentJob) break;
+    try {
+      while (queueRef.current.length > 0 && enabled) {
+        const currentJob = queueRef.current.shift();
+        if (!currentJob) break;
 
-      // Bỏ qua nếu job thuộc thế hệ ván cờ cũ (do game reset)
-      if (currentJob.generation !== generationRef.current) continue;
+        // Bỏ qua nếu job thuộc thế hệ ván cờ cũ (do game reset)
+        if (currentJob.generation !== generationRef.current) continue;
 
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
-      try {
-        const result = await AnalysisEngine.analyzeSingleMove(
-          {
-            ply: currentJob.ply,
-            fenBefore: currentJob.fenBefore,
-            fenAfter: currentJob.fenAfter,
-            moveSan: currentJob.moveSan,
-            playerColor: currentJob.playerColor,
-            depth,
-            movetimeMs,
-            abortSignal: controller.signal,
-          },
-          bridgeRef.current,
-          sessionCacheRef.current
-        );
-
-        if (currentJob.generation === generationRef.current) {
-          setAnalysisByPly((prev) => ({
-            ...prev,
-            [currentJob.ply]: result,
-          }));
-        }
-      } catch (err: any) {
-        if (
-          err?.name !== 'AbortError' &&
-          err?.message !== 'Analysis aborted' &&
-          err?.message !== 'Worker terminated' &&
-          currentJob.generation === generationRef.current
-        ) {
-          setAnalysisByPly((prev) => ({
-            ...prev,
-            [currentJob.ply]: {
+        try {
+          const result = await AnalysisEngine.analyzeSingleMove(
+            {
               ply: currentJob.ply,
-              moveNumber: Math.floor((currentJob.ply - 1) / 2) + 1,
-              color: currentJob.playerColor,
-              san: currentJob.moveSan,
-              from: 'a1',
-              to: 'a1',
               fenBefore: currentJob.fenBefore,
               fenAfter: currentJob.fenAfter,
-              bestMoveSan: '',
-              bestMoveUci: '',
-              phase: 'OPENING',
-              status: 'FAILED',
+              moveSan: currentJob.moveSan,
+              playerColor: currentJob.playerColor,
+              depth,
+              movetimeMs,
+              abortSignal: controller.signal,
             },
-          }));
-        }
-      } finally {
-        abortControllerRef.current = null;
-      }
-    }
+            bridgeRef.current,
+            sessionCacheRef.current
+          );
 
-    isProcessingRef.current = false;
-    setIsAnalyzing(false);
+          if (currentJob.generation === generationRef.current) {
+            setAnalysisByPly((prev) => ({
+              ...prev,
+              [currentJob.ply]: result,
+            }));
+          }
+        } catch (err: any) {
+          if (
+            err?.name !== 'AbortError' &&
+            err?.message !== 'Analysis aborted' &&
+            err?.message !== 'Worker terminated' &&
+            currentJob.generation === generationRef.current
+          ) {
+            setAnalysisByPly((prev) => ({
+              ...prev,
+              [currentJob.ply]: {
+                ply: currentJob.ply,
+                moveNumber: Math.floor((currentJob.ply - 1) / 2) + 1,
+                color: currentJob.playerColor,
+                san: currentJob.moveSan,
+                from: 'a1',
+                to: 'a1',
+                fenBefore: currentJob.fenBefore,
+                fenAfter: currentJob.fenAfter,
+                bestMoveSan: '',
+                bestMoveUci: '',
+                phase: 'OPENING',
+                status: 'FAILED',
+              },
+            }));
+          }
+        } finally {
+          abortControllerRef.current = null;
+        }
+      }
+    } finally {
+      isProcessingRef.current = false;
+      setIsAnalyzing(false);
+    }
   }, [enabled, depth, movetimeMs]);
 
   // Đẩy nước đi mới vào hàng đợi phân tích

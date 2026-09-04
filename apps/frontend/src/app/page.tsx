@@ -634,6 +634,8 @@ export default function Home() {
       processedGameOverRef.current = null;
       resetGameOverState();
       setIsGameOverModalOpen(false);
+      resetAnalysis();
+      processedPlyRef.current = 0;
 
       const myColor = activeMatch.yourColor || 'w';
       setPlayerColor(myColor);
@@ -655,7 +657,7 @@ export default function Home() {
     } else if (!activeMatch) {
       currentActiveRoomIdRef.current = null;
     }
-  }, [activeMatch, activeMode, setIsFriendModalOpen, setIsTournamentModalOpen, setIsGameOverModalOpen, resetGameOverState, setPlayerColor, setBoardFen]);
+  }, [activeMatch, activeMode, setIsFriendModalOpen, setIsTournamentModalOpen, setIsGameOverModalOpen, resetGameOverState, setPlayerColor, setBoardFen, resetAnalysis]);
 
   // 3. LẮNG NGHE SỰ KIỆN ĐỐI THỦ ĐẦU HÀNG, F5 HOẶC HẾT GIỜ (TIMEOUT)
   useEffect(() => {

@@ -60,12 +60,12 @@ export class StockfishBridge {
       this.worker.postMessage('uci');
       this.worker.postMessage('isready');
 
-      // Timeout dự phòng 3 giây
+      // Timeout dự phòng 12 giây để tải và biên dịch WebAssembly
       timer = setTimeout(() => {
         this.isReady = true;
         this.worker?.removeEventListener('message', handler);
         resolve();
-      }, 3000);
+      }, 12000);
     });
   }
 

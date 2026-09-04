@@ -125,7 +125,7 @@ export function useChessEngine() {
   };
 
   // Nạp FEN từ CSDL hoặc WebSocket Realtime
-  const setBoardFen = (newFen: string, history?: string[]) => {
+  const setBoardFen = useCallback((newFen: string, history?: string[]) => {
     try {
       generationRef.current++;
       workerRef.current?.postMessage('stop');
@@ -162,10 +162,10 @@ export function useChessEngine() {
     } catch (err) {
       console.error('Invalid FEN:', err);
     }
-  };
+  }, []);
 
   // Thực hiện nước đi của Người chơi (Hỗ trợ chọn quân Phong cấp)
-  const makePlayerMove = (from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
+  const makePlayerMove = useCallback((from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
     if (isAiThinking || gameRef.current.isGameOver()) return false;
     if (gameRef.current.turn() !== playerColor) return false;
 
@@ -190,10 +190,10 @@ export function useChessEngine() {
       return false;
     }
     return false;
-  };
+  }, [isAiThinking, playerColor, triggerAiMove]);
 
   // Reset Game
-  const resetGame = (options?: { autoTriggerAi?: boolean }) => {
+  const resetGame = useCallback((options?: { autoTriggerAi?: boolean }) => {
     generationRef.current++;
     workerRef.current?.postMessage('stop');
     if (pendingBotMoveTimerRef.current) {
@@ -213,10 +213,10 @@ export function useChessEngine() {
     if (options?.autoTriggerAi && playerColor === 'b') {
       triggerAiMove(gameRef.current.fen());
     }
-  };
+  }, [playerColor, triggerAiMove]);
 
   // Đổi bên (Trắng/Đen)
-  const togglePlayerColor = () => {
+  const togglePlayerColor = useCallback(() => {
     generationRef.current++;
     workerRef.current?.postMessage('stop');
     if (pendingBotMoveTimerRef.current) {
@@ -239,7 +239,7 @@ export function useChessEngine() {
     if (newColor === 'b') {
       triggerAiMove(gameRef.current.fen());
     }
-  };
+  }, [playerColor, triggerAiMove]);
 
   return {
     game: gameRef.current,

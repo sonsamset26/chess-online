@@ -33,6 +33,25 @@ export function toCanonicalUci(from: string, to: string, promotion?: string): st
   return `${from.toLowerCase()}${to.toLowerCase()}${promo}`;
 }
 
+// Bảng tra cứu các nước đi khai cuộc lý thuyết chuẩn quốc tế (Opening Book)
+const MASTER_OPENING_PLY_1 = new Set(['e4', 'd4', 'Nf3', 'c4', 'g3', 'b3', 'f4', 'Nc3', 'e3', 'd3']);
+const MASTER_OPENING_PLY_2 = new Set(['e5', 'c5', 'e6', 'c6', 'd5', 'd6', 'Nf6', 'Nc6', 'g6', 'b6', 'f5']);
+const MASTER_DEVELOPMENT_MOVES = new Set([
+  'e4', 'd4', 'c4', 'e5', 'd5', 'c5', 'c3', 'c6', 'e3', 'e6', 'd3', 'd6', 'g3', 'g6', 'b3', 'b6', 'a3', 'a6', 'h3', 'h6',
+  'Nf3', 'Nc3', 'Nbd2', 'Nge2', 'Nf6', 'Nc6', 'Nbd7', 'Nge7', 'Nh6', 'Nh3',
+  'Bc4', 'Bb5', 'Be2', 'Bd3', 'Bg5', 'Bf4', 'Be3', 'Bg2', 'Bb2',
+  'Bc5', 'Bb4', 'Be7', 'Bd6', 'Bg4', 'Bf5', 'Be6', 'Bg7', 'Bb7',
+  'O-O'
+]);
+
+export function isStandardOpeningMove(ply: number, san: string): boolean {
+  const cleanSan = san.replace(/[+#!?]/g, '');
+  if (ply === 1) return MASTER_OPENING_PLY_1.has(cleanSan);
+  if (ply === 2) return MASTER_OPENING_PLY_2.has(cleanSan);
+  if (ply <= 8) return MASTER_DEVELOPMENT_MOVES.has(cleanSan);
+  return false;
+}
+
 export interface MoveTelemetryInput {
   timeSpentMs?: number;
   timeLeftMs?: number;
@@ -177,11 +196,16 @@ export class AnalysisEngine {
       }
 
       // 5. Tính toán CPL chuẩn hóa
-      const { evalPlayed, cpl } = EvaluationService.calculateCPL(
+      let { evalPlayed, cpl } = EvaluationService.calculateCPL(
         bestMoveResult.evalBest,
         evalOppAfterMove,
         isBestMovePlayed
       );
+
+      // 6. Master Opening Guard: Các nước khai cuộc lý thuyết chuẩn không bị gán nhãn Mistake do nông độ sâu engine
+      if (ply <= 8 && isStandardOpeningMove(ply, moveSan) && evalOppAfterMove <= 130) {
+        cpl = Math.min(cpl, 5);
+      }
 
       const classification = MoveClassificationService.classify(cpl);
       const accuracy = MoveClassificationService.calculateMoveAccuracy(cpl);
