@@ -81,6 +81,8 @@ export interface PlayTabProps {
   setIsResignModalOpen: (open: boolean) => void;
   setSelectedPly: (ply: number | null) => void;
   replayAnalysisByPly?: Record<number, any>;
+  isReplayAnalyzing?: boolean;
+  replayAnalysisProgress?: { current: number; total: number } | null;
   analysisReport?: any;
   onOpenAnalysisReport?: () => void;
 }
@@ -129,6 +131,8 @@ export const PlayTab: React.FC<PlayTabProps> = ({
   setIsResignModalOpen,
   setSelectedPly,
   replayAnalysisByPly,
+  isReplayAnalyzing,
+  replayAnalysisProgress,
   analysisReport,
   onOpenAnalysisReport,
 }) => {
@@ -380,6 +384,17 @@ export const PlayTab: React.FC<PlayTabProps> = ({
             {/* LỊCH SỬ NƯỚC ĐI VÀ ĐÁNH GIÁ PHÂN TÍCH CHO MOBILE (< md) */}
             {replayMatch && (
               <div className="md:hidden w-full max-w-[480px] mt-2 flex flex-col gap-2">
+                {isReplayAnalyzing && replayAnalysisProgress && (
+                  <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-950/70 border border-indigo-500/30 text-[11px] text-indigo-300 font-medium shadow-sm animate-pulse">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                      <span>Đang nạp phân tích AI ({replayAnalysisProgress.current}/{replayAnalysisProgress.total})...</span>
+                    </div>
+                    <span className="font-mono font-bold text-indigo-200">
+                      {Math.round((replayAnalysisProgress.current / Math.max(1, replayAnalysisProgress.total)) * 100)}%
+                    </span>
+                  </div>
+                )}
                 <div className="h-[280px] w-full flex flex-col">
                   <MoveHistory
                     moveHistory={replayMatch.moves}
@@ -676,6 +691,17 @@ export const PlayTab: React.FC<PlayTabProps> = ({
 
               {/* Move History Desktop - MỞ RỘNG TO RÕ DỄ QUAN SÁT */}
               <div className={`w-full flex flex-col ${replayMatch ? 'h-[440px] md:h-[480px]' : 'flex-1 min-h-0'}`}>
+                {replayMatch && isReplayAnalyzing && replayAnalysisProgress && (
+                  <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-950/70 border border-indigo-500/30 text-[11px] text-indigo-300 font-medium mb-1.5 shadow-sm animate-pulse">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                      <span>Đang nạp phân tích AI ({replayAnalysisProgress.current}/{replayAnalysisProgress.total})...</span>
+                    </div>
+                    <span className="font-mono font-bold text-indigo-200">
+                      {Math.round((replayAnalysisProgress.current / Math.max(1, replayAnalysisProgress.total)) * 100)}%
+                    </span>
+                  </div>
+                )}
                 <MoveHistory
                   moveHistory={replayMatch ? replayMatch.moves : moveHistory}
                   analysisByPly={replayMatch ? replayAnalysisByPly : (isLiveAnalysisEnabled ? analysisByPly : undefined)}

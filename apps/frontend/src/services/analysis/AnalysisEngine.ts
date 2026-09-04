@@ -42,8 +42,10 @@ export interface AnalyzeGameOptions {
   telemetries?: MoveTelemetryInput[];
   matchId?: string;
   depth?: number;
+  movetimeMs?: number;
   config?: MoveClassificationConfig;
   onProgress?: (percent: number, statusText?: string) => void;
+  onMoveAnalyzed?: (analyzedMove: CompletedMoveAnalysis, allMoves: CompletedMoveAnalysis[]) => void;
   abortSignal?: AbortSignal;
 }
 
@@ -234,9 +236,11 @@ export class AnalysisEngine {
     const {
       telemetries = [],
       matchId,
-      depth = 10,
+      depth = 8,
+      movetimeMs = 150,
       config = DEFAULT_CLASSIFICATION_CONFIG,
       onProgress,
+      onMoveAnalyzed,
       abortSignal,
     } = options;
 
@@ -270,7 +274,13 @@ export class AnalysisEngine {
         const posKeyBefore = getPositionKey(fenBefore);
         let bestMoveResult = fenCache.get(posKeyBefore);
         if (!bestMoveResult) {
-          bestMoveResult = await EvaluationService.findBestMoveAndEvalAsync(game, depth, bridge, abortSignal);
+          bestMoveResult = await EvaluationService.findBestMoveAndEvalAsync(game, {
+            depth,
+            movetimeMs,
+            bridge,
+            abortSignal,
+            allowSyncFallback: true,
+          });
           fenCache.set(posKeyBefore, bestMoveResult);
         }
 
@@ -317,7 +327,13 @@ export class AnalysisEngine {
             const posKeyAfter = getPositionKey(fenAfter);
             let oppResult = fenCache.get(posKeyAfter);
             if (!oppResult) {
-              oppResult = await EvaluationService.findBestMoveAndEvalAsync(game, depth, bridge, abortSignal);
+              oppResult = await EvaluationService.findBestMoveAndEvalAsync(game, {
+                depth,
+                movetimeMs,
+                bridge,
+                abortSignal,
+                allowSyncFallback: true,
+              });
               fenCache.set(posKeyAfter, oppResult);
             }
             evalOppAfterMove = oppResult.evalBest;
@@ -350,7 +366,7 @@ export class AnalysisEngine {
         const timeSpentMs = telemetry?.timeSpentMs;
         const isTimePressure = telemetry?.timeLeftMs !== undefined ? telemetry.timeLeftMs < 30000 : false;
 
-        analyzedMoves.push({
+        const moveAnalysis: CompletedMoveAnalysis = {
           ply,
           moveNumber,
           color,
@@ -369,7 +385,10 @@ export class AnalysisEngine {
           phase,
           timeSpentMs,
           isTimePressure,
-        });
+        };
+
+        analyzedMoves.push(moveAnalysis);
+        onMoveAnalyzed?.(moveAnalysis, analyzedMoves);
 
         if (onProgress) {
           const percent = Math.round(((i + 1) / totalPlies) * 100);

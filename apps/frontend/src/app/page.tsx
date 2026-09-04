@@ -35,6 +35,7 @@ import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
 import { sounds } from '../utils/soundEffects';
 import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
 import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
+import { MoveAnalysis } from '../services/analysis/types';
 import { Chess, Square } from 'chess.js';
 import { Menu, Crown, ScrollText, Flag, ArrowLeft, AlertTriangle, Volume2, VolumeX } from 'lucide-react';
 import { calculateMaterialDetails } from '../utils/chessMaterial';
@@ -104,6 +105,10 @@ export default function Home() {
     tournamentIdOrCode?: string;
     preferredColor?: 'w' | 'b';
   } | null>(null);
+  const [progressiveReplayAnalysis, setProgressiveReplayAnalysis] = useState<Record<number, MoveAnalysis>>({});
+  const [isReplayAnalyzing, setIsReplayAnalyzing] = useState<boolean>(false);
+  const [replayAnalysisProgress, setReplayAnalysisProgress] = useState<{ current: number; total: number } | null>(null);
+  const replayAbortRef = useRef<AbortController | null>(null);
 
   // Đếm ngược Reconnect
   const [reconnectCountdown, setReconnectCountdown] = useState<number>(45);
@@ -252,6 +257,11 @@ export default function Home() {
 
   const handleExitReplay = () => {
     const origin = replayOrigin;
+    replayAbortRef.current?.abort();
+    replayAbortRef.current = null;
+    setIsReplayAnalyzing(false);
+    setReplayAnalysisProgress(null);
+    setProgressiveReplayAnalysis({});
     setReplayMatch(null);
     setReplayMoveIndex(0);
     resetGameOverState();
@@ -272,7 +282,7 @@ export default function Home() {
     setReplayOrigin(null);
   };
 
-  // Bản đồ phân loại nước đi khi xem lại ván cờ (Tự động nạp từ Cache hoặc MongoDB)
+  // Bản đồ phân loại nước đi khi xem lại ván cờ (Tự động nạp từ Cache hoặc MongoDB, hoặc kết quả cấp tiến)
   const replayAnalysisByPly = useMemo(() => {
     if (!replayMatch) return undefined;
     const reportOrSummary = AnalysisCacheService.getValidAnalysis(
@@ -280,27 +290,85 @@ export default function Home() {
       replayMatch._id,
       replayMatch.moves
     );
-    if (!reportOrSummary) return undefined;
-    return AnalysisCacheService.convertToAnalysisByPly(reportOrSummary);
-  }, [replayMatch]);
+    if (reportOrSummary) {
+      return AnalysisCacheService.convertToAnalysisByPly(reportOrSummary);
+    }
+    if (Object.keys(progressiveReplayAnalysis).length > 0) {
+      return progressiveReplayAnalysis;
+    }
+    return undefined;
+  }, [replayMatch, progressiveReplayAnalysis]);
 
-  // Tự động phân tích ván cờ nếu đang xem lại mà chưa có dữ liệu đánh giá
+  // Tự động phân tích ván cờ nếu đang xem lại mà chưa có dữ liệu đánh giá (Cấp tiến theo thời gian thực)
   useEffect(() => {
-    if (!replayMatch || !replayMatch.moves || replayMatch.moves.length < 2) return;
+    if (!replayMatch || !replayMatch.moves || replayMatch.moves.length < 2) {
+      setIsReplayAnalyzing(false);
+      setReplayAnalysisProgress(null);
+      setProgressiveReplayAnalysis({});
+      return;
+    }
+
     const existing = AnalysisCacheService.getValidAnalysis(
       replayMatch.analysis,
       replayMatch._id,
       replayMatch.moves
     );
-    if (!existing) {
-      AnalysisEngine.analyzeGame(replayMatch.moves, { depth: 8 })
-        .then((report) => {
-          AnalysisCacheService.saveCache(replayMatch._id, report, replayMatch.moves);
-          setReplayMatch((prev) => (prev ? { ...prev, analysis: report } : null));
-        })
-        .catch(() => {});
+
+    if (existing) {
+      setIsReplayAnalyzing(false);
+      setReplayAnalysisProgress(null);
+      setProgressiveReplayAnalysis({});
+      return;
     }
-  }, [replayMatch?._id, replayMatch?.moves]);
+
+    // Kích hoạt phân tích nền cấp tiến với Stockfish Engine
+    replayAbortRef.current?.abort();
+    const controller = new AbortController();
+    replayAbortRef.current = controller;
+    setIsReplayAnalyzing(true);
+    setReplayAnalysisProgress({ current: 0, total: replayMatch.moves.length });
+    setProgressiveReplayAnalysis({});
+
+    AnalysisEngine.analyzeGame(replayMatch.moves, {
+      depth: 8,
+      movetimeMs: 150,
+      abortSignal: controller.signal,
+      onMoveAnalyzed: (analyzedMove) => {
+        setProgressiveReplayAnalysis((prev) => ({
+          ...prev,
+          [analyzedMove.ply]: {
+            ...analyzedMove,
+            status: 'ANALYZED',
+          },
+        }));
+        setReplayAnalysisProgress({
+          current: analyzedMove.ply,
+          total: replayMatch.moves.length,
+        });
+      },
+    })
+      .then((report) => {
+        AnalysisCacheService.saveCache(replayMatch._id, report, replayMatch.moves);
+        if (replayMatch._id && !replayMatch._id.startsWith('local_') && !replayMatch._id.startsWith('game_')) {
+          AnalysisCacheService.syncToBackend(replayMatch._id, report, user?.token);
+        }
+        setReplayMatch((prev) => (prev ? { ...prev, analysis: report } : null));
+        setAnalysisReport(report);
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError' && err?.message !== 'Analysis aborted') {
+          console.warn('Lỗi phân tích ván cờ xem lại:', err);
+        }
+      })
+      .finally(() => {
+        setIsReplayAnalyzing(false);
+        setReplayAnalysisProgress(null);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [replayMatch?._id, replayMatch?.moves, user?.token]);
 
   // TÍCH HỢP LIVE MOVE ANALYSIS (LIVE COACH TRONG TRẬN)
   const isLiveAnalysisEnabled =
@@ -1100,6 +1168,8 @@ export default function Home() {
             setIsResignModalOpen={setIsResignModalOpen}
             setSelectedPly={setSelectedPly}
             replayAnalysisByPly={replayAnalysisByPly}
+            isReplayAnalyzing={isReplayAnalyzing}
+            replayAnalysisProgress={replayAnalysisProgress}
             analysisReport={replayMatch ? (AnalysisCacheService.getCache(replayMatch._id, replayMatch.moves) || analysisReport) : analysisReport}
             onOpenAnalysisReport={() => {
               if (!replayMatch) return;

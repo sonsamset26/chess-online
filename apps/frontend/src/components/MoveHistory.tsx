@@ -150,6 +150,11 @@ export const MoveHistory: React.FC<MoveHistoryProps> = ({
                 </div>
               )}
             </div>
+          ) : selectedPly !== null ? (
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-400/90 italic select-none">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mr-1" />
+              <span>Đang phân tích nước đi này...</span>
+            </div>
           ) : (
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 italic select-none">
               <Info className="w-3.5 h-3.5 opacity-60" />
