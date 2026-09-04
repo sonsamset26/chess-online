@@ -150,7 +150,7 @@ export class StockfishBridge {
         drainTimer = setTimeout(() => {
           worker.removeEventListener('message', drainHandler);
           reject(err);
-        }, 150);
+        }, 400);
 
         worker.addEventListener('message', drainHandler);
         try {

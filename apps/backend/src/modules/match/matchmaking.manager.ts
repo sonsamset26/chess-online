@@ -241,6 +241,7 @@ export class MatchmakingManager {
       whitePlayer: { userId: whitePlayer.userId, username: whitePlayer.username, eloRating: whitePlayer.eloRating },
       blackPlayer: { userId: blackPlayer.userId, username: blackPlayer.username, eloRating: blackPlayer.eloRating },
       fen: game.fen(),
+      history: game.history(),
       isRated: p1.isRated,
       clock: {
         whiteTimeMs: initialTimeMs,

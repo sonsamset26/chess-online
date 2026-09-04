@@ -35,13 +35,16 @@ export function toCanonicalUci(from: string, to: string, promotion?: string): st
 
 // Bảng tra cứu các nước đi khai cuộc lý thuyết chuẩn quốc tế (Opening Book)
 const MASTER_OPENING_PLY_1 = new Set(['e4', 'd4', 'Nf3', 'c4', 'g3', 'b3', 'f4', 'Nc3', 'e3', 'd3']);
-const MASTER_OPENING_PLY_2 = new Set(['e5', 'c5', 'e6', 'c6', 'd5', 'd6', 'Nf6', 'Nc6', 'g6', 'b6', 'f5']);
+const MASTER_OPENING_PLY_2 = new Set(['e5', 'c5', 'e6', 'c6', 'd5', 'd6', 'Nf6', 'Nc6', 'g6', 'b6', 'f5', 'g5', 'b5']);
 const MASTER_DEVELOPMENT_MOVES = new Set([
-  'e4', 'd4', 'c4', 'e5', 'd5', 'c5', 'c3', 'c6', 'e3', 'e6', 'd3', 'd6', 'g3', 'g6', 'b3', 'b6', 'a3', 'a6', 'h3', 'h6',
+  'e4', 'd4', 'c4', 'e5', 'd5', 'c5', 'c3', 'c6', 'e3', 'e6', 'd3', 'd6', 'g3', 'g6', 'b3', 'b6', 'a3', 'a6', 'h3', 'h6', 'f4', 'f5',
   'Nf3', 'Nc3', 'Nbd2', 'Nge2', 'Nf6', 'Nc6', 'Nbd7', 'Nge7', 'Nh6', 'Nh3',
   'Bc4', 'Bb5', 'Be2', 'Bd3', 'Bg5', 'Bf4', 'Be3', 'Bg2', 'Bb2',
   'Bc5', 'Bb4', 'Be7', 'Bd6', 'Bg4', 'Bf5', 'Be6', 'Bg7', 'Bb7',
-  'O-O'
+  'Qe2', 'Qd2', 'Qd3', 'Qc2', 'Qa4', 'Qb3',
+  'cxd4', 'exd4', 'dxe4', 'cxd5', 'exd5', 'dxc4', 'bxc3', 'dxc3',
+  'Nxd4', 'Qxd4', 'Nxd5', 'Qxd5', 'Nxe4', 'Nxe5', 'Bxc6', 'bxc6', 'dxc6', 'Bxf6', 'Qxf6', 'gxf6',
+  'O-O', 'O-O-O'
 ]);
 
 export function isStandardOpeningMove(ply: number, san: string): boolean {
@@ -203,7 +206,10 @@ export class AnalysisEngine {
       );
 
       // 6. Master Opening Guard: Các nước khai cuộc lý thuyết chuẩn không bị gán nhãn Mistake do nông độ sâu engine
-      if (ply <= 8 && isStandardOpeningMove(ply, moveSan) && evalOppAfterMove <= 130) {
+      // - 4 nước đầu tiên (ply <= 4): Bảo vệ tuyệt đối các nước khai cuộc chuẩn (e4, d4, c4, e5, e6, c5, d5, Nf6, v.v.)
+      // - Từ nước 5 đến 8 (ply <= 8): Bảo vệ nước chuẩn phát triển quân nếu không bị mất quân nặng (evalOppAfterMove <= 350)
+      const isBook = isStandardOpeningMove(ply, moveSan);
+      if (isBook && (ply <= 4 || evalOppAfterMove <= 350)) {
         cpl = Math.min(cpl, 5);
       }
 

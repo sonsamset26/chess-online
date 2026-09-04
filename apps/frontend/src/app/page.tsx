@@ -389,7 +389,7 @@ export default function Home() {
 
   const processedPlyRef = useRef<number>(0);
 
-  // Trigger phân tích Realtime sau mỗi nước cờ hợp lệ
+  // Trigger phân tích Realtime sau mỗi nước cờ hợp lệ (Kèm Reconciliation tự động phục hồi nước cờ bị sót)
   useEffect(() => {
     if (!isLiveAnalysisEnabled) {
       processedPlyRef.current = 0;
@@ -405,30 +405,28 @@ export default function Home() {
       return;
     }
 
-    // Khi có một hoặc nhiều nước mới được thêm vào
-    if (currentPlies > processedPlyRef.current) {
-      const startPly = processedPlyRef.current + 1;
-      const clone = new Chess();
-      for (let i = 0; i < startPly - 1; i++) {
-        try {
-          clone.move(moveHistory[i]);
-        } catch {
-          break;
-        }
+    if (currentPlies === 0) {
+      processedPlyRef.current = 0;
+      return;
+    }
+
+    // Tái tạo lại FEN từng nước và enqueue các nước chưa có kết quả phân tích ANALYZED
+    const clone = new Chess();
+    for (let p = 1; p <= currentPlies; p++) {
+      const ply = p;
+      const san = moveHistory[p - 1];
+      const moveColor: 'w' | 'b' = ply % 2 === 1 ? 'w' : 'b';
+      const fenBefore = clone.fen();
+      try {
+        clone.move(san);
+      } catch {
+        break;
       }
+      const fenAfter = clone.fen();
 
-      for (let p = startPly; p <= currentPlies; p++) {
-        const ply = p;
-        const san = moveHistory[p - 1];
-        const moveColor: 'w' | 'b' = ply % 2 === 1 ? 'w' : 'b';
-        const fenBefore = clone.fen();
-        try {
-          clone.move(san);
-        } catch {
-          break;
-        }
-        const fenAfter = clone.fen();
-
+      // Reconciliation: Chỉ enqueue nếu nước này chưa có kết quả phân tích ANALYZED thành công
+      const existing = analysisByPly[ply];
+      if (!existing || existing.status !== 'ANALYZED') {
         enqueueMove({
           ply,
           fenBefore,
@@ -437,10 +435,10 @@ export default function Home() {
           playerColor: moveColor,
         });
       }
-
-      processedPlyRef.current = currentPlies;
     }
-  }, [moveHistory, isLiveAnalysisEnabled, enqueueMove, resetAnalysis]);
+
+    processedPlyRef.current = currentPlies;
+  }, [moveHistory, isLiveAnalysisEnabled, enqueueMove, resetAnalysis, analysisByPly]);
 
   // ---------------------------------------------------------------------------
   // ĐỒNG HỒ THI ĐẤU THỜI GIAN THỰC (REALTIME IN-GAME CHESS CLOCK)
@@ -633,13 +631,25 @@ export default function Home() {
       }
       processedGameOverRef.current = null;
       resetGameOverState();
-      setIsGameOverModalOpen(false);
-      resetAnalysis();
-      processedPlyRef.current = 0;
+      // Ưu tiên lịch sử nước đi nếu đối thủ đã đi trước khi phòng mount xong
+      const initialHistory =
+        activeMatch.history && activeMatch.history.length > 0
+          ? activeMatch.history
+          : latestMove?.history && latestMove.history.length > 0
+          ? latestMove.history
+          : moveHistory.length > 0
+          ? moveHistory
+          : [];
+
+      if (initialHistory.length === 0) {
+        resetAnalysis();
+        processedPlyRef.current = 0;
+      }
 
       const myColor = activeMatch.yourColor || 'w';
       setPlayerColor(myColor);
-      setBoardFen(activeMatch.fen, activeMatch.history || []);
+      const initialFen = (latestMove && latestMove.history?.length === initialHistory.length) ? latestMove.fen : activeMatch.fen;
+      setBoardFen(initialFen, initialHistory);
       sounds.playGameStart();
 
       try {
