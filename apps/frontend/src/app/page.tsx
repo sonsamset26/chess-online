@@ -405,34 +405,42 @@ export default function Home() {
       return;
     }
 
-    // Khi có đúng 1 nước mới được thêm vào
-    if (currentPlies === processedPlyRef.current + 1) {
-      const ply = currentPlies;
-      const san = moveHistory[currentPlies - 1];
-      const moveColor: 'w' | 'b' = ply % 2 === 1 ? 'w' : 'b';
-
-      const fenAfter = game.fen();
+    // Khi có một hoặc nhiều nước mới được thêm vào
+    if (currentPlies > processedPlyRef.current) {
+      const startPly = processedPlyRef.current + 1;
       const clone = new Chess();
-      for (let i = 0; i < currentPlies - 1; i++) {
+      for (let i = 0; i < startPly - 1; i++) {
         try {
           clone.move(moveHistory[i]);
         } catch {
           break;
         }
       }
-      const fenBefore = clone.fen();
 
-      enqueueMove({
-        ply,
-        fenBefore,
-        fenAfter,
-        moveSan: san,
-        playerColor: moveColor,
-      });
+      for (let p = startPly; p <= currentPlies; p++) {
+        const ply = p;
+        const san = moveHistory[p - 1];
+        const moveColor: 'w' | 'b' = ply % 2 === 1 ? 'w' : 'b';
+        const fenBefore = clone.fen();
+        try {
+          clone.move(san);
+        } catch {
+          break;
+        }
+        const fenAfter = clone.fen();
+
+        enqueueMove({
+          ply,
+          fenBefore,
+          fenAfter,
+          moveSan: san,
+          playerColor: moveColor,
+        });
+      }
 
       processedPlyRef.current = currentPlies;
     }
-  }, [moveHistory, isLiveAnalysisEnabled, game, enqueueMove, resetAnalysis]);
+  }, [moveHistory, isLiveAnalysisEnabled, enqueueMove, resetAnalysis]);
 
   // ---------------------------------------------------------------------------
   // ĐỒNG HỒ THI ĐẤU THỜI GIAN THỰC (REALTIME IN-GAME CHESS CLOCK)
