@@ -15,6 +15,7 @@ import {
   Info,
   CheckCircle2
 } from 'lucide-react';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface FeatureVector {
   openingCpl: number;
@@ -97,14 +98,40 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('chess_token');
+      let token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
       const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      const apiUrl = getApiUrl();
+
       // 1. Lấy dữ liệu hồ sơ ML
-      const profileRes = await fetch('http://localhost:5000/api/v1/ml/profile/me', { headers });
+      let profileRes = await fetch(`${apiUrl}/api/v1/ml/profile/me`, { headers });
+
+      // Silent refresh token nếu accessToken hết hạn (401)
+      if (profileRes.status === 401) {
+        try {
+          const refreshRes = await fetch(`${apiUrl}/api/v1/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            if (refreshData.success && refreshData.data?.accessToken) {
+              token = refreshData.data.accessToken;
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('chess_token', token as string);
+              }
+              headers['Authorization'] = `Bearer ${token}`;
+              profileRes = await fetch(`${apiUrl}/api/v1/ml/profile/me`, { headers });
+            }
+          }
+        } catch (refreshErr) {
+          console.warn('Làm mới phiên đăng nhập thất bại:', refreshErr);
+        }
+      }
+
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         if (profileData.data) {
@@ -113,7 +140,7 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
       }
 
       // 2. Lấy danh sách câu đố được gợi ý
-      const recRes = await fetch('http://localhost:5000/api/v1/ml/recommendations/puzzles?limit=4', { headers });
+      const recRes = await fetch(`${apiUrl}/api/v1/ml/recommendations/puzzles?limit=4`, { headers });
       if (recRes.ok) {
         const recData = await recRes.json();
         if (recData.data?.puzzles) {
@@ -136,14 +163,43 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
     if (isRecomputing) return;
     setIsRecomputing(true);
     try {
-      const token = localStorage.getItem('chess_token');
-      const res = await fetch('http://localhost:5000/api/v1/ml/profile/recompute', {
+      let token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
+      const apiUrl = getApiUrl();
+      let res = await fetch(`${apiUrl}/api/v1/ml/profile/recompute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (res.status === 401) {
+        try {
+          const refreshRes = await fetch(`${apiUrl}/api/v1/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            if (refreshData.success && refreshData.data?.accessToken) {
+              token = refreshData.data.accessToken;
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('chess_token', token as string);
+              }
+              res = await fetch(`${apiUrl}/api/v1/ml/profile/recompute`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+            }
+          }
+        } catch (refreshErr) {
+          console.warn('Làm mới phiên đăng nhập thất bại:', refreshErr);
+        }
+      }
+
       if (res.ok) {
         await fetchProfileData();
       }

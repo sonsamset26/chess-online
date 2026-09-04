@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Crown, Trophy, Calendar, Users, Loader2, AlertCircle } from 'lucide-react';
 import { TournamentBracketView, TournamentDataProps } from './TournamentBracketView';
+import { getApiUrl } from '../utils/apiUrl';
 
 interface TournamentDetailModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ export const TournamentDetailModal: React.FC<TournamentDetailModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const API_URL = getApiUrl();
 
   useEffect(() => {
     if (!isOpen || !tournamentIdOrCode) {

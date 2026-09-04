@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trophy, Users, PlusCircle, LogIn, Copy, Check, Swords, Shield, Crown, Play, Trash2, LogOut } from 'lucide-react';
 import { TournamentBracketView } from './TournamentBracketView';
+import { getApiUrl } from '../utils/apiUrl';
 
 export interface TournamentPlayer {
   userId: string;
@@ -170,7 +171,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
     try {
       setLoading(true);
       setErrorMessage(null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl();
       const token = typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null;
 
       const res = await fetch(`${apiUrl}/api/v1/tournaments`, {

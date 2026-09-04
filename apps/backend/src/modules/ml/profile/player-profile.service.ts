@@ -53,15 +53,24 @@ export class PlayerProfileService {
     const userId = user ? (user.id || user._id.toString()) : userIdOrUsername;
     const username = user?.username || userIdOrUsername;
 
-    // 2. Truy vấn các ván cờ xếp hạng hoặc đấu giải gần nhất
+    // 2. Truy vấn các ván cờ xếp hạng, bạn bè hoặc đấu giải gần nhất
+    const userConditions: any[] = [
+      { whiteUserId: userId },
+      { blackUserId: userId },
+      { whiteUsername: username },
+      { blackUsername: username },
+    ];
+    if (user?._id) {
+      userConditions.push({ whitePlayer: user._id }, { blackPlayer: user._id });
+    }
+    if (mongoose.Types.ObjectId.isValid(userIdOrUsername)) {
+      const objId = new mongoose.Types.ObjectId(userIdOrUsername);
+      userConditions.push({ whitePlayer: objId }, { blackPlayer: objId });
+    }
+
     const matches = await Match.find({
-      $or: [
-        { whiteUserId: userId },
-        { blackUserId: userId },
-        { whiteUsername: username },
-        { blackUsername: username },
-      ],
-      gameMode: { $in: ['PVP_RATED', 'TOURNAMENT'] },
+      $or: userConditions,
+      gameMode: { $in: ['PVP_RATED', 'PVP_CUSTOM', 'TOURNAMENT'] },
     })
       .sort({ endedAt: -1, createdAt: -1 })
       .limit(PlayerFeatureAggregator.MAX_GAMES_WINDOW)
@@ -92,9 +101,12 @@ export class PlayerProfileService {
 
     // 6. Lưu hoặc cập nhật vào bảng PlayerProfile
     const updated = await PlayerProfile.findOneAndUpdate(
-      { userId },
+      {
+        $or: [{ userId }, { username }],
+      },
       {
         $set: {
+          userId,
           user: user?._id,
           username,
           gamesAnalyzed: aggregation.gamesAnalyzed,

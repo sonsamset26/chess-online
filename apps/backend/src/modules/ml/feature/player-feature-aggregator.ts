@@ -27,10 +27,10 @@ export class PlayerFeatureAggregator {
     userIdOrUsername: string,
     matches: IMatch[]
   ): AggregatedPlayerProfileResult {
-    // 1. Chỉ lấy các ván đấu mang tính cạnh tranh thực tế (PVP_RATED hoặc TOURNAMENT)
+    // 1. Chỉ lấy các ván đấu giữa người với người (PVP_RATED, PVP_CUSTOM hoặc TOURNAMENT)
     // Loại bỏ hoàn toàn đấu máy (PV_AI) để tránh làm méo mó hành vi thi đấu
     const validMatches = matches
-      .filter((m) => m.gameMode === 'PVP_RATED' || m.gameMode === 'TOURNAMENT')
+      .filter((m) => m.gameMode === 'PVP_RATED' || m.gameMode === 'PVP_CUSTOM' || m.gameMode === 'TOURNAMENT')
       .slice(0, this.MAX_GAMES_WINDOW);
 
     const N = validMatches.length;

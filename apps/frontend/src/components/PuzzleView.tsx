@@ -5,8 +5,9 @@ import { ChessBoardComponent } from './ChessBoard';
 import { PlayerCard } from './PlayerCard';
 import { sounds } from '../utils/soundEffects';
 import { Puzzle, Lightbulb, RotateCcw, ArrowRight, CheckCircle2, XCircle, Cloud } from 'lucide-react';
+import { getApiUrl } from '../utils/apiUrl';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+const API_BASE_URL = getApiUrl();
 
 export const PuzzleView: React.FC = () => {
   const [puzzlesList, setPuzzlesList] = useState<PuzzleData[]>(PUZZLES_DATA);

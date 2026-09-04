@@ -1,4 +1,5 @@
 import { GameAnalysisReport, MoveAnalysis, PlayerFeatureVector } from './types';
+import { getApiUrl } from '../../utils/apiUrl';
 
 const CACHE_PREFIX = 'chess_analysis_';
 const LRU_KEY = 'chess_analysis_lru_keys';
@@ -154,7 +155,7 @@ export class AnalysisCacheService {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/v1/matches/${matchId}/analysis`, {
         method: 'POST',
         headers,

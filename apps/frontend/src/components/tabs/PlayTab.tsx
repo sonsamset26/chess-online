@@ -456,16 +456,8 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                     />
                     {!activeMatch && (
                       <GameControls
-                        onReset={() => {
-                          handleBackToMenu();
-                          setIsGameOverModalOpen(false);
-                          resetGame({ autoTriggerAi: true });
-                        }}
-                        onToggleColor={() => {
-                          handleBackToMenu();
-                          setIsGameOverModalOpen(false);
-                          togglePlayerColor();
-                        }}
+                        onReset={handlePlayAgain}
+                        onToggleColor={togglePlayerColor}
                         playerColor={playerColor}
                         disabled={isAiThinking}
                       />
@@ -660,16 +652,8 @@ export const PlayTab: React.FC<PlayTabProps> = ({
 
                     {!activeMatch && (
                       <GameControls
-                        onReset={() => {
-                          handleBackToMenu();
-                          setIsGameOverModalOpen(false);
-                          resetGame({ autoTriggerAi: true });
-                        }}
-                        onToggleColor={() => {
-                          handleBackToMenu();
-                          setIsGameOverModalOpen(false);
-                          togglePlayerColor();
-                        }}
+                        onReset={handlePlayAgain}
+                        onToggleColor={togglePlayerColor}
                         playerColor={playerColor}
                         disabled={isAiThinking}
                       />

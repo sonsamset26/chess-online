@@ -33,6 +33,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useLiveAnalysis } from '../hooks/useLiveAnalysis';
 
 import { sounds } from '../utils/soundEffects';
+import { getApiUrl } from '../utils/apiUrl';
 import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
 import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
 import { MoveAnalysis } from '../services/analysis/types';
@@ -138,7 +139,7 @@ export default function Home() {
   useEffect(() => {
     if (activeTab === 'leaderboard') {
       setIsLeaderboardLoading(true);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl();
       fetch(`${apiUrl}/api/v1/users/leaderboard?limit=20`)
         .then((res) => res.json())
         .then((data) => {
@@ -160,7 +161,7 @@ export default function Home() {
         const parsed = JSON.parse(savedUser);
         setUser({ ...parsed, token });
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        const apiUrl = getApiUrl();
         fetch(`${apiUrl}/api/v1/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -985,6 +986,13 @@ export default function Home() {
     }
   };
 
+  const handleToggleBotColor = () => {
+    resetGameOverState();
+    setIsGameOverModalOpen(false);
+    processedGameOverRef.current = null;
+    togglePlayerColor();
+  };
+
   const handleBackToMenu = () => {
     resetGameOverState();
     setActiveMode(null);
@@ -1159,7 +1167,7 @@ export default function Home() {
             handleBackToMenu={handleBackToMenu}
             setDifficulty={setDifficulty}
             resetGame={resetGame}
-            togglePlayerColor={togglePlayerColor}
+            togglePlayerColor={handleToggleBotColor}
             toggleMute={toggleMute}
             setIsGameOverModalOpen={setIsGameOverModalOpen}
             setIsTournamentModalOpen={setIsTournamentModalOpen}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { History, Swords, Calendar, Eye, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Trophy, Crown, BarChart2 } from 'lucide-react';
 import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
+import { getApiUrl } from '../utils/apiUrl';
 
 export interface MatchRecord {
   _id: string;
@@ -88,7 +89,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       setError(null);
 
       let token = currentUser.token || (typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl();
 
       if (!token) {
         setMatches([]);
@@ -184,7 +185,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       setTournamentsError(null);
 
       const token = currentUser.token || (typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const apiUrl = getApiUrl();
 
       if (!token) {
         setTournamentsError('Vui lòng đăng nhập để xem lịch sử giải đấu.');
