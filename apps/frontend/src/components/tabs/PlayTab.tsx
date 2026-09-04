@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Chess, Square } from 'chess.js';
 import {
   AlertTriangle,
   Trophy,
   RotateCcw,
+  RotateCw,
   ArrowLeft,
   Cpu,
   Flag,
@@ -32,7 +33,11 @@ export interface PlayTabProps {
   activeMatch: ActiveMatch | null;
   replayMatch: MatchRecord | null;
   replayMoveIndex: number;
-  replayOrigin: { source: 'history' | 'tournament_detail' | 'game_over' } | null;
+  replayOrigin: {
+    source: 'history' | 'tournament_detail' | 'game_over';
+    tournamentIdOrCode?: string;
+    preferredColor?: 'w' | 'b';
+  } | null;
   disconnectedOpponent: { disconnectedPlayer: string; gracePeriodSeconds: number } | null;
   reconnectCountdown: number;
   opponentInfo: any;
@@ -127,8 +132,66 @@ export const PlayTab: React.FC<PlayTabProps> = ({
   analysisReport,
   onOpenAnalysisReport,
 }) => {
+  // Trạng thái lật bàn cờ khi xem lại ván đấu (cho phép người dùng đổi góc nhìn Trắng/Đen)
+  const [flippedReplay, setFlippedReplay] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setFlippedReplay(null);
+  }, [replayMatch?._id]);
+
+  // Xác định góc nhìn mặc định khi xem lại
+  const defaultReplayPerspective: 'w' | 'b' = useMemo(() => {
+    if (!replayMatch) return playerColor;
+
+    // 1. Ưu tiên góc nhìn được truyền từ nguồn mở xem lại
+    if (replayOrigin?.preferredColor) {
+      return replayOrigin.preferredColor;
+    }
+
+    // 2. Nếu vừa kết thúc ván đấu trên màn hình
+    if (replayOrigin?.source === 'game_over') {
+      return playerColor;
+    }
+
+    // 3. So khớp theo ID hoặc username của người dùng đang đăng nhập
+    const myId = user?.userId || (user as any)?._id || (user as any)?.id;
+    const myUsername = user?.username;
+
+    if (
+      (myId && replayMatch.blackUserId === myId) ||
+      (myUsername && replayMatch.blackUsername === myUsername) ||
+      replayMatch.blackUsername === 'Bạn'
+    ) {
+      return 'b';
+    }
+
+    if (
+      (myId && replayMatch.whiteUserId === myId) ||
+      (myUsername && replayMatch.whiteUsername === myUsername) ||
+      replayMatch.whiteUsername === 'Bạn'
+    ) {
+      return 'w';
+    }
+
+    // Mặc định góc nhìn quân Trắng
+    return 'w';
+  }, [replayMatch, replayOrigin, playerColor, user]);
+
+  // Góc nhìn thực tế hiển thị trên bàn cờ khi Replay
+  const effectiveReplayColor: 'w' | 'b' = useMemo(() => {
+    if (!replayMatch) return playerColor;
+    if (flippedReplay !== null) {
+      return flippedReplay ? (defaultReplayPerspective === 'w' ? 'b' : 'w') : defaultReplayPerspective;
+    }
+    return defaultReplayPerspective;
+  }, [replayMatch, playerColor, defaultReplayPerspective, flippedReplay]);
+
+  const handleToggleReplayFlip = () => {
+    setFlippedReplay((prev) => (prev === null ? true : !prev));
+  };
+
   // Điều hướng xem lại ván cờ bằng phím mũi tên Trái / Phải / Home / End
-  React.useEffect(() => {
+  useEffect(() => {
     if (!replayMatch) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
@@ -175,12 +238,12 @@ export const PlayTab: React.FC<PlayTabProps> = ({
               </div>
             )}
 
-            {/* Card ĐỐI THỦ / QUÂN ĐEN */}
+            {/* Card ĐỐI THỦ / QUÂN TRÊN BÀN CỜ */}
             <PlayerCard
               isAi={!replayMatch && activeMode === 'bots'}
               name={
                 replayMatch
-                  ? replayMatch.blackUsername
+                  ? (effectiveReplayColor === 'w' ? replayMatch.blackUsername : replayMatch.whiteUsername)
                   : activeMatch
                   ? opponentInfo?.username || 'Đối thủ Online'
                   : activeMode === 'friend'
@@ -189,7 +252,9 @@ export const PlayTab: React.FC<PlayTabProps> = ({
               }
               subText={
                 replayMatch
-                  ? `${replayMatch.blackOldElo ? `Elo: ${replayMatch.blackOldElo} • ` : ''}Quân Đen`
+                  ? effectiveReplayColor === 'w'
+                    ? `${replayMatch.blackOldElo ? `Elo: ${replayMatch.blackOldElo} • ` : ''}Quân Đen`
+                    : `${replayMatch.whiteOldElo ? `Elo: ${replayMatch.whiteOldElo} • ` : ''}Quân Trắng`
                   : activeMatch
                   ? activeMatch.isRated
                     ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
@@ -204,9 +269,17 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                     : 'Khó (~2000 Elo)'
                   : 'Phòng thi đấu'
               }
-              color={replayMatch ? 'b' : (playerColor === 'w' ? 'b' : 'w')}
-              capturedPieces={replayMatch ? materialDetails.blackCaptured : (playerColor === 'w' ? materialDetails.blackCaptured : materialDetails.whiteCaptured)}
-              materialAdvantage={replayMatch ? materialDetails.blackAdvantage : (playerColor === 'w' ? materialDetails.blackAdvantage : materialDetails.whiteAdvantage)}
+              color={replayMatch ? (effectiveReplayColor === 'w' ? 'b' : 'w') : (playerColor === 'w' ? 'b' : 'w')}
+              capturedPieces={
+                replayMatch
+                  ? (effectiveReplayColor === 'w' ? materialDetails.blackCaptured : materialDetails.whiteCaptured)
+                  : (playerColor === 'w' ? materialDetails.blackCaptured : materialDetails.whiteCaptured)
+              }
+              materialAdvantage={
+                replayMatch
+                  ? (effectiveReplayColor === 'w' ? materialDetails.blackAdvantage : materialDetails.whiteAdvantage)
+                  : (playerColor === 'w' ? materialDetails.blackAdvantage : materialDetails.whiteAdvantage)
+              }
               isThinking={false}
               gameStatus={replayMatch ? 'GAME_OVER' : currentStatus}
               timeLeftMs={playerColor === 'w' ? blackDisplayTimeMs : whiteDisplayTimeMs}
@@ -217,7 +290,7 @@ export const PlayTab: React.FC<PlayTabProps> = ({
             <ChessBoardComponent
               game={game}
               fen={fen}
-              playerColor={replayMatch ? 'w' : playerColor}
+              playerColor={replayMatch ? effectiveReplayColor : playerColor}
               onPieceDrop={handlePieceDrop}
               muted={isMuted}
               disabled={
@@ -229,12 +302,12 @@ export const PlayTab: React.FC<PlayTabProps> = ({
               }
             />
 
-            {/* Card BẢN THÂN / QUÂN TRẮNG */}
+            {/* Card BẢN THÂN / QUÂN DƯỚI ĐÁY BÀN CỜ */}
             <PlayerCard
               isAi={false}
               name={
                 replayMatch
-                  ? replayMatch.whiteUsername
+                  ? (effectiveReplayColor === 'w' ? replayMatch.whiteUsername : replayMatch.blackUsername)
                   : activeMatch
                   ? myInfo?.username || 'Bạn'
                   : user
@@ -243,7 +316,9 @@ export const PlayTab: React.FC<PlayTabProps> = ({
               }
               subText={
                 replayMatch
-                  ? `${replayMatch.whiteOldElo ? `Elo: ${replayMatch.whiteOldElo} • ` : ''}Quân Trắng`
+                  ? effectiveReplayColor === 'w'
+                    ? `${replayMatch.whiteOldElo ? `Elo: ${replayMatch.whiteOldElo} • ` : ''}Quân Trắng`
+                    : `${replayMatch.blackOldElo ? `Elo: ${replayMatch.blackOldElo} • ` : ''}Quân Đen`
                   : activeMatch
                   ? activeMatch.isRated
                     ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Cầm quân Trắng' : 'Cầm quân Đen'}`
@@ -254,9 +329,17 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                   ? 'Cầm quân Trắng'
                   : 'Cầm quân Đen'
               }
-              color={replayMatch ? 'w' : playerColor}
-              capturedPieces={replayMatch ? materialDetails.whiteCaptured : (playerColor === 'w' ? materialDetails.whiteCaptured : materialDetails.blackCaptured)}
-              materialAdvantage={replayMatch ? materialDetails.whiteAdvantage : (playerColor === 'w' ? materialDetails.whiteAdvantage : materialDetails.blackAdvantage)}
+              color={replayMatch ? effectiveReplayColor : playerColor}
+              capturedPieces={
+                replayMatch
+                  ? (effectiveReplayColor === 'w' ? materialDetails.whiteCaptured : materialDetails.blackCaptured)
+                  : (playerColor === 'w' ? materialDetails.whiteCaptured : materialDetails.blackCaptured)
+              }
+              materialAdvantage={
+                replayMatch
+                  ? (effectiveReplayColor === 'w' ? materialDetails.whiteAdvantage : materialDetails.blackAdvantage)
+                  : (playerColor === 'w' ? materialDetails.whiteAdvantage : materialDetails.blackAdvantage)
+              }
               gameStatus={replayMatch ? 'GAME_OVER' : currentStatus}
               timeLeftMs={playerColor === 'w' ? whiteDisplayTimeMs : blackDisplayTimeMs}
               isClockActive={!replayMatch && currentStatus === 'IN_PROGRESS' && currentTurn === playerColor}
@@ -288,7 +371,26 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                   replayOrigin={replayOrigin}
                   onExit={handleExitReplay}
                   onGoToMove={goToReplayMove}
+                  onFlipBoard={handleToggleReplayFlip}
+                  effectiveColor={effectiveReplayColor}
                 />
+              </div>
+            )}
+
+            {/* LỊCH SỬ NƯỚC ĐI VÀ ĐÁNH GIÁ PHÂN TÍCH CHO MOBILE (< md) */}
+            {replayMatch && (
+              <div className="md:hidden w-full max-w-[480px] mt-2 flex flex-col gap-2">
+                <div className="h-[280px] w-full flex flex-col">
+                  <MoveHistory
+                    moveHistory={replayMatch.moves}
+                    analysisByPly={replayAnalysisByPly}
+                    selectedPly={replayMoveIndex}
+                    onSelectPly={(ply) => {
+                      if (ply !== null) goToReplayMove(ply);
+                    }}
+                    showLiveAnalysis={true}
+                  />
+                </div>
               </div>
             )}
 
@@ -385,19 +487,29 @@ export const PlayTab: React.FC<PlayTabProps> = ({
               {/* Top Bar: Nút Rời Phòng / Thoát Xem lại */}
               <div className="p-3 bg-[#16202E] rounded-2xl border border-[#2A374A] flex items-center justify-between shadow-lg shrink-0 gap-2">
                 {replayMatch ? (
-                  <button
-                    onClick={handleExitReplay}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold transition-all shadow"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>
-                      {replayOrigin?.source === 'tournament_detail'
-                        ? 'Quay lại Sơ đồ Giải'
-                        : replayOrigin?.source === 'game_over'
-                        ? 'Trở về menu'
-                        : 'Quay lại Lịch sử'}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleExitReplay}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold transition-all shadow"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>
+                        {replayOrigin?.source === 'tournament_detail'
+                          ? 'Quay lại Sơ đồ Giải'
+                          : replayOrigin?.source === 'game_over'
+                          ? 'Trở về menu'
+                          : 'Quay lại Lịch sử'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleToggleReplayFlip}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#1E293B] hover:bg-[#2A374A] text-slate-300 border border-[#334155] text-xs font-bold transition-all active:scale-95"
+                      title="Đổi góc nhìn bàn cờ (Trắng ⇄ Đen)"
+                    >
+                      <RotateCw className="w-3.5 h-3.5 text-pink-400" />
+                      <span>Lật cờ ({effectiveReplayColor === 'w' ? 'Quân Trắng' : 'Quân Đen'})</span>
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <button
@@ -569,7 +681,7 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                   analysisByPly={replayMatch ? replayAnalysisByPly : (isLiveAnalysisEnabled ? analysisByPly : undefined)}
                   selectedPly={replayMatch ? replayMoveIndex : selectedPly}
                   onSelectPly={replayMatch ? (ply) => { if (ply !== null) goToReplayMove(ply); } : setSelectedPly}
-                  showLiveAnalysis={isLiveAnalysisEnabled}
+                  showLiveAnalysis={Boolean(replayMatch) || isLiveAnalysisEnabled}
                 />
               </div>
             </div>

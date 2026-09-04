@@ -102,6 +102,7 @@ export default function Home() {
   const [replayOrigin, setReplayOrigin] = useState<{
     source: 'history' | 'tournament_detail' | 'game_over';
     tournamentIdOrCode?: string;
+    preferredColor?: 'w' | 'b';
   } | null>(null);
 
   // Đếm ngược Reconnect
@@ -1149,7 +1150,9 @@ export default function Home() {
             onSelectReplay={(matchRecord: MatchRecord) => {
               const cachedAnalysis = AnalysisCacheService.getValidAnalysis(matchRecord.analysis, matchRecord._id, matchRecord.moves);
               const matchToReplay = cachedAnalysis ? { ...matchRecord, analysis: cachedAnalysis as any } : matchRecord;
-              setReplayOrigin({ source: 'history' });
+              const isMyBlack = (user?.id && matchRecord.blackUserId === user.id) ||
+                                (user?.username && matchRecord.blackUsername === user.username);
+              setReplayOrigin({ source: 'history', preferredColor: isMyBlack ? 'b' : 'w' });
               setHistorySubTab('matches');
               setReplayMatch(matchToReplay);
               setActiveTab('play');
@@ -1248,9 +1251,12 @@ export default function Home() {
         token={user?.token}
         onSelectReplayMatch={(matchRecord) => {
           setSelectedTournamentDetailId(null);
+          const isMyBlack = (user?.id && matchRecord.blackUserId === user.id) ||
+                            (user?.username && matchRecord.blackUsername === user.username);
           setReplayOrigin({
             source: 'tournament_detail',
             tournamentIdOrCode: selectedTournamentDetailId || undefined,
+            preferredColor: isMyBlack ? 'b' : 'w',
           });
           setReplayMatch(matchRecord);
           setActiveTab('play');
@@ -1314,12 +1320,16 @@ export default function Home() {
             const matchId = activeMatch?.roomId || 'local_' + Date.now();
             const cachedAnalysis = AnalysisCacheService.getValidAnalysis(undefined, matchId, moveHistory);
             const isWhite = playerColor === 'w';
+            const userElo = user?.eloRating || myInfo?.eloRating || 1200;
+            const oppElo = opponentInfo?.eloRating || (activeMode === 'bots' ? (difficulty === 1 ? 800 : difficulty === 2 ? 1300 : 2000) : 1200);
             const record: MatchRecord = {
               _id: matchId,
               whiteUserId: isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
               blackUserId: !isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
               whiteUsername: isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
               blackUsername: !isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
+              whiteOldElo: isWhite ? userElo : oppElo,
+              blackOldElo: !isWhite ? userElo : oppElo,
               gameMode: activeMode === 'tournament' ? 'TOURNAMENT' : activeMatch?.isRated ? 'PVP_RATED' : activeMode === 'friend' ? 'PVP_CUSTOM' : 'PV_AI',
               winnerColor: currentStatus === 'WHITE_WIN' ? 'w' : currentStatus === 'BLACK_WIN' ? 'b' : 'draw',
               endReason: (currentEndReason as any) || 'CHECKMATE',
@@ -1336,7 +1346,7 @@ export default function Home() {
               startedAt: new Date().toISOString(),
               createdAt: new Date().toISOString(),
             };
-            setReplayOrigin({ source: 'game_over' });
+            setReplayOrigin({ source: 'game_over', preferredColor: playerColor });
             setReplayMatch(record);
             setReplayMoveIndex(moveHistory.length);
             setBoardFen(fen, moveHistory);
