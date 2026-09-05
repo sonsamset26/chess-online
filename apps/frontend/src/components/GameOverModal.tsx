@@ -131,7 +131,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               BẠN ĐÃ THUA
             </h2>
             <p className="text-xs text-[#94A3B8] mb-4 leading-relaxed font-medium">
-              {(customMessage && !customMessage.includes('Bạn thắng')) ? customMessage : 'Ván cờ kết thúc. Bạn có thể xem lại bàn cờ để rút kinh nghiệm cho ván sau.'}
+              {isTournamentMatch
+                ? 'Bạn đã dừng bước tại vòng đấu này. Bạn có thể mở sơ đồ để theo dõi tiếp các cặp đấu còn lại.'
+                : (customMessage && !customMessage.includes('Bạn thắng')) ? customMessage : 'Ván cờ kết thúc. Bạn có thể xem lại bàn cờ để rút kinh nghiệm cho ván sau.'}
             </p>
           </>
         )}
@@ -173,6 +175,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
         )}
 
+        {/* THẺ GIẢI ĐẤU (NẾU LÀ TRẬN THUỘC GIẢI ĐẤU) */}
+        {isTournamentMatch && (
+          <div className="w-full p-2.5 mb-4 rounded-2xl bg-[#0F172A] border border-amber-500/30 flex items-center justify-center gap-2 shadow-inner">
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[11px] font-bold text-amber-300">
+              Vòng Đấu Loại Trực Tiếp
+            </span>
+          </div>
+        )}
+
         {/* THẺ GIAO HỮU NẾU LÀ ĐẤU BẠN BÈ (CUSTOM ROOM UNRATED) */}
         {!isRated && isOnlineMatch && !isTournamentMatch && (
           <div className="w-full p-2.5 mb-4 rounded-2xl bg-[#0F172A] border border-[#2A374A] flex items-center justify-center gap-2 shadow-inner">
@@ -209,13 +221,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   <Eye className="w-4 h-4" />
                   <span>Xem lại bàn cờ</span>
                 </button>
+                <button
+                  onClick={onBackToMenu}
+                  className="w-full py-2 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Trở về Menu</span>
+                </button>
               </>
             ) : (
               <>
                 {onViewBracket && (
                   <button
                     onClick={onViewBracket}
-                    className="w-full py-2.5 px-4 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
                   >
                     <Trophy className="w-4 h-4" />
                     <span>Xem Nhánh Đấu</span>
@@ -223,10 +242,17 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 )}
                 <button
                   onClick={onCloseToReview}
-                  className="w-full py-2 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#0F172A] hover:bg-[#1E293B] text-pink-400 border border-pink-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
                   <Eye className="w-4 h-4" />
                   <span>Xem lại bàn cờ</span>
+                </button>
+                <button
+                  onClick={onBackToMenu}
+                  className="w-full py-2 px-4 rounded-xl bg-[#2A374A] hover:bg-[#3B3835] text-[#CBD5E1] font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Trở về Menu</span>
                 </button>
               </>
             )

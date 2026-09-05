@@ -34,7 +34,7 @@ export interface PlayTabProps {
   replayMatch: MatchRecord | null;
   replayMoveIndex: number;
   replayOrigin: {
-    source: 'history' | 'tournament_detail' | 'game_over';
+    source: 'history' | 'tournament_detail' | 'game_over' | 'tournament_live';
     tournamentIdOrCode?: string;
     preferredColor?: 'w' | 'b';
   } | null;
@@ -477,10 +477,18 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                 {activeMatch && (
                   <div className="flex items-center justify-between px-3 py-1.5 bg-[#0F172A] rounded-xl text-xs">
                     <span className="text-pink-400 font-bold">
-                      {activeMatch.isRated ? '⚔️ Đấu xếp hạng' : '👥 Đấu với bạn'}
+                      {activeMatch.isTournament || activeMatch.roomId?.startsWith('tournament_') || activeMatch.roomId?.startsWith('room_armageddon_') || activeMode === 'tournament'
+                        ? '🏆 Giải đấu'
+                        : activeMatch.isRated
+                        ? '⚔️ Đấu xếp hạng'
+                        : '👥 Đấu với bạn'}
                     </span>
                     <span className="text-amber-400 font-mono font-bold">
-                      {activeMatch.isRated ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200}` : 'Giao hữu'}
+                      {activeMatch.isTournament || activeMatch.roomId?.startsWith('tournament_') || activeMatch.roomId?.startsWith('room_armageddon_') || activeMode === 'tournament'
+                        ? 'Loại trực tiếp'
+                        : activeMatch.isRated
+                        ? `Elo: ${user?.eloRating || myInfo?.eloRating || 1200}`
+                        : 'Giao hữu'}
                     </span>
                   </div>
                 )}
@@ -501,7 +509,7 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                     >
                       <ArrowLeft className="w-4 h-4" />
                       <span>
-                        {replayOrigin?.source === 'tournament_detail'
+                        {replayOrigin?.source === 'tournament_detail' || replayOrigin?.source === 'tournament_live'
                           ? 'Quay lại Sơ đồ Giải'
                           : replayOrigin?.source === 'game_over'
                           ? 'Trở về menu'
@@ -549,7 +557,9 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                   {replayMatch
                     ? `📜 Xem lại: ${replayMatch.whiteUsername} vs ${replayMatch.blackUsername}`
                     : activeMatch
-                    ? activeMatch.isRated
+                    ? activeMatch.isTournament || activeMatch.roomId?.startsWith('tournament_') || activeMatch.roomId?.startsWith('room_armageddon_') || activeMode === 'tournament'
+                      ? '🏆 Giải đấu'
+                      : activeMatch.isRated
                       ? '⚔️ Đấu xếp hạng'
                       : '👥 Đấu với bạn'
                     : activeMode === 'bots'
@@ -577,12 +587,16 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                         ? '⚔️ Đấu xếp hạng'
                         : '👥 Đấu với bạn'
                       : activeMatch
-                      ? activeMatch.isRated
+                      ? activeMatch.isTournament || activeMatch.roomId?.startsWith('tournament_') || activeMatch.roomId?.startsWith('room_armageddon_') || activeMode === 'tournament'
+                        ? '🏆 Ván đấu giải'
+                        : activeMatch.isRated
                         ? 'Đấu xếp hạng'
                         : 'Phòng bạn bè'
                       : activeMode === 'friend'
                       ? 'Phòng bạn bè'
-                      : activeMode === 'bots'
+                      : activeMode === 'tournament'
+                      ? 'Giải đấu'
+                      : activeMode === 'bots'                    
                       ? 'Đấu với máy'
                       : 'Trực tuyến'}
                   </span>

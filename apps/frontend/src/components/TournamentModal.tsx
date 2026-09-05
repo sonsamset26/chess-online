@@ -355,12 +355,12 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
               GIẢI ĐẤU CỜ VUA
               {tournament && (
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#0F172A] border border-amber-500/30 text-amber-400 font-mono">
-                  {tournament.size} Người • Loại trực tiếp
+                  {tournament.size} người • Loại trực tiếp
                 </span>
               )}
             </h2>
             <p className="text-xs text-[#94A3B8] font-medium">
-              Thi đấu loại trực tiếp, cạnh tranh danh hiệu Quán quân!
+              Thể thức loại trực tiếp. Kỳ thủ thắng trận tiến vào vòng kế tiếp.
             </p>
           </div>
         </div>
@@ -513,8 +513,8 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
               {tournament.status === 'FINISHED' && tournament.championId && (
                 <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/50 text-center flex flex-col items-center gap-1 shadow-lg shadow-amber-500/10">
                   <Crown className="w-8 h-8 text-amber-400 animate-bounce" />
-                  <span className="text-lg font-black text-amber-300 uppercase tracking-wide">
-                    🏆 QUÁN QUÂN GIẢI ĐẤU: {getPlayerName(tournament.championId)}
+                  <span className="text-lg font-black text-amber-300 tracking-wide">
+                    🏆 Nhà vô địch: {getPlayerName(tournament.championId)}
                   </span>
                 </div>
               )}
@@ -599,7 +599,7 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
                 <div className="flex flex-col gap-4">
                   <h4 className="text-xs font-bold text-[#CBD5E1] uppercase tracking-wider flex items-center gap-1.5">
                     <Swords className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Sơ đồ thi đấu (Bracket)</span>
+                    <span>Sơ đồ thi đấu</span>
                   </h4>
 
                   <TournamentBracketView

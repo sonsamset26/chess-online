@@ -346,6 +346,7 @@ export class MatchGateway {
             winnerColor,
             isArmageddonDraw: room.isArmageddon && isDraw,
             armageddonWinnerColor: room.isArmageddon && isDraw ? 'b' : undefined,
+            isTournament: Boolean(room.tournamentContext),
             moveTimeMs: elapsed,
             eloResult: room.isRated ? eloResult : null,
           });
@@ -459,6 +460,8 @@ export class MatchGateway {
           history: room.game.history(),
           turn: room.game.turn(),
           isRated: room.isRated,
+          isTournament: Boolean(room.tournamentContext),
+          isArmageddon: Boolean(room.isArmageddon),
           yourColor: isWhite ? 'w' : 'b',
           liveAnalyses: room.liveAnalyses || {},
           clock: {
@@ -597,6 +600,8 @@ export class MatchGateway {
       message: timeoutMsg,
       isDraw: isDrawMatch,
       eloResult: room.isRated ? eloResult : null,
+      isTournament: Boolean(room.tournamentContext),
+      isArmageddon: Boolean(room.isArmageddon),
     };
 
     this.io.to(roomId).emit('opponent_resigned', timeoutPayload);
@@ -729,6 +734,8 @@ export class MatchGateway {
         ? `Đối thủ ${loserPlayer.username} đã rời trận do quá thời gian chờ kết nối lại. Bạn thắng!` 
         : `Đối thủ ${loserPlayer.username} đã đầu hàng. Bạn thắng!`,
       eloResult: room.isRated ? eloResult : null,
+      isTournament: Boolean(room.tournamentContext),
+      isArmageddon: Boolean(room.isArmageddon),
     };
 
     this.io.to(roomId).emit('opponent_resigned', resPayload);

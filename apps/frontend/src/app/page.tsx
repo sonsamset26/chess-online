@@ -121,7 +121,7 @@ export default function Home() {
   const [replayMatch, setReplayMatch] = useState<MatchRecord | null>(null);
   const [replayMoveIndex, setReplayMoveIndex] = useState<number>(0);
   const [replayOrigin, setReplayOrigin] = useState<{
-    source: 'history' | 'tournament_detail' | 'game_over';
+    source: 'history' | 'tournament_detail' | 'game_over' | 'tournament_live';
     tournamentIdOrCode?: string;
     preferredColor?: 'w' | 'b';
   } | null>(null);
@@ -293,6 +293,11 @@ export default function Home() {
       setSelectedTournamentDetailId(origin.tournamentIdOrCode);
       setHistorySubTab('tournaments');
       setActiveTab('history');
+    } else if (origin?.source === 'tournament_live') {
+      setActiveTab('play');
+      setActiveMode('tournament');
+      setIsTournamentModalOpen(true);
+      clearActiveMatch();
     } else if (origin?.source === 'game_over') {
       setActiveTab('play');
       setActiveMode(null);
@@ -643,8 +648,25 @@ export default function Home() {
       const savedTournamentId = localStorage.getItem('chess_active_tournament_id');
 
       if (savedMatch) {
-        // Đang có trận online dang dở -> khôi phục activeMode để không bị rớt về menu
-        setActiveModeState('online');
+        try {
+          const parsed = JSON.parse(savedMatch);
+          const isTourney = Boolean(
+            parsed.isTournament ||
+            parsed.roomId?.startsWith('tournament_') ||
+            parsed.roomId?.startsWith('room_armageddon_') ||
+            savedTournamentId ||
+            savedMode === 'tournament'
+          );
+          if (isTourney) {
+            setActiveModeState('tournament');
+          } else if (savedMode === 'friend') {
+            setActiveModeState('friend');
+          } else {
+            setActiveModeState('online');
+          }
+        } catch {
+          setActiveModeState(savedTournamentId ? 'tournament' : 'online');
+        }
       } else if (savedTournamentId) {
         setActiveModeState('tournament');
         setIsTournamentModalOpen(true);
@@ -701,7 +723,15 @@ export default function Home() {
       setReplayOrigin(null);
       setIsFriendModalOpen(false);
       setIsTournamentModalOpen(false);
-      if (activeMatch.isTournament) {
+      const isTourneyMatch = Boolean(
+        activeMatch.isTournament ||
+        activeMatch.roomId?.startsWith('tournament_') ||
+        activeMatch.roomId?.startsWith('room_armageddon_') ||
+        activeMode === 'tournament' ||
+        tournamentData ||
+        (typeof window !== 'undefined' && localStorage.getItem('chess_active_tournament_id'))
+      );
+      if (isTourneyMatch) {
         setActiveMode('tournament');
       } else if (activeMatch.isRated === false) {
         setActiveMode('friend');
@@ -738,6 +768,7 @@ export default function Home() {
           JSON.stringify({
             roomId: activeMatch.roomId,
             userId: myUserId,
+            isTournament: isTourneyMatch,
           })
         );
       } catch (err) {
@@ -1468,65 +1499,86 @@ export default function Home() {
       />
 
       {/* POPUP KẾT QUẢ KHI KẾT THÚC TRẬN ĐẤU */}
-      <GameOverModal
-        isOpen={isGameOverModalOpen && !replayMatch}
-        gameStatus={currentStatus}
-        playerColor={playerColor}
-        isOnlineMatch={Boolean(activeMatch)}
-        isRated={activeMatch?.isRated ?? false}
-        endReason={currentEndReason}
-        customMessage={customGameOverMsg}
-        myEloResult={currentMatchEloResult}
-        moveHistory={moveHistory}
-        isTournamentMatch={activeMode === 'tournament' || Boolean(activeMatch?.isTournament)}
-        isChampion={isTournamentChampion}
-        onOpenAnalysis={() => handleStartAnalysis(moveHistory, activeMatch?.roomId || 'local_' + Date.now(), user?.token)}
-        onViewBracket={() => {
-          setIsGameOverModalOpen(false);
-          setIsTournamentModalOpen(true);
-        }}
-        onPlayAgain={handlePlayAgain}
-        onCloseToReview={() => {
-          setIsGameOverModalOpen(false);
-          if (moveHistory && moveHistory.length > 0) {
-            const matchId = activeMatch?.roomId || 'local_' + Date.now();
-            const cachedAnalysis = AnalysisCacheService.getValidAnalysis(undefined, matchId, moveHistory);
-            const isWhite = playerColor === 'w';
-            const userElo = user?.eloRating || myInfo?.eloRating || 1200;
-            const oppElo = opponentInfo?.eloRating || (activeMode === 'bots' ? (difficulty === 1 ? 800 : difficulty === 2 ? 1300 : 2000) : 1200);
-            const record: MatchRecord = {
-              _id: matchId,
-              whiteUserId: isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
-              blackUserId: !isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
-              whiteUsername: isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
-              blackUsername: !isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
-              whiteOldElo: isWhite ? userElo : oppElo,
-              blackOldElo: !isWhite ? userElo : oppElo,
-              gameMode: activeMode === 'tournament' ? 'TOURNAMENT' : activeMatch?.isRated ? 'PVP_RATED' : activeMode === 'friend' ? 'PVP_CUSTOM' : 'PV_AI',
-              winnerColor: currentStatus === 'WHITE_WIN' ? 'w' : currentStatus === 'BLACK_WIN' ? 'b' : 'draw',
-              endReason: (currentEndReason as any) || 'CHECKMATE',
-              isRated: Boolean(activeMatch?.isRated),
-              moves: [...moveHistory],
-              pgn: '',
-              finalFen: fen,
-              movesCount: moveHistory.length,
-              timeControl: {
-                initialSeconds: 600,
-                incrementSeconds: 0,
-              },
-              analysis: cachedAnalysis || undefined,
-              startedAt: new Date().toISOString(),
-              createdAt: new Date().toISOString(),
-            };
-            clearActiveMatch();
-            setReplayOrigin({ source: 'game_over', preferredColor: playerColor });
-            setReplayMatch(record);
-            setReplayMoveIndex(moveHistory.length);
-            setBoardFen(fen, moveHistory);
-          }
-        }}
-        onBackToMenu={handleBackToMenu}
-      />
+      {(() => {
+        const isCurrentTournamentMatch = Boolean(
+          activeMode === 'tournament' ||
+          activeMatch?.isTournament ||
+          activeMatch?.roomId?.startsWith('tournament_') ||
+          activeMatch?.roomId?.startsWith('room_armageddon_') ||
+          resignationEvent?.isTournament ||
+          resignationEvent?.roomId?.startsWith('tournament_') ||
+          resignationEvent?.roomId?.startsWith('room_armageddon_') ||
+          latestMove?.isTournament ||
+          latestMove?.roomId?.startsWith('tournament_') ||
+          tournamentData ||
+          (typeof window !== 'undefined' && localStorage.getItem('chess_active_tournament_id'))
+        );
+
+        return (
+          <GameOverModal
+            isOpen={isGameOverModalOpen && !replayMatch}
+            gameStatus={currentStatus}
+            playerColor={playerColor}
+            isOnlineMatch={Boolean(activeMatch)}
+            isRated={isCurrentTournamentMatch ? false : (activeMatch?.isRated ?? false)}
+            endReason={currentEndReason}
+            customMessage={customGameOverMsg}
+            myEloResult={currentMatchEloResult}
+            moveHistory={moveHistory}
+            isTournamentMatch={isCurrentTournamentMatch}
+            isChampion={isTournamentChampion}
+            onOpenAnalysis={() => handleStartAnalysis(moveHistory, activeMatch?.roomId || 'local_' + Date.now(), user?.token)}
+            onViewBracket={() => {
+              setIsGameOverModalOpen(false);
+              setIsTournamentModalOpen(true);
+            }}
+            onPlayAgain={handlePlayAgain}
+            onCloseToReview={() => {
+              setIsGameOverModalOpen(false);
+              if (moveHistory && moveHistory.length > 0) {
+                const matchId = activeMatch?.roomId || resignationEvent?.roomId || latestMove?.roomId || 'local_' + Date.now();
+                const cachedAnalysis = AnalysisCacheService.getValidAnalysis(undefined, matchId, moveHistory);
+                const isWhite = playerColor === 'w';
+                const userElo = user?.eloRating || myInfo?.eloRating || 1200;
+                const oppElo = opponentInfo?.eloRating || (activeMode === 'bots' ? (difficulty === 1 ? 800 : difficulty === 2 ? 1300 : 2000) : 1200);
+                const record: MatchRecord = {
+                  _id: matchId,
+                  whiteUserId: isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
+                  blackUserId: !isWhite ? (user?.id || 'me') : (opponentInfo?.userId || 'opp'),
+                  whiteUsername: isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
+                  blackUsername: !isWhite ? (user?.username || 'Bạn') : (opponentInfo?.username || 'Đối thủ'),
+                  whiteOldElo: isWhite ? userElo : oppElo,
+                  blackOldElo: !isWhite ? userElo : oppElo,
+                  gameMode: isCurrentTournamentMatch ? 'TOURNAMENT' : activeMatch?.isRated ? 'PVP_RATED' : activeMode === 'friend' ? 'PVP_CUSTOM' : 'PV_AI',
+                  winnerColor: currentStatus === 'WHITE_WIN' ? 'w' : currentStatus === 'BLACK_WIN' ? 'b' : 'draw',
+                  endReason: (currentEndReason as any) || 'CHECKMATE',
+                  isRated: isCurrentTournamentMatch ? false : Boolean(activeMatch?.isRated),
+                  moves: [...moveHistory],
+                  pgn: '',
+                  finalFen: fen,
+                  movesCount: moveHistory.length,
+                  timeControl: {
+                    initialSeconds: 600,
+                    incrementSeconds: 0,
+                  },
+                  analysis: cachedAnalysis || undefined,
+                  startedAt: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                };
+                clearActiveMatch();
+                setReplayOrigin({
+                  source: isCurrentTournamentMatch ? 'tournament_live' : 'game_over',
+                  preferredColor: playerColor,
+                });
+                setReplayMatch(record);
+                setReplayMoveIndex(moveHistory.length);
+                setBoardFen(fen, moveHistory);
+              }
+            }}
+            onBackToMenu={handleBackToMenu}
+          />
+        );
+      })()}
 
       {/* GIAO DIỆN BÁO CÁO PHÂN TÍCH VÁN CỜ (REPORT VIEW) */}
       {analysisReport && !replayMatch && (

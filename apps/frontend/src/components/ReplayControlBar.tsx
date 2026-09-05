@@ -6,7 +6,7 @@ interface ReplayControlBarProps {
   replayMatch: MatchRecord;
   replayMoveIndex: number;
   replayOrigin: {
-    source: 'tournament_detail' | 'history' | 'active_match' | 'game_over';
+    source: 'tournament_detail' | 'history' | 'active_match' | 'game_over' | 'tournament_live';
     tournamentIdOrCode?: string;
     preferredColor?: 'w' | 'b';
   } | null;
@@ -50,7 +50,7 @@ export const ReplayControlBar: React.FC<ReplayControlBarProps> = ({
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>
-              {replayOrigin?.source === 'tournament_detail'
+              {replayOrigin?.source === 'tournament_detail' || replayOrigin?.source === 'tournament_live'
                 ? 'Về Sơ đồ'
                 : replayOrigin?.source === 'game_over'
                 ? 'Về menu'

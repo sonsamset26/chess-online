@@ -46,6 +46,7 @@ export interface EloCalculationResult {
 }
 
 export interface MoveData {
+  roomId?: string;
   from: Square;
   to: Square;
   fen: string;
@@ -60,6 +61,7 @@ export interface MoveData {
   eloResult?: EloCalculationResult | null;
   clock?: ClockPayload;
   moveTimeMs?: number;
+  isTournament?: boolean;
 }
 
 export interface ResignationData {
@@ -70,6 +72,8 @@ export interface ResignationData {
   reason: 'RESIGNATION' | 'DISCONNECT' | 'TIMEOUT' | 'DRAW';
   message: string;
   eloResult?: EloCalculationResult | null;
+  isTournament?: boolean;
+  isArmageddon?: boolean;
 }
 
 export interface DisconnectedOpponentInfo {

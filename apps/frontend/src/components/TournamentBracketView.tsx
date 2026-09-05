@@ -381,7 +381,7 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
         {isLive && typeof countdown === 'number' && countdown > 0 && (
           <div className="py-2 px-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-between sm:justify-end gap-3 shadow-lg shadow-amber-500/10 animate-pulse">
             <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
-              <span>⚔️ Vào trận sau:</span>
+              <span>Vào trận sau:</span>
             </div>
             <div className="font-mono font-black text-xs sm:text-sm bg-black/60 px-2.5 py-0.5 rounded-lg border border-amber-500/40 text-amber-300 shadow-inner">
               <span>00:{countdown < 10 ? `0${countdown}` : countdown}</span>
@@ -534,13 +534,13 @@ export const TournamentBracketView: React.FC<TournamentBracketViewProps> = ({
 
                           {isChampionCurrentUser && (
                             <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/40">
-                              🎉 BẠN VÔ ĐỊCH
+                              🏆 Bạn là nhà vô địch
                             </span>
                           )}
 
                           {!championId && (
-                            <span className="text-[10px] text-[#94A3B8] italic">
-                              Cạnh tranh danh hiệu
+                            <span className="text-[10px] text-[#94A3B8]">
+                              Chờ kết quả chung kết
                             </span>
                           )}
                         </div>
