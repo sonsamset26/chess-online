@@ -23,6 +23,8 @@ import { DifficultySelector } from '../DifficultySelector';
 import { GameControls } from '../GameControls';
 import { MoveHistory } from '../MoveHistory';
 import { PromotionPiece } from '../PromotionModal';
+import { TournamentData } from '../TournamentModal';
+import { TournamentSpectatorLobby } from '../TournamentSpectatorLobby';
 import { MatchRecord } from '../HistoryView';
 import { MatchAnalysisDashboard } from '../MatchAnalysisDashboard';
 import { ActiveMatch } from '../../hooks/useSocket';
@@ -85,6 +87,8 @@ export interface PlayTabProps {
   replayAnalysisProgress?: { current: number; total: number } | null;
   analysisReport?: any;
   onOpenAnalysisReport?: () => void;
+  tournamentData?: TournamentData | null;
+  onExitTournament?: () => void;
 }
 
 export const PlayTab: React.FC<PlayTabProps> = ({
@@ -135,6 +139,8 @@ export const PlayTab: React.FC<PlayTabProps> = ({
   replayAnalysisProgress,
   analysisReport,
   onOpenAnalysisReport,
+  tournamentData,
+  onExitTournament,
 }) => {
   // Trạng thái lật bàn cờ khi xem lại ván đấu (cho phép người dùng đổi góc nhìn Trắng/Đen)
   const [flippedReplay, setFlippedReplay] = useState<boolean | null>(null);
@@ -224,6 +230,15 @@ export const PlayTab: React.FC<PlayTabProps> = ({
         <div className="w-full max-w-xl mx-auto flex flex-col items-center justify-center p-2 md:p-4">
           <PlayMenu onSelectMode={onSelectMode} />
         </div>
+      ) : activeMode === 'tournament' && !activeMatch && !replayMatch ? (
+        /* MÀN HÌNH SẢNH KHÁN GIẢ / CHỜ GIẢI ĐẤU (TOURNAMENT SPECTATOR LOBBY) */
+        <TournamentSpectatorLobby
+          tournament={tournamentData || null}
+          currentUserId={user?.id || user?.username}
+          currentUsername={user?.username}
+          onOpenBracket={() => setIsTournamentModalOpen(true)}
+          onExitTournament={onExitTournament || handleBackToMenu}
+        />
       ) : (
         /* MÀN HÌNH BÀN CỜ THI ĐẤU & XEM LẠI */
         <div className={`w-full grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 ${replayMatch ? 'items-start' : 'h-full items-center'} justify-center`}>

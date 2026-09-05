@@ -38,7 +38,7 @@ import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService'
 import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
 import { MoveAnalysis } from '../services/analysis/types';
 import { Chess, Square } from 'chess.js';
-import { Menu, Crown, ScrollText, Flag, ArrowLeft, AlertTriangle, Volume2, VolumeX } from 'lucide-react';
+import { Menu, Crown, ScrollText, Flag, ArrowLeft, AlertTriangle, Volume2, VolumeX, Trophy, X } from 'lucide-react';
 import { calculateMaterialDetails } from '../utils/chessMaterial';
 
 export default function Home() {
@@ -116,6 +116,19 @@ export default function Home() {
   const [tournamentData, setTournamentData] = useState<TournamentData | null>(null);
   const [selectedTournamentDetailId, setSelectedTournamentDetailId] = useState<string | null>(null);
   const [historySubTab, setHistorySubTab] = useState<'matches' | 'tournaments'>('matches');
+  const [tournamentToast, setTournamentToast] = useState<{
+    tournament: TournamentData;
+    championId: string;
+    championName: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!tournamentToast) return;
+    const timer = setTimeout(() => {
+      setTournamentToast(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [tournamentToast]);
 
   // Trạng thái Replay
   const [replayMatch, setReplayMatch] = useState<MatchRecord | null>(null);
@@ -695,9 +708,23 @@ export default function Home() {
     const handleTournamentFinished = (data: { tournament: TournamentData; championId: string }) => {
       setTournamentData(data.tournament);
       setTournamentChampionId(data.championId);
-      if (activeMode === 'tournament') {
+
+      const champPlayer = data.tournament.players?.find(
+        (p) => p.userId === data.championId || p.username === data.championId
+      );
+      const championName = champPlayer?.username || data.championId || 'Kỳ thủ';
+
+      // 1. Nếu đang ở màn hình giải đấu HOẶC đang ở menu chính (không bận ván cờ mới)
+      if (activeMode === 'tournament' || (!activeMatch && !replayMatch)) {
         setIsGameOverModalOpen(false);
         setIsTournamentModalOpen(true);
+      } else {
+        // 2. Nếu đang bận trong một ván cờ mới: hiển thị Toast góc màn hình không che bàn cờ
+        setTournamentToast({
+          tournament: data.tournament,
+          championId: data.championId,
+          championName,
+        });
       }
     };
 
@@ -710,7 +737,7 @@ export default function Home() {
       socket.off('tournament_cancelled', handleTournamentCancelled);
       socket.off('tournament_finished', handleTournamentFinished);
     };
-  }, [socket, activeMode, setIsTournamentModalOpen, setIsGameOverModalOpen, setTournamentChampionId]);
+  }, [socket, activeMode, activeMatch, replayMatch, setIsTournamentModalOpen, setIsGameOverModalOpen, setTournamentChampionId]);
 
   // 2. LẮNG NGHE VÀO PHÒNG TRẬN ĐẤU MỚI (MATCH_FOUND)
   const currentActiveRoomIdRef = useRef<string | null>(null);
@@ -1309,6 +1336,8 @@ export default function Home() {
             goToReplayMove={goToReplayMove}
             handlePlayAgain={handlePlayAgain}
             handleBackToMenu={handleBackToMenu}
+            tournamentData={tournamentData}
+            onExitTournament={handleBackToMenu}
             setDifficulty={setDifficulty}
             resetGame={resetGame}
             togglePlayerColor={handleToggleBotColor}
@@ -1429,12 +1458,11 @@ export default function Home() {
         isOpen={isTournamentModalOpen}
         onClose={() => {
           setIsTournamentModalOpen(false);
-          if (!activeMatch) {
-            setActiveMode(null);
-          }
           if (tournamentData?.status === 'FINISHED') {
             setTournamentData(null);
             setTournamentChampionId(null);
+            localStorage.removeItem('chess_active_tournament_id');
+            setActiveMode(null);
           }
         }}
         currentUserId={user?.id || user?.username}
@@ -1530,6 +1558,11 @@ export default function Home() {
             onOpenAnalysis={() => handleStartAnalysis(moveHistory, activeMatch?.roomId || 'local_' + Date.now(), user?.token)}
             onViewBracket={() => {
               setIsGameOverModalOpen(false);
+              if (isCurrentTournamentMatch) {
+                clearActiveMatch();
+                currentActiveRoomIdRef.current = null;
+                localStorage.removeItem('chess_active_online_match');
+              }
               setIsTournamentModalOpen(true);
             }}
             onPlayAgain={handlePlayAgain}
@@ -1670,6 +1703,48 @@ export default function Home() {
               Đã hiểu
             </button>
           </div>
+        </div>
+      )}
+
+      {/* TOAST THÔNG BÁO KẾT QUẢ GIẢI ĐẤU (Khi người chơi đang trong ván cờ mới) */}
+      {tournamentToast && (
+        <div className="fixed top-5 right-5 z-[100] max-w-sm w-full p-4 bg-[#16202E] border border-amber-500/60 rounded-2xl shadow-2xl flex items-start gap-3 animate-in slide-in-from-top duration-300 select-none">
+          <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shrink-0">
+            <Trophy className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+              Giải đấu đã kết thúc
+            </h4>
+            <p className="text-xs text-slate-200 mt-0.5 truncate">
+              Nhà vô địch: <span className="font-bold text-amber-400">{tournamentToast.championName}</span>
+            </p>
+            <div className="flex items-center gap-2 mt-2.5">
+              <button
+                onClick={() => {
+                  setTournamentData(tournamentToast.tournament);
+                  setTournamentChampionId(tournamentToast.championId);
+                  setIsTournamentModalOpen(true);
+                  setTournamentToast(null);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] transition-all shadow"
+              >
+                Xem sơ đồ
+              </button>
+              <button
+                onClick={() => setTournamentToast(null)}
+                className="px-2 py-1 rounded-lg bg-[#2A374A] hover:bg-[#3B3835] text-slate-300 text-[11px] transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={() => setTournamentToast(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>
