@@ -36,10 +36,101 @@ import { sounds } from '../utils/soundEffects';
 import { getApiUrl } from '../utils/apiUrl';
 import { AnalysisCacheService } from '../services/analysis/AnalysisCacheService';
 import { AnalysisEngine } from '../services/analysis/AnalysisEngine';
-import { MoveAnalysis } from '../services/analysis/types';
+import { GameReportService } from '../services/analysis/GameReportService';
+import { MoveAnalysis, CompletedMoveAnalysis, GamePhase, GameAnalysisReport } from '../services/analysis/types';
 import { Chess, Square } from 'chess.js';
 import { Menu, Crown, ScrollText, Flag, ArrowLeft, AlertTriangle, Volume2, VolumeX, Trophy, X } from 'lucide-react';
 import { calculateMaterialDetails } from '../utils/chessMaterial';
+
+function buildReportFromLiveAnalysis(
+  analysisMap: Record<number, MoveAnalysis>,
+  moves: string[],
+  matchId?: string
+): GameAnalysisReport | null {
+  if (!moves || moves.length === 0) return null;
+
+  const completedMoves: CompletedMoveAnalysis[] = [];
+  const clone = new Chess();
+
+  for (let i = 0; i < moves.length; i++) {
+    const ply = i + 1;
+    const san = moves[i];
+    const color: 'w' | 'b' = ply % 2 === 1 ? 'w' : 'b';
+    const moveNumber = Math.floor(i / 2) + 1;
+    const fenBefore = clone.fen();
+
+    let from: Square = 'a1';
+    let to: Square = 'a1';
+    try {
+      const moveRes = clone.move(san);
+      if (moveRes) {
+        from = moveRes.from;
+        to = moveRes.to;
+      }
+    } catch {
+      // ignore
+    }
+    const fenAfter = clone.fen();
+
+    let phase: GamePhase = 'OPENING';
+    if (moveNumber > 30) {
+      phase = 'ENDGAME';
+    } else if (moveNumber > 10) {
+      phase = 'MIDDLEGAME';
+    }
+
+    const liveMove = analysisMap[ply];
+    if (liveMove && liveMove.status === 'ANALYZED' && liveMove.classification && liveMove.cpl !== undefined) {
+      completedMoves.push({
+        ...liveMove,
+        ply,
+        moveNumber,
+        color,
+        san,
+        from: liveMove.from || from,
+        to: liveMove.to || to,
+        fenBefore: liveMove.fenBefore || fenBefore,
+        fenAfter: liveMove.fenAfter || fenAfter,
+        evalBefore: liveMove.evalBefore ?? 0,
+        evalAfter: liveMove.evalAfter ?? 0,
+        cpl: liveMove.cpl,
+        classification: liveMove.classification,
+        accuracy: liveMove.accuracy ?? 100,
+        phase: liveMove.phase || phase,
+      });
+    } else {
+      const isCheckmate = san.includes('#');
+      const cpl = isCheckmate ? 0 : 10;
+      const classification = isCheckmate ? 'BEST' : 'GOOD';
+      const accuracy = isCheckmate ? 100 : 90;
+      const evalBefore = 0;
+      const evalAfter = isCheckmate ? 10000 : 0;
+
+      completedMoves.push({
+        ply,
+        moveNumber,
+        color,
+        san,
+        from,
+        to,
+        fenBefore,
+        fenAfter,
+        bestMoveSan: san,
+        bestMoveUci: '',
+        evalBefore,
+        evalAfter,
+        cpl,
+        classification,
+        accuracy,
+        phase,
+        status: 'ANALYZED',
+      });
+    }
+  }
+
+  if (completedMoves.length === 0) return null;
+  return GameReportService.generateReport(completedMoves, matchId);
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
@@ -457,6 +548,7 @@ export default function Home() {
 
     if (currentPlies === 0) {
       processedPlyRef.current = 0;
+      resetAnalysis();
       return;
     }
 
@@ -877,13 +969,18 @@ export default function Home() {
         }
       }
 
-      // Tự động phân tích ván đấu với Bot
+      // Tự động phân tích ván đấu với Bot (tái sử dụng ngay dữ liệu phân tích từng nước trong trận)
       if (activeMode === 'bots' && moveHistory.length >= 2) {
-        triggerAutoAnalysis('local_bot_' + Date.now(), moveHistory);
+        const botReport = buildReportFromLiveAnalysis(analysisByPly, moveHistory);
+        if (botReport) {
+          AnalysisCacheService.saveCache(null, botReport, moveHistory);
+        } else {
+          triggerAutoAnalysis('local_bot_' + Date.now(), moveHistory);
+        }
       }
     }
     prevStatusRef.current = currentStatus;
-  }, [currentStatus, playerColor, replayMatch, activeMode, moveHistory, triggerAutoAnalysis]);
+  }, [currentStatus, playerColor, replayMatch, activeMode, moveHistory, triggerAutoAnalysis, analysisByPly]);
 
   // 5. Đồng bộ nước đi mới từ WebSocket Realtime & Cập nhật kết thúc trận (Checkmate / Draw)
   useEffect(() => {
@@ -1115,6 +1212,7 @@ export default function Home() {
     processedGameOverRef.current = null;
 
     if (activeMode === 'bots') {
+      resetAnalysis();
       resetGame({ autoTriggerAi: true });
     } else if (activeMode === 'friend' || (activeMatch && !activeMatch.isRated && !activeMatch.isTournament)) {
       clearActiveMatch();
@@ -1554,7 +1652,13 @@ export default function Home() {
               setIsGameOverModalOpen(false);
               if (moveHistory && moveHistory.length > 0) {
                 const matchId = activeMatch?.roomId || resignationEvent?.roomId || latestMove?.roomId || 'local_' + Date.now();
-                const cachedAnalysis = AnalysisCacheService.getValidAnalysis(undefined, matchId, moveHistory);
+                let cachedAnalysis = AnalysisCacheService.getValidAnalysis(undefined, matchId, moveHistory);
+                if (!cachedAnalysis && Object.keys(analysisByPly).length > 0) {
+                  cachedAnalysis = buildReportFromLiveAnalysis(analysisByPly, moveHistory, matchId);
+                  if (cachedAnalysis) {
+                    AnalysisCacheService.saveCache(matchId, cachedAnalysis, moveHistory);
+                  }
+                }
                 const isWhite = playerColor === 'w';
                 const userElo = user?.eloRating || myInfo?.eloRating || 1200;
                 const oppElo = opponentInfo?.eloRating || (activeMode === 'bots' ? (difficulty === 1 ? 800 : difficulty === 2 ? 1300 : 2000) : 1200);

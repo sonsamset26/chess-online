@@ -73,7 +73,7 @@ export function useLiveAnalysis(options: UseLiveAnalysisOptions) {
       inFlightPliesRef.current.clear();
       isProcessingRef.current = false;
       sessionCacheRef.current.clear();
-      setAnalysisByPly({});
+      // Không xóa analysisByPly ở đây để giữ lại dữ liệu phân tích từng nước khi trận đấu kết thúc hoặc chuyển sang Xem lại (Replay)
       setIsAnalyzing(false);
       setSelectedPly(null);
     }

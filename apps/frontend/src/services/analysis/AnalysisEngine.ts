@@ -378,6 +378,12 @@ export class AnalysisEngine {
           evalPlayed = cplResult.evalPlayed;
           cpl = cplResult.cpl;
 
+          // Master Opening Guard: Các nước khai cuộc lý thuyết chuẩn không bị gán nhãn Mistake do nông độ sâu engine
+          const isBook = isStandardOpeningMove(ply, san);
+          if (isBook && (ply <= 4 || evalOppAfterMove <= 350)) {
+            cpl = Math.min(cpl, 5);
+          }
+
           // 5. Phân loại chất lượng nước đi và tính độ chính xác
           classification = MoveClassificationService.classify(cpl, config);
           accuracy = MoveClassificationService.calculateMoveAccuracy(cpl);
