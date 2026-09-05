@@ -43,15 +43,7 @@ import { calculateMaterialDetails } from '../utils/chessMaterial';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
-  const [activeMode, setActiveModeState] = useState<GameModeSelection | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('chess_active_mode');
-      if (saved === 'bots' || saved === 'online' || saved === 'friend' || saved === 'tournament') {
-        return saved as GameModeSelection;
-      }
-    }
-    return null;
-  });
+  const [activeMode, setActiveModeState] = useState<GameModeSelection | null>(null);
 
   const setActiveMode = useCallback((mode: GameModeSelection | null) => {
     setActiveModeState(mode);
@@ -226,6 +218,7 @@ export default function Home() {
     socket,
     isConnected,
     isSearchingQueue,
+    isReconnectingMatch,
     createdRoomCode,
     friendRoomError,
     activeMatch,
@@ -709,23 +702,13 @@ export default function Home() {
       setTournamentData(data.tournament);
       setTournamentChampionId(data.championId);
 
-      const champPlayer = data.tournament.players?.find(
-        (p) => p.userId === data.championId || p.username === data.championId
-      );
-      const championName = champPlayer?.username || data.championId || 'Kỳ thủ';
-
-      // 1. Nếu đang ở màn hình giải đấu HOẶC đang ở menu chính (không bận ván cờ mới)
-      if (activeMode === 'tournament' || (!activeMatch && !replayMatch)) {
-        setIsGameOverModalOpen(false);
-        setIsTournamentModalOpen(true);
-      } else {
-        // 2. Nếu đang bận trong một ván cờ mới: hiển thị Toast góc màn hình không che bàn cờ
-        setTournamentToast({
-          tournament: data.tournament,
-          championId: data.championId,
-          championName,
-        });
+      // Nếu người chơi đã bị loại và chủ động rời giải về menu hoặc đang đấu chế độ khác, bỏ qua hoàn toàn thông báo
+      if (activeMode !== 'tournament') {
+        return;
       }
+
+      setIsGameOverModalOpen(false);
+      setIsTournamentModalOpen(true);
     };
 
     socket.on('tournament_updated', handleTournamentUpdated);
@@ -852,7 +835,7 @@ export default function Home() {
 
       // Tự động phân tích ván đấu ở chế độ nền
       if (moveHistory.length >= 2) {
-        triggerAutoAnalysis(resignationEvent.roomId, moveHistory, user?.token);
+        triggerAutoAnalysis(resignationEvent.matchId || resignationEvent.roomId, moveHistory, user?.token);
       }
     }
   }, [replayMatch, resignationEvent, playerColor, moveHistory, user?.token, triggerAutoAnalysis, setIsResignModalOpen, setIsLeaveModalOpen, setIsLogoutModalOpen, setIsGameOverModalOpen, setCurrentEndReason, setLocalGameOverStatus, setCustomGameOverMsg, setCurrentMatchEloResult]);
@@ -960,7 +943,7 @@ export default function Home() {
         // Tự động phân tích ván đấu ở chế độ nền
         const fullHistory = latestMove.history || moveHistory;
         if (fullHistory && fullHistory.length >= 2) {
-          triggerAutoAnalysis(activeMatch?.roomId || 'game_' + Date.now(), fullHistory, user?.token);
+          triggerAutoAnalysis(latestMove.matchId || activeMatch?.matchId || activeMatch?.roomId || 'game_' + Date.now(), fullHistory, user?.token);
         }
       }
     }
@@ -1306,6 +1289,7 @@ export default function Home() {
           <PlayTab
             activeMode={activeMode}
             activeMatch={activeMatch}
+            isReconnectingMatch={isReconnectingMatch}
             replayMatch={replayMatch}
             replayMoveIndex={replayMoveIndex}
             replayOrigin={replayOrigin}

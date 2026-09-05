@@ -19,12 +19,13 @@ export interface WeaknessAnalysisResult {
 
 export class WeaknessAnalyzer {
   /**
-   * Quy đổi điểm CPL sang thang điểm hiệu năng 0-100 (CPL <= 15 -> 100 điểm, CPL >= 100 -> 10 điểm)
+   * Quy đổi điểm CPL sang thang điểm hiệu năng 0-100 (CPL <= 15 -> 96 điểm, CPL >= 100 -> 15 điểm)
    */
   private static cplToScore(cpl: number): number {
-    if (cpl <= 15) return 100;
+    if (cpl <= 0) return 60; // Baseline mặc định khi chưa có dữ liệu CPL
+    if (cpl <= 15) return 96;
     if (cpl >= 100) return 15;
-    return Math.round(100 - ((cpl - 15) / 85) * 85);
+    return Math.max(15, Math.min(96, Math.round(100 - ((cpl - 15) / 85) * 85)));
   }
 
   /**
@@ -39,16 +40,17 @@ export class WeaknessAnalyzer {
     const endBlunder = features.endgameBlunderRate || 0;
     const timePressureBlunder = features.timePressureBlunderRate || 0;
     const thinkingTime = features.averageThinkingTimeMs || 0;
+    const isUnanalyzed = opCpl === 0 && midCpl === 0 && endCpl === 0;
 
-    const opScore = this.cplToScore(opCpl);
-    const midScore = this.cplToScore(midCpl);
-    const endScore = this.cplToScore(endCpl);
+    const opScore = isUnanalyzed ? 65 : this.cplToScore(opCpl);
+    const midScore = isUnanalyzed ? 60 : this.cplToScore(midCpl);
+    const endScore = isUnanalyzed ? 55 : this.cplToScore(endCpl);
 
     // Điểm quản lý thời gian: dựa trên timePressureBlunder và thinkingTime
     let timeScore = 80;
     if (timePressureBlunder > 0.25) timeScore -= 40;
     else if (timePressureBlunder > 0.15) timeScore -= 20;
-    if (thinkingTime < 2500) timeScore -= 15; // Chơi quá vội
+    if (thinkingTime < 2500 && thinkingTime > 0) timeScore -= 15; // Chơi quá vội
     timeScore = Math.max(15, Math.min(100, timeScore));
 
     const phaseScores: PhaseScores = {
@@ -111,7 +113,9 @@ export class WeaknessAnalyzer {
       ENDGAME: 'Cuối trận',
     };
 
-    const summary = `Bạn hay để mất ưu thế nhất ở giai đoạn ${phaseNames[weakestPhase]}. Tập trung rèn luyện khâu này sẽ giúp thế cờ của bạn chắc chắn hơn.`;
+    const summary = isUnanalyzed
+      ? 'Hệ thống đang chờ dữ liệu phân tích ván cờ từ Stockfish. Hãy mở xem lại các ván đấu để nạp chỉ số chi tiết.'
+      : `Bạn hay để mất ưu thế nhất ở giai đoạn ${phaseNames[weakestPhase]}. Tập trung rèn luyện khâu này sẽ giúp thế cờ của bạn chắc chắn hơn.`;
 
     return {
       weakestPhase,

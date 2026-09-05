@@ -175,10 +175,11 @@ export class MatchGateway {
         }
 
         const winnerColor: 'w' | 'b' | 'draw' = room.isArmageddon ? 'b' : 'draw';
-        const { eloResult } = await this.finalizeMatchEnding(room, room.roomId, winnerColor, 'DRAW');
+        const { eloResult, savedMatchId } = await this.finalizeMatchEnding(room, room.roomId, winnerColor, 'DRAW');
 
         this.io.to(room.roomId).emit('game_draw', {
           roomId: room.roomId,
+          matchId: savedMatchId,
           reason: 'MUTUAL_AGREEMENT',
           message: 'Hai bên đã đồng ý hòa ván cờ theo thỏa thuận.',
           eloResult: room.isRated ? eloResult : null,
@@ -303,6 +304,7 @@ export class MatchGateway {
 
           let eloResult: EloCalculationResult | null = null;
           let winnerColor: 'w' | 'b' | null = null;
+          let savedMatchId: string | undefined;
 
           // 6.8. Xử lý kết quả ván đấu nếu kết thúc
           if (isGameOver) {
@@ -319,12 +321,14 @@ export class MatchGateway {
 
             const res = await this.finalizeMatchEnding(room, data.roomId, finColor, finReason);
             eloResult = res.eloResult;
+            savedMatchId = res.savedMatchId;
             winnerColor = finColor === 'draw' ? null : finColor;
           }
 
           // 6.9. Broadcast gói tin Event-driven kèm mốc thời gian chuẩn
           this.io.to(data.roomId).emit('receive_move', {
             roomId: data.roomId,
+            matchId: savedMatchId,
             version: room.version,
             from: data.from,
             to: data.to,
@@ -589,10 +593,11 @@ export class MatchGateway {
       ? `Người chơi ${timedOutPlayer.username} đã hết thời gian thi đấu, nhưng đối phương không đủ quân để chiếu hết. Tỷ số hòa.`
       : `Người chơi ${timedOutPlayer.username} đã hết thời gian thi đấu. Bạn thắng!`;
 
-    const { eloResult } = await this.finalizeMatchEnding(room, roomId, finalWinnerColor, endReason);
+    const { eloResult, savedMatchId } = await this.finalizeMatchEnding(room, roomId, finalWinnerColor, endReason);
 
     const timeoutPayload = {
       roomId,
+      matchId: savedMatchId,
       winnerColor: finalWinnerColor,
       winnerName: isDrawMatch ? 'Hòa cờ' : opponentPlayer.username,
       loserName: timedOutPlayer.username,
@@ -722,10 +727,11 @@ export class MatchGateway {
 
     console.log(`🏳️ [Resignation] Phòng ${roomId} (${room.isRated ? 'Rated' : 'Unrated Friend'}): ${loserPlayer.username} (${reason === 'DISCONNECT' ? 'Thoát/F5 Web' : 'Đầu hàng'}). Thắng: ${winnerPlayer.username}`);
 
-    const { eloResult } = await this.finalizeMatchEnding(room, roomId, winnerColor, endReason);
+    const { eloResult, savedMatchId } = await this.finalizeMatchEnding(room, roomId, winnerColor, endReason);
 
     const resPayload = {
       roomId,
+      matchId: savedMatchId,
       winnerColor,
       winnerName: winnerPlayer.username,
       loserName: loserPlayer.username,
@@ -756,6 +762,7 @@ export class MatchGateway {
         blackUserId: room.players.black.userId,
         whiteUsername: room.players.white.username,
         blackUsername: room.players.black.username,
+        roomId: room.roomId,
         gameMode: room.tournamentContext ? 'TOURNAMENT' : (room.isRated ? 'PVP_RATED' : 'PVP_CUSTOM'),
         tournamentId: room.tournamentContext?.tournamentId,
         tournamentRound: room.tournamentContext?.roundNumber,

@@ -49,6 +49,7 @@ export interface IMatch extends Document {
   blackUserId: string;
   whiteUsername: string;
   blackUsername: string;
+  roomId?: string;
   gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM' | 'TOURNAMENT';
   aiDifficulty?: number;
   winnerColor: 'w' | 'b' | 'draw';
@@ -113,6 +114,10 @@ const MatchSchema = new Schema<IMatch>(
       type: String,
       enum: ['PV_AI', 'PVP_RATED', 'PVP_CUSTOM', 'TOURNAMENT'],
       default: 'PVP_RATED',
+    },
+    roomId: {
+      type: String,
+      index: true,
     },
     isArmageddon: {
       type: Boolean,

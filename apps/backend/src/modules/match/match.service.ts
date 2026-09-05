@@ -8,6 +8,7 @@ export interface CreateMatchInput {
   blackUserId: string;
   whiteUsername: string;
   blackUsername: string;
+  roomId?: string;
   gameMode: 'PV_AI' | 'PVP_RATED' | 'PVP_CUSTOM' | 'TOURNAMENT';
   aiDifficulty?: number;
   winnerColor: 'w' | 'b' | 'draw';
@@ -209,12 +210,18 @@ export class MatchService {
    * Lưu hoặc cập nhật kết quả phân tích ván đấu (Idempotent CAS)
    */
   public static async saveMatchAnalysis(
-    matchId: string,
+    matchIdOrRoomId: string,
     analysisData: any
   ): Promise<IMatch | null> {
-    if (!mongoose.Types.ObjectId.isValid(matchId)) return null;
+    if (!matchIdOrRoomId) return null;
 
-    const existing = await Match.findById(matchId);
+    let existing = null;
+    if (mongoose.Types.ObjectId.isValid(matchIdOrRoomId)) {
+      existing = await Match.findById(matchIdOrRoomId);
+    }
+    if (!existing) {
+      existing = await Match.findOne({ roomId: matchIdOrRoomId });
+    }
     if (!existing) return null;
 
     // Idempotent guard: Nếu ván đấu đã có phân tích, trả về luôn để tránh ghi đè xung đột
@@ -223,7 +230,7 @@ export class MatchService {
     }
 
     const updated = await Match.findByIdAndUpdate(
-      matchId,
+      existing._id,
       {
         $set: {
           analysis: {

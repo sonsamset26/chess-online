@@ -66,6 +66,7 @@ export interface PlayTabProps {
   selectedPly: number | null;
   isLiveAnalysisEnabled: boolean;
   isGameOverModalOpen: boolean;
+  isReconnectingMatch?: boolean;
   onSelectMode: (mode: GameModeSelection) => void;
   handlePieceDrop: (from: Square, to: Square, promotion?: PromotionPiece) => boolean;
   handleExitReplay: () => void;
@@ -134,6 +135,7 @@ export const PlayTab: React.FC<PlayTabProps> = ({
   setIsLeaveModalOpen,
   setIsResignModalOpen,
   setSelectedPly,
+  isReconnectingMatch,
   replayAnalysisByPly,
   isReplayAnalyzing,
   replayAnalysisProgress,
@@ -265,8 +267,12 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                   ? (effectiveReplayColor === 'w' ? replayMatch.blackUsername : replayMatch.whiteUsername)
                   : activeMatch
                   ? opponentInfo?.username || 'Đối thủ Online'
+                  : isReconnectingMatch
+                  ? 'Đang kết nối lại...'
                   : activeMode === 'friend'
                   ? 'Bạn bè (Player 2)'
+                  : activeMode === 'online' || activeMode === 'tournament'
+                  ? 'Đang kết nối phòng...'
                   : 'Stockfish Engine'
               }
               subText={
@@ -278,6 +284,8 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                   ? activeMatch.isRated
                     ? `Elo: ${opponentInfo?.eloRating || 1200} • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
                     : `Phòng Bạn Bè • ${playerColor === 'w' ? 'Quân Đen' : 'Quân Trắng'}`
+                  : isReconnectingMatch
+                  ? 'Đang khôi phục thế cờ...'
                   : activeMode === 'friend'
                   ? 'Đang chờ bạn bè tham gia phòng...'
                   : activeMode === 'bots'
@@ -286,6 +294,8 @@ export const PlayTab: React.FC<PlayTabProps> = ({
                     : difficulty === 2
                     ? 'Trung bình (~1300 Elo)'
                     : 'Khó (~2000 Elo)'
+                  : activeMode === 'online' || activeMode === 'tournament'
+                  ? 'Đang tải thông tin ván đấu...'
                   : 'Phòng thi đấu'
               }
               color={replayMatch ? (effectiveReplayColor === 'w' ? 'b' : 'w') : (playerColor === 'w' ? 'b' : 'w')}

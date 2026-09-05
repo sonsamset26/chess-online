@@ -256,14 +256,14 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
     const center = size / 2;
     const radius = 95;
     const axes = [
-      { label: 'Khai trận', score: profile?.weaknessAnalysis?.phaseScores.opening || 50, description: 'Độ chính xác và khả năng triển khai thế trận đầu ván' },
-      { label: 'Tính toán', score: profile?.weaknessAnalysis?.phaseScores.middlegame || 50, description: 'Khả năng tính toán các đòn phối hợp ở giữa trận' },
-      { label: 'Dứt điểm', score: profile?.weaknessAnalysis?.phaseScores.endgame || 50, description: 'Kỹ thuật xử lý và chuyển hóa lợi thế ở cuối trận' },
-      { label: 'Bảo toàn', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector.endgameBlunderRate || 0) * 350))), description: 'Khả năng giữ vững lợi thế và tránh sai lầm ở cuối trận' },
-      { label: 'Vững thế', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector.middlegameBlunderRate || 0) * 350))), description: 'Duy trì thế trận chặt chẽ và hạn chế sai lầm ở giữa trận' },
-      { label: 'Cẩn trọng', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector.openingBlunderRate || 0) * 400))), description: 'Hạn chế sai sót và tránh cạm bẫy ở đầu trận' },
-      { label: 'Bản lĩnh', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector.timePressureBlunderRate || 0) * 300))), description: 'Giữ được sự điềm tĩnh và chính xác khi cạn thời gian' },
-      { label: 'Linh hoạt', score: profile?.weaknessAnalysis?.phaseScores.timeManagement || 50, description: 'Tốc độ tư duy và điều phối thời gian hợp lý' },
+      { label: 'Khai trận', score: profile?.weaknessAnalysis?.phaseScores?.opening || 50, description: 'Độ chính xác và khả năng triển khai thế trận đầu ván' },
+      { label: 'Tính toán', score: profile?.weaknessAnalysis?.phaseScores?.middlegame || 50, description: 'Khả năng tính toán các đòn phối hợp ở giữa trận' },
+      { label: 'Dứt điểm', score: profile?.weaknessAnalysis?.phaseScores?.endgame || 50, description: 'Kỹ thuật xử lý và chuyển hóa lợi thế ở cuối trận' },
+      { label: 'Bảo toàn', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector?.endgameBlunderRate || 0) * 350))), description: 'Khả năng giữ vững lợi thế và tránh sai lầm ở cuối trận' },
+      { label: 'Vững thế', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector?.middlegameBlunderRate || 0) * 350))), description: 'Duy trì thế trận chặt chẽ và hạn chế sai lầm ở giữa trận' },
+      { label: 'Cẩn trọng', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector?.openingBlunderRate || 0) * 400))), description: 'Hạn chế sai sót và tránh cạm bẫy ở đầu trận' },
+      { label: 'Bản lĩnh', score: Math.max(20, Math.min(100, Math.round(100 - (profile?.featureVector?.timePressureBlunderRate || 0) * 300))), description: 'Giữ được sự điềm tĩnh và chính xác khi cạn thời gian' },
+      { label: 'Linh hoạt', score: profile?.weaknessAnalysis?.phaseScores?.timeManagement || 50, description: 'Tốc độ tư duy và điều phối thời gian hợp lý' },
     ];
 
     const numAxes = axes.length;
@@ -466,12 +466,24 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="font-bold text-white">Đầu trận</span>
                   <span className="text-pink-400 font-mono font-bold">
-                    {profile?.weaknessAnalysis?.phaseScores.opening || 75} / 100
+                    {profile?.weaknessAnalysis?.phaseScores?.opening !== undefined
+                      ? `${profile.weaknessAnalysis.phaseScores.opening} / 100`
+                      : '-- / 100'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-[#94A3B8]">
-                  <span>Mất điểm TB: {profile?.featureVector.openingCpl || 25} cpl</span>
-                  <span>Tỉ lệ sai lầm: {((profile?.featureVector.openingBlunderRate || 0) * 100).toFixed(1)}%</span>
+                  <span>
+                    Mất điểm TB:{' '}
+                    {profile?.featureVector?.openingCpl && profile.featureVector.openingCpl > 0
+                      ? `${profile.featureVector.openingCpl} cpl`
+                      : 'Đang chờ phân tích'}
+                  </span>
+                  <span>
+                    Tỉ lệ sai lầm:{' '}
+                    {profile?.featureVector?.openingBlunderRate !== undefined
+                      ? `${(profile.featureVector.openingBlunderRate * 100).toFixed(1)}%`
+                      : '--%'}
+                  </span>
                 </div>
               </div>
 
@@ -480,12 +492,24 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="font-bold text-white">Giữa trận</span>
                   <span className="text-pink-400 font-mono font-bold">
-                    {profile?.weaknessAnalysis?.phaseScores.middlegame || 60} / 100
+                    {profile?.weaknessAnalysis?.phaseScores?.middlegame !== undefined
+                      ? `${profile.weaknessAnalysis.phaseScores.middlegame} / 100`
+                      : '-- / 100'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-[#94A3B8]">
-                  <span>Mất điểm TB: {profile?.featureVector.middlegameCpl || 45} cpl</span>
-                  <span>Tỉ lệ sai lầm: {((profile?.featureVector.middlegameBlunderRate || 0) * 100).toFixed(1)}%</span>
+                  <span>
+                    Mất điểm TB:{' '}
+                    {profile?.featureVector?.middlegameCpl && profile.featureVector.middlegameCpl > 0
+                      ? `${profile.featureVector.middlegameCpl} cpl`
+                      : 'Đang chờ phân tích'}
+                  </span>
+                  <span>
+                    Tỉ lệ sai lầm:{' '}
+                    {profile?.featureVector?.middlegameBlunderRate !== undefined
+                      ? `${(profile.featureVector.middlegameBlunderRate * 100).toFixed(1)}%`
+                      : '--%'}
+                  </span>
                 </div>
               </div>
 
@@ -494,12 +518,24 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="font-bold text-white">Cuối trận</span>
                   <span className="text-pink-400 font-mono font-bold">
-                    {profile?.weaknessAnalysis?.phaseScores.endgame || 55} / 100
+                    {profile?.weaknessAnalysis?.phaseScores?.endgame !== undefined
+                      ? `${profile.weaknessAnalysis.phaseScores.endgame} / 100`
+                      : '-- / 100'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-[#94A3B8]">
-                  <span>Mất điểm TB: {profile?.featureVector.endgameCpl || 55} cpl</span>
-                  <span>Tỉ lệ sai lầm: {((profile?.featureVector.endgameBlunderRate || 0) * 100).toFixed(1)}%</span>
+                  <span>
+                    Mất điểm TB:{' '}
+                    {profile?.featureVector?.endgameCpl && profile.featureVector.endgameCpl > 0
+                      ? `${profile.featureVector.endgameCpl} cpl`
+                      : 'Đang chờ phân tích'}
+                  </span>
+                  <span>
+                    Tỉ lệ sai lầm:{' '}
+                    {profile?.featureVector?.endgameBlunderRate !== undefined
+                      ? `${(profile.featureVector.endgameBlunderRate * 100).toFixed(1)}%`
+                      : '--%'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -511,7 +547,9 @@ export const PlayerProfileTab: React.FC<PlayerProfileTabProps> = ({
               <span>Thời gian suy nghĩ TB:</span>
             </div>
             <span className="font-mono font-bold text-white">
-              {((profile?.featureVector.averageThinkingTimeMs || 3500) / 1000).toFixed(1)}s / nước
+              {profile?.featureVector?.averageThinkingTimeMs && profile.featureVector.averageThinkingTimeMs > 0
+                ? `${(profile.featureVector.averageThinkingTimeMs / 1000).toFixed(1)}s / nước`
+                : '-- s / nước'}
             </span>
           </div>
         </div>

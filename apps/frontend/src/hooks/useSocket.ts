@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Square } from 'chess.js';
 
@@ -21,6 +21,7 @@ export interface ClockPayload {
 
 export interface ActiveMatch {
   roomId: string;
+  matchId?: string;
   yourColor: 'w' | 'b';
   whitePlayer: PlayerInfo;
   blackPlayer: PlayerInfo;
@@ -47,6 +48,7 @@ export interface EloCalculationResult {
 
 export interface MoveData {
   roomId?: string;
+  matchId?: string;
   from: Square;
   to: Square;
   fen: string;
@@ -66,6 +68,7 @@ export interface MoveData {
 
 export interface ResignationData {
   roomId: string;
+  matchId?: string;
   winnerColor: 'w' | 'b' | 'draw';
   winnerName: string;
   loserName: string;
@@ -90,8 +93,15 @@ export interface DrawOfferData {
 
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isSearchingQueue, setIsSearchingQueue] = useState(false);
+  const [isReconnectingMatch, setIsReconnectingMatch] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return Boolean(localStorage.getItem('chess_active_online_match'));
+    }
+    return false;
+  });
   const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(null);
   const [latestMove, setLatestMove] = useState<MoveData | null>(null);
   const [currentClock, setCurrentClock] = useState<ClockPayload | null>(null);
@@ -119,10 +129,32 @@ export function useSocket() {
       transports: ['websocket', 'polling'],
       autoConnect: true,
     });
+    socketRef.current = socketInstance;
 
     socketInstance.on('connect', () => {
       console.log('🔌 [Socket.io Client] Đã kết nối thành công:', socketInstance.id);
       setIsConnected(true);
+
+      // Auto-reconnect tức thì ngay khi Socket kết nối (Bỏ qua React closure delay và chống kẹt F5)
+      if (typeof window !== 'undefined') {
+        try {
+          const savedMatch = localStorage.getItem('chess_active_online_match');
+          if (savedMatch) {
+            const { roomId, userId } = JSON.parse(savedMatch);
+            if (roomId) {
+              setIsReconnectingMatch(true);
+              const token = localStorage.getItem('chess_token');
+              socketInstance.emit('reconnect_match', {
+                roomId,
+                token: token || undefined,
+                userId: userId || undefined,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Lỗi đọc dữ liệu reconnect từ localStorage:', e);
+        }
+      }
     });
 
     socketInstance.on('disconnect', () => {
@@ -171,6 +203,7 @@ export function useSocket() {
     // Nhận lại trạng thái ván đấu khi vừa Reconnect / F5
     socketInstance.on('match_reconnected', (data: ActiveMatch) => {
       console.log('🔄 [Socket.io Client] Khôi phục ván đấu sau Reconnect / F5:', data);
+      setIsReconnectingMatch(false);
       setIsSearchingQueue(false);
       setResignationEvent(null);
       setDisconnectedOpponent(null);
@@ -182,6 +215,7 @@ export function useSocket() {
 
     socketInstance.on('reconnect_error', (data: { message: string }) => {
       console.warn('⚠️ [Socket.io Client] Reconnect Error:', data?.message);
+      setIsReconnectingMatch(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('chess_active_online_match');
         localStorage.removeItem('chess_active_mode');
@@ -258,45 +292,52 @@ export function useSocket() {
   }, []);
 
   const joinQueue = (userData: { userId: string; username: string; eloRating?: number }) => {
-    if (socket && isConnected) {
-      socket.emit('join_queue', userData);
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('join_queue', userData);
     }
   };
 
   const leaveQueue = () => {
-    if (socket && isConnected) {
-      socket.emit('leave_queue');
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('leave_queue');
       setIsSearchingQueue(false);
     }
   };
 
   const createFriendRoom = (userData: { userId: string; username: string; eloRating?: number }) => {
-    if (socket && isConnected) {
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
       setFriendRoomError(null);
-      socket.emit('create_friend_room', userData);
+      s.emit('create_friend_room', userData);
     }
   };
 
   const joinFriendRoom = (roomCode: string, userData: { userId: string; username: string; eloRating?: number }) => {
-    if (socket && isConnected) {
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
       setFriendRoomError(null);
-      socket.emit('join_friend_room', { roomCode, ...userData });
+      s.emit('join_friend_room', { roomCode, ...userData });
     }
   };
 
   const cancelFriendRoom = () => {
-    if (socket && isConnected && createdRoomCode) {
-      socket.emit('cancel_friend_room', { roomCode: createdRoomCode });
+    const s = socketRef.current || socket;
+    if (s && isConnected && createdRoomCode) {
+      s.emit('cancel_friend_room', { roomCode: createdRoomCode });
       setCreatedRoomCode(null);
       setFriendRoomError(null);
     }
   };
 
-  // Reconnect lại phòng đấu khi F5 web
+  // Reconnect lại phòng đấu khi F5 web (chống kẹt stale closure)
   const reconnectMatch = (roomId: string, tokenOrUserId?: string, fallbackUserId?: string) => {
-    if (socket && isConnected) {
+    const s = socketRef.current || socket;
+    if (s) {
+      setIsReconnectingMatch(true);
       const isJwt = typeof tokenOrUserId === 'string' && tokenOrUserId.split('.').length === 3;
-      socket.emit('reconnect_match', {
+      s.emit('reconnect_match', {
         roomId,
         token: isJwt ? tokenOrUserId : undefined,
         userId: isJwt ? fallbackUserId : (tokenOrUserId || fallbackUserId),
@@ -306,39 +347,45 @@ export function useSocket() {
 
   // Đầu hàng trận đấu
   const resignMatch = (roomId: string) => {
-    if (socket && isConnected) {
-      socket.emit('resign_match', { roomId });
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('resign_match', { roomId });
     }
   };
 
   // Cầu hòa trận đấu (Mutual Draw Offer)
   const offerDraw = (roomId: string) => {
-    if (socket && isConnected) {
-      socket.emit('offer_draw', { roomId });
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('offer_draw', { roomId });
     }
   };
 
   const acceptDraw = (roomId: string) => {
-    if (socket && isConnected) {
-      socket.emit('accept_draw', { roomId });
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('accept_draw', { roomId });
       setDrawOffer(null);
     }
   };
 
   const declineDraw = (roomId: string) => {
-    if (socket && isConnected) {
-      socket.emit('decline_draw', { roomId });
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('decline_draw', { roomId });
       setDrawOffer(null);
     }
   };
 
   const sendMove = (roomId: string, from: Square, to: Square, promotion?: string) => {
-    if (socket && isConnected) {
-      socket.emit('send_move', { roomId, from, to, promotion });
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('send_move', { roomId, from, to, promotion });
     }
   };
 
   const clearActiveMatch = () => {
+    setIsReconnectingMatch(false);
     setActiveMatch(null);
     setLatestMove(null);
     setCurrentClock(null);
@@ -352,23 +399,26 @@ export function useSocket() {
   };
 
   const shareMoveAnalysis = (roomId: string, ply: number, analysis: any) => {
-    if (socket && isConnected) {
-      socket.emit('share_move_analysis', { roomId, ply, analysis });
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('share_move_analysis', { roomId, ply, analysis });
     }
   };
 
   const registerUser = (arg1?: string, arg2?: string) => {
-    if (socket && isConnected) {
-      const isJwt = (s?: string) => typeof s === 'string' && s.split('.').length === 3;
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      const isJwt = (str?: string) => typeof str === 'string' && str.split('.').length === 3;
       const token = isJwt(arg1) ? arg1 : (isJwt(arg2) ? arg2 : undefined);
       const userId = !isJwt(arg1) ? arg1 : (!isJwt(arg2) ? arg2 : undefined);
-      socket.emit('register_user', { token, userId });
+      s.emit('register_user', { token, userId });
     }
   };
 
   const unregisterUser = () => {
-    if (socket && isConnected) {
-      socket.emit('unregister_user');
+    const s = socketRef.current || socket;
+    if (s && isConnected) {
+      s.emit('unregister_user');
     }
   };
 
@@ -380,6 +430,7 @@ export function useSocket() {
     socket,
     isConnected,
     isSearchingQueue,
+    isReconnectingMatch,
     createdRoomCode,
     friendRoomError,
     activeMatch,
