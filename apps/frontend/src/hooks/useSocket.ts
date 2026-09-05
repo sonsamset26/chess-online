@@ -176,6 +176,15 @@ export function useSocket() {
       }
     });
 
+    socketInstance.on('reconnect_error', (data: { message: string }) => {
+      console.warn('⚠️ [Socket.io Client] Reconnect Error:', data?.message);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('chess_active_online_match');
+        localStorage.removeItem('chess_active_mode');
+      }
+      setActiveMatch(null);
+    });
+
     // Đối thủ bị mất kết nối (bắt đầu đếm lùi 45s)
     socketInstance.on('player_disconnected', (data: DisconnectedOpponentInfo) => {
       console.log('⚠️ [Socket.io Client] Đối thủ mất kết nối:', data);
@@ -280,13 +289,13 @@ export function useSocket() {
   };
 
   // Reconnect lại phòng đấu khi F5 web
-  const reconnectMatch = (roomId: string, tokenOrUserId: string) => {
+  const reconnectMatch = (roomId: string, tokenOrUserId?: string, fallbackUserId?: string) => {
     if (socket && isConnected) {
       const isJwt = typeof tokenOrUserId === 'string' && tokenOrUserId.split('.').length === 3;
       socket.emit('reconnect_match', {
         roomId,
         token: isJwt ? tokenOrUserId : undefined,
-        userId: !isJwt ? tokenOrUserId : undefined,
+        userId: isJwt ? fallbackUserId : (tokenOrUserId || fallbackUserId),
       });
     }
   };

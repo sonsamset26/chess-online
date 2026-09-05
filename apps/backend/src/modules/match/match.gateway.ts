@@ -403,8 +403,15 @@ export class MatchGateway {
           return socket.emit('reconnect_error', { message: 'Xác thực thất bại. Vui lòng đăng nhập lại.' });
         }
 
-        const isWhite = room.players.white.userId === effectiveUserId;
-        const isBlack = room.players.black.userId === effectiveUserId;
+        const isWhite =
+          room.players.white.userId === effectiveUserId ||
+          room.players.white.username === effectiveUserId ||
+          (Boolean(data.userId) && (room.players.white.userId === data.userId || room.players.white.username === data.userId));
+
+        const isBlack =
+          room.players.black.userId === effectiveUserId ||
+          room.players.black.username === effectiveUserId ||
+          (Boolean(data.userId) && (room.players.black.userId === data.userId || room.players.black.username === data.userId));
 
         if (!isWhite && !isBlack) {
           return socket.emit('reconnect_error', { message: 'Bạn không thuộc ván đấu này.' });

@@ -43,7 +43,26 @@ import { calculateMaterialDetails } from '../utils/chessMaterial';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('play');
-  const [activeMode, setActiveMode] = useState<GameModeSelection | null>(null);
+  const [activeMode, setActiveModeState] = useState<GameModeSelection | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chess_active_mode');
+      if (saved === 'bots' || saved === 'online' || saved === 'friend' || saved === 'tournament') {
+        return saved as GameModeSelection;
+      }
+    }
+    return null;
+  });
+
+  const setActiveMode = useCallback((mode: GameModeSelection | null) => {
+    setActiveModeState(mode);
+    if (typeof window !== 'undefined') {
+      if (mode) {
+        localStorage.setItem('chess_active_mode', mode);
+      } else {
+        localStorage.removeItem('chess_active_mode');
+      }
+    }
+  }, []);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState<{ id?: string; username: string; eloRating: number; avatarUrl?: string; token: string } | null>(null);
 
@@ -595,14 +614,15 @@ export default function Home() {
   // Cố gắng khôi phục ván đấu dở dang (F5 Reconnect)
   const isInitialReconnectAttempted = useRef(false);
   useEffect(() => {
-    if (isConnected && user && !activeMatch && !isInitialReconnectAttempted.current) {
-      isInitialReconnectAttempted.current = true;
+    if (isConnected && !activeMatch && !isInitialReconnectAttempted.current) {
       try {
         const savedMatch = localStorage.getItem('chess_active_online_match');
         if (savedMatch) {
           const { roomId, userId } = JSON.parse(savedMatch);
-          if (roomId && (userId === user.id || userId === user.username)) {
-            reconnectMatch(roomId, user.token);
+          if (roomId) {
+            isInitialReconnectAttempted.current = true;
+            const token = user?.token || (typeof window !== 'undefined' ? localStorage.getItem('chess_token') : null);
+            reconnectMatch(roomId, token || undefined, userId);
           }
         }
       } catch (err) {
@@ -610,6 +630,63 @@ export default function Home() {
       }
     }
   }, [isConnected, user, activeMatch, reconnectMatch]);
+
+  // Tự động lưu thế cờ Bot vào localStorage khi đang chơi với Bot
+  useEffect(() => {
+    if (activeMode === 'bots' && typeof window !== 'undefined' && fen) {
+      try {
+        localStorage.setItem(
+          'chess_bot_game',
+          JSON.stringify({
+            fen,
+            moveHistory,
+            playerColor,
+            difficulty,
+          })
+        );
+      } catch (err) {
+        console.error('Error saving bot game:', err);
+      }
+    }
+  }, [activeMode, fen, moveHistory, playerColor, difficulty]);
+
+  // Khôi phục activeMode và dữ liệu ván cờ từ localStorage ngay khi Client Mount (giải quyết triệt để SSR F5)
+  const isStateRestoredOnMountRef = useRef(false);
+  useEffect(() => {
+    if (isStateRestoredOnMountRef.current) return;
+    isStateRestoredOnMountRef.current = true;
+
+    try {
+      const savedMode = localStorage.getItem('chess_active_mode');
+      const savedMatch = localStorage.getItem('chess_active_online_match');
+      const savedTournamentId = localStorage.getItem('chess_active_tournament_id');
+
+      if (savedMatch) {
+        // Đang có trận online dang dở -> khôi phục activeMode để không bị rớt về menu
+        setActiveModeState('online');
+      } else if (savedTournamentId) {
+        setActiveModeState('tournament');
+        setIsTournamentModalOpen(true);
+      } else if (savedMode === 'bots' || savedMode === 'online' || savedMode === 'friend' || savedMode === 'tournament') {
+        setActiveModeState(savedMode as GameModeSelection);
+      }
+
+      // Khôi phục thế cờ Bot nếu đang chơi với Bot
+      if (savedMode === 'bots' && !savedMatch) {
+        const savedBotGame = localStorage.getItem('chess_bot_game');
+        if (savedBotGame) {
+          const { fen: savedFen, moveHistory: savedHistory, playerColor: savedColor, difficulty: savedDiff } = JSON.parse(savedBotGame);
+          if (savedFen) {
+            setBoardFen(savedFen, savedHistory || []);
+            if (savedColor) setPlayerColor(savedColor);
+            if (savedDiff) setDifficulty(savedDiff);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi khôi phục trạng thái từ localStorage:', err);
+    }
+  }, [setBoardFen, setPlayerColor, setDifficulty, setIsTournamentModalOpen]);
 
   // 1. LẮNG NGHE SỰ KIỆN GIẢI ĐẤU TỪ SOCKET.IO
   useEffect(() => {
@@ -914,7 +991,7 @@ export default function Home() {
   // Tạo phòng bạn bè
   const handleCreateFriendRoom = () => {
     createFriendRoom({
-      userId: user ? user.username : `guest_host_${Math.floor(Math.random() * 1000)}`,
+      userId: user ? (user.id || user.username) : `guest_host_${Math.floor(Math.random() * 1000)}`,
       username: user ? user.username : 'Chủ phòng',
       eloRating: user ? user.eloRating : 1200,
     });
@@ -923,7 +1000,7 @@ export default function Home() {
   // Nhập mã phòng tham gia
   const handleJoinFriendRoom = (code: string) => {
     joinFriendRoom(code, {
-      userId: user ? user.username : `guest_join_${Math.floor(Math.random() * 1000)}`,
+      userId: user ? (user.id || user.username) : `guest_join_${Math.floor(Math.random() * 1000)}`,
       username: user ? user.username : 'Khách',
       eloRating: user ? user.eloRating : 1200,
     });
@@ -973,6 +1050,9 @@ export default function Home() {
     localStorage.removeItem('chess_token');
     localStorage.removeItem('chess_user');
     localStorage.removeItem('chess_active_online_match');
+    localStorage.removeItem('chess_active_mode');
+    localStorage.removeItem('chess_bot_game');
+    localStorage.removeItem('chess_active_tournament_id');
     setUser(null);
     setActiveMode(null);
     clearActiveMatch();
@@ -996,6 +1076,9 @@ export default function Home() {
     if (createdRoomCode) {
       cancelFriendRoom();
     }
+    localStorage.removeItem('chess_active_online_match');
+    localStorage.removeItem('chess_active_mode');
+    localStorage.removeItem('chess_bot_game');
     clearActiveMatch();
     setActiveMode(null);
     resetGame();
@@ -1058,9 +1141,13 @@ export default function Home() {
     resetGame();
     setIsGameOverModalOpen(false);
     processedGameOverRef.current = null;
+    localStorage.removeItem('chess_active_online_match');
+    localStorage.removeItem('chess_active_mode');
+    localStorage.removeItem('chess_bot_game');
     if (tournamentData?.status === 'FINISHED') {
       setTournamentData(null);
       setTournamentChampionId(null);
+      localStorage.removeItem('chess_active_tournament_id');
     }
   };
 

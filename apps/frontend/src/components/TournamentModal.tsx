@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Trophy, Users, PlusCircle, LogIn, Copy, Check, Swords, Shield, Crown, Play, Trash2, LogOut } from 'lucide-react';
 import { TournamentBracketView } from './TournamentBracketView';
 import { getApiUrl } from '../utils/apiUrl';
@@ -84,6 +84,45 @@ export const TournamentModal: React.FC<TournamentModalProps> = ({
       }
     }
   }, [tournament]);
+
+  // Khôi phục giải đấu đang tham gia khi mở Modal hoặc sau khi F5
+  const isTournamentRestoredRef = useRef(false);
+  useEffect(() => {
+    if (!tournament && isOpen && !isTournamentRestoredRef.current && typeof window !== 'undefined') {
+      const savedTournamentId = localStorage.getItem('chess_active_tournament_id');
+      if (savedTournamentId) {
+        isTournamentRestoredRef.current = true;
+        setLoading(true);
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/api/v1/tournaments/${savedTournamentId}`)
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success && json.data) {
+              const loadedTournament = json.data as TournamentData;
+              setTournament(loadedTournament);
+              if (onTournamentUpdated) onTournamentUpdated(loadedTournament);
+              if (socket && currentUserId) {
+                const token = localStorage.getItem('chess_token');
+                socket.emit('join_tournament', {
+                  code: loadedTournament.code,
+                  token: token || undefined,
+                  userId: currentUserId,
+                  username: currentUsername || 'Player',
+                  eloRating: currentUserElo,
+                });
+              }
+            } else {
+              localStorage.removeItem('chess_active_tournament_id');
+            }
+          })
+          .catch((err) => {
+            console.error('Error restoring tournament:', err);
+            localStorage.removeItem('chess_active_tournament_id');
+          })
+          .finally(() => setLoading(false));
+      }
+    }
+  }, [isOpen, tournament, socket, currentUserId, currentUsername, currentUserElo, onTournamentUpdated]);
 
   // Lắng nghe các sự kiện socket của giải đấu
   useEffect(() => {
