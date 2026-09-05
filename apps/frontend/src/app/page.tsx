@@ -631,26 +631,7 @@ export default function Home() {
     }
   }, [isConnected, user, activeMatch, reconnectMatch]);
 
-  // Tự động lưu thế cờ Bot vào localStorage khi đang chơi với Bot
-  useEffect(() => {
-    if (activeMode === 'bots' && typeof window !== 'undefined' && fen) {
-      try {
-        localStorage.setItem(
-          'chess_bot_game',
-          JSON.stringify({
-            fen,
-            moveHistory,
-            playerColor,
-            difficulty,
-          })
-        );
-      } catch (err) {
-        console.error('Error saving bot game:', err);
-      }
-    }
-  }, [activeMode, fen, moveHistory, playerColor, difficulty]);
-
-  // Khôi phục activeMode và dữ liệu ván cờ từ localStorage ngay khi Client Mount (giải quyết triệt để SSR F5)
+  // Khôi phục activeMode từ localStorage ngay khi Client Mount (giải quyết triệt để SSR F5)
   const isStateRestoredOnMountRef = useRef(false);
   useEffect(() => {
     if (isStateRestoredOnMountRef.current) return;
@@ -670,23 +651,10 @@ export default function Home() {
       } else if (savedMode === 'bots' || savedMode === 'online' || savedMode === 'friend' || savedMode === 'tournament') {
         setActiveModeState(savedMode as GameModeSelection);
       }
-
-      // Khôi phục thế cờ Bot nếu đang chơi với Bot
-      if (savedMode === 'bots' && !savedMatch) {
-        const savedBotGame = localStorage.getItem('chess_bot_game');
-        if (savedBotGame) {
-          const { fen: savedFen, moveHistory: savedHistory, playerColor: savedColor, difficulty: savedDiff } = JSON.parse(savedBotGame);
-          if (savedFen) {
-            setBoardFen(savedFen, savedHistory || []);
-            if (savedColor) setPlayerColor(savedColor);
-            if (savedDiff) setDifficulty(savedDiff);
-          }
-        }
-      }
     } catch (err) {
       console.error('Lỗi khôi phục trạng thái từ localStorage:', err);
     }
-  }, [setBoardFen, setPlayerColor, setDifficulty, setIsTournamentModalOpen]);
+  }, [setIsTournamentModalOpen]);
 
   // 1. LẮNG NGHE SỰ KIỆN GIẢI ĐẤU TỪ SOCKET.IO
   useEffect(() => {

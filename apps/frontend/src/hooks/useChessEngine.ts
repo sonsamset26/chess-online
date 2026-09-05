@@ -164,6 +164,64 @@ export function useChessEngine() {
     }
   }, []);
 
+  // Khôi phục thế cờ từ localStorage khi khởi tạo trên Client (giải quyết F5 khi đấu với Máy)
+  const isBotGameRestoredRef = useRef(false);
+  useEffect(() => {
+    if (isBotGameRestoredRef.current || typeof window === 'undefined') return;
+    isBotGameRestoredRef.current = true;
+
+    try {
+      const savedMode = localStorage.getItem('chess_active_mode');
+      const savedMatch = localStorage.getItem('chess_active_online_match');
+      if (savedMode === 'bots' && !savedMatch) {
+        const savedBotGame = localStorage.getItem('chess_bot_game');
+        if (savedBotGame) {
+          const { fen: savedFen, moveHistory: savedHistory, playerColor: savedColor, difficulty: savedDiff } = JSON.parse(savedBotGame);
+          if (savedColor) setPlayerColor(savedColor);
+          if (savedDiff) setDifficulty(savedDiff);
+          if (savedFen) {
+            setBoardFen(savedFen, savedHistory || []);
+
+            // Nếu đến lượt Bot đi cờ, kích hoạt Bot tiếp tục tính toán
+            try {
+              const testGame = new Chess(savedFen);
+              if (!testGame.isGameOver() && testGame.turn() !== (savedColor || 'w')) {
+                setTimeout(() => triggerAiMove(savedFen), 400);
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi khôi phục bot game trong useChessEngine:', err);
+    }
+  }, [setBoardFen, triggerAiMove]);
+
+  // Tự động lưu thế cờ Bot vào localStorage mỗi khi có nước đi mới (chỉ chạy SAU khi đã hoàn tất restore)
+  useEffect(() => {
+    if (!isBotGameRestoredRef.current || typeof window === 'undefined') return;
+
+    try {
+      const savedMode = localStorage.getItem('chess_active_mode');
+      const savedMatch = localStorage.getItem('chess_active_online_match');
+      if (savedMode === 'bots' && !savedMatch) {
+        if (moveHistory.length > 0 || fen !== 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' || playerColor === 'b') {
+          localStorage.setItem(
+            'chess_bot_game',
+            JSON.stringify({
+              fen,
+              moveHistory,
+              playerColor,
+              difficulty,
+            })
+          );
+        }
+      }
+    } catch (e) {
+      console.error('Failed to auto-save bot game:', e);
+    }
+  }, [fen, moveHistory, playerColor, difficulty]);
+
   // Thực hiện nước đi của Người chơi (Hỗ trợ chọn quân Phong cấp)
   const makePlayerMove = useCallback((from: Square, to: Square, promotion: PromotionPiece = 'q'): boolean => {
     if (isAiThinking || gameRef.current.isGameOver()) return false;
@@ -210,6 +268,12 @@ export function useChessEngine() {
     setGameStatus('IN_PROGRESS');
     setIsAiThinking(false);
 
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('chess_bot_game');
+      } catch {}
+    }
+
     if (options?.autoTriggerAi && playerColor === 'b') {
       triggerAiMove(gameRef.current.fen());
     }
@@ -235,6 +299,12 @@ export function useChessEngine() {
     setMoveHistory([]);
     setGameStatus('IN_PROGRESS');
     setIsAiThinking(false);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('chess_bot_game');
+      } catch {}
+    }
 
     if (newColor === 'b') {
       triggerAiMove(gameRef.current.fen());
